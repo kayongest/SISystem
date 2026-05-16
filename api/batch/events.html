@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Manager · full CRUD</title>
+    <!-- Font Awesome 6 (free) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Google Fonts: Inter clean -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+        body {
+            background: linear-gradient(145deg, #f6f9fc 0%, #e9f1f8 100%);
+            min-height: 100vh;
+            padding: 2rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .events-container {
+            max-width: 1300px;
+            width: 100%;
+        }
+
+        /* header card */
+        .app-header {
+            background: white;
+            border-radius: 32px;
+            padding: 2rem 2.2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 25px rgba(0,20,40,0.06);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid rgba(255,255,255,0.5);
+            backdrop-filter: blur(4px);
+        }
+        .title-section h1 {
+            font-weight: 700;
+            font-size: 1.95rem;
+            letter-spacing: -0.02em;
+            color: #0b2b3c;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .title-section h1 i {
+            color: #2a7f6e;
+            font-size: 2rem;
+        }
+        .sub {
+            color: #4a6572;
+            font-weight: 500;
+            margin-top: 6px;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sub i {
+            color: #3b8c7a;
+        }
+        .create-btn {
+            background: #1f5e4f;
+            color: white;
+            border: none;
+            padding: 0.9rem 2rem;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 6px 14px rgba(26,83,70,0.25);
+            transition: 0.2s;
+            cursor: pointer;
+            border: 1px solid #358070;
+        }
+        .create-btn i {
+            font-size: 1.1rem;
+        }
+        .create-btn:hover {
+            background: #154d40;
+            transform: scale(1.02);
+            box-shadow: 0 10px 20px rgba(21,77,64,0.3);
+        }
+
+        /* form card – create + update */
+        .event-form-panel {
+            background: white;
+            border-radius: 28px;
+            padding: 1.9rem 2rem;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 10px 20px rgba(33,53,71,0.05);
+            border: 1px solid #deecf0;
+            transition: 0.25s;
+        }
+        .form-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            color: #1c5346;
+            font-size: 1.3rem;
+            margin-bottom: 1.8rem;
+        }
+        .form-title i {
+            font-size: 1.4rem;
+        }
+        .form-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            align-items: flex-end;
+        }
+        .input-group {
+            flex: 1 1 200px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .input-group label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: #3d5a65;
+        }
+        .input-group input, .input-group textarea {
+            padding: 0.8rem 1rem;
+            border-radius: 16px;
+            border: 1.5px solid #d5e3e9;
+            background: #fbfdfe;
+            font-size: 0.95rem;
+            transition: 0.15s;
+            outline: none;
+            width: 100%;
+        }
+        .input-group input:focus, .input-group textarea:focus {
+            border-color: #2a7f6e;
+            box-shadow: 0 0 0 4px rgba(42,127,110,0.08);
+            background: white;
+        }
+        .input-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        .form-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .btn-primary {
+            background: #1f5e4f;
+            border: none;
+            padding: 0.8rem 1.8rem;
+            border-radius: 40px;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid #358070;
+            transition: 0.15s;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+        .btn-primary i {
+            font-size: 0.95rem;
+        }
+        .btn-primary:hover {
+            background: #154d40;
+        }
+        .btn-secondary {
+            background: #ecf3f7;
+            border: none;
+            padding: 0.8rem 1.8rem;
+            border-radius: 40px;
+            font-weight: 600;
+            color: #1e4a5e;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: 0.15s;
+            cursor: pointer;
+            border: 1px solid #cbdae2;
+        }
+        .btn-secondary i {
+            color: #3d6b73;
+        }
+        .btn-secondary:hover {
+            background: #dfeaf0;
+        }
+
+        /* event grid */
+        .events-grid-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 1.3rem;
+        }
+        .events-grid-title h2 {
+            font-weight: 650;
+            color: #0b2b2f;
+            font-size: 1.5rem;
+            display: flex;
+            gap: 10px;
+        }
+        .counter-badge {
+            background: #1f5e4f;
+            color: white;
+            padding: 0.2rem 0.9rem;
+            border-radius: 40px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .event-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.8rem;
+        }
+        .event-card {
+            background: white;
+            border-radius: 24px;
+            padding: 1.5rem 1.4rem;
+            box-shadow: 0 8px 18px rgba(21,56,62,0.04);
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(200,222,225,0.5);
+            position: relative;
+        }
+        .event-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 28px rgba(31,94,79,0.08);
+            border-color: #b3d4cf;
+        }
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .event-title {
+            font-weight: 700;
+            font-size: 1.3rem;
+            color: #0a2c33;
+            letter-spacing: -0.01em;
+            word-break: break-word;
+        }
+        .event-badge {
+            background: #d7f0e9;
+            padding: 0.25rem 0.8rem;
+            border-radius: 50px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #1d5a4c;
+            text-transform: uppercase;
+        }
+        .event-date {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: #3c606a;
+            background: #f0f6fa;
+            padding: 0.4rem 0.9rem;
+            border-radius: 30px;
+            width: fit-content;
+            margin: 10px 0 8px;
+        }
+        .event-date i {
+            color: #2a7f6e;
+        }
+        .event-description {
+            color: #345b61;
+            line-height: 1.5;
+            margin: 8px 0 16px;
+            word-break: break-word;
+            font-size: 0.95rem;
+            background: #fafeff;
+            padding: 0.7rem 0.9rem;
+            border-radius: 16px;
+            border: 1px solid #e7f0f2;
+            flex: 1;
+        }
+        .card-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 8px;
+            border-top: 1px solid #e2ecf0;
+            padding-top: 1rem;
+        }
+        .btn-edit, .btn-delete {
+            border: none;
+            background: transparent;
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 0.5rem 1.1rem;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: 0.15s;
+            cursor: pointer;
+        }
+        .btn-edit {
+            background: #ecf5f2;
+            color: #1b5a4c;
+            border: 1px solid #b7d5ce;
+        }
+        .btn-edit:hover {
+            background: #d3ece5;
+            border-color: #5e9b8d;
+        }
+        .btn-delete {
+            background: #ffeeed;
+            color: #a1463c;
+            border: 1px solid #f3cdca;
+        }
+        .btn-delete:hover {
+            background: #ffdbd8;
+            border-color: #cf8a83;
+        }
+        .empty-state {
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(6px);
+            border-radius: 48px;
+            padding: 3.5rem 2rem;
+            text-align: center;
+            border: 2px dashed #9eb9bf;
+            color: #2c5a61;
+            font-weight: 500;
+            grid-column: 1 / -1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        .empty-state i {
+            font-size: 3rem;
+            color: #54878c;
+            opacity: 0.8;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .debug-hint {
+            margin-top: 2rem;
+            color: #466974;
+            font-size: 0.8rem;
+            text-align: center;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+<div class="events-container">
+    <!-- HEADER with CRUD context -->
+    <div class="app-header">
+        <div class="title-section">
+            <h1><i class="fas fa-calendar-circle-plus"></i> Event Flow</h1>
+            <div class="sub">
+                <i class="fas fa-database"></i> full CRUD · persistent localStorage
+                <span style="margin-left: 12px; background: #d0e6e0; padding: 4px 12px; border-radius: 50px;">
+                    <i class="fas fa-arrows-rotate"></i> create · read · update · delete
+                </span>
+            </div>
+        </div>
+        <button class="create-btn" id="showCreateFormBtn">
+            <i class="fas fa-plus-circle"></i> Create new event
+        </button>
+    </div>
+
+    <!-- ========== CREATE / UPDATE FORM (hidden by default) ========= -->
+    <div id="eventFormPanel" class="event-form-panel hidden">
+        <div class="form-title">
+            <i class="fas fa-pen-to-square" id="formIcon"></i>
+            <span id="formHeading">➕ Add new event</span>
+        </div>
+        <div class="form-grid">
+            <div class="input-group">
+                <label><i class="fas fa-tag"></i> Event title</label>
+                <input type="text" id="eventTitleInput" placeholder="e.g. Annual summit" autocomplete="off">
+            </div>
+            <div class="input-group">
+                <label><i class="fas fa-calendar-day"></i> Date</label>
+                <input type="date" id="eventDateInput">
+            </div>
+            <div class="input-group" style="flex:1 1 280px;">
+                <label><i class="fas fa-align-left"></i> Description</label>
+                <textarea id="eventDescInput" placeholder="Details, speakers, location..."></textarea>
+            </div>
+            <div class="form-actions">
+                <button class="btn-primary" id="saveEventBtn">
+                    <i class="fas fa-check-circle"></i> <span id="saveBtnText">Save event</span>
+                </button>
+                <button class="btn-secondary" id="cancelFormBtn">
+                    <i class="fas fa-ban"></i> Cancel
+                </button>
+            </div>
+        </div>
+        <!-- hidden field to store editing id -->
+        <input type="hidden" id="editingEventId" value="">
+    </div>
+
+    <!-- ========== EVENTS GRID : READ operation ========= -->
+    <div class="events-grid-title">
+        <h2><i class="fas fa-list-check"></i> Your events</h2>
+        <span class="counter-badge" id="eventCounter">0</span>
+    </div>
+    <div id="eventGrid" class="event-cards">
+        <!-- dynamic cards will be injected via JS -->
+    </div>
+    <div class="debug-hint">
+        <i class="fas fa-floppy-disk"></i> CRUD operations are saved in localStorage — page refresh keeps your events.
+    </div>
+</div>
+
+<script>
+    (function() {
+        "use strict";
+
+        /* ---------- DATA (MODEL) ---------- */
+        const STORAGE_KEY = 'eventFlowCRUD';
+        let events = [];   // array of { id: string, title, date, description }
+
+        // ---------- DOM refs ----------
+        const panel = document.getElementById('eventFormPanel');
+        const formHeading = document.getElementById('formHeading');
+        const formIcon = document.getElementById('formIcon');
+        const saveBtnText = document.getElementById('saveBtnText');
+        const eventTitleInput = document.getElementById('eventTitleInput');
+        const eventDateInput = document.getElementById('eventDateInput');
+        const eventDescInput = document.getElementById('eventDescInput');
+        const editingIdInput = document.getElementById('editingEventId');
+        const eventGrid = document.getElementById('eventGrid');
+        const eventCounter = document.getElementById('eventCounter');
+        const showCreateBtn = document.getElementById('showCreateFormBtn');
+        const cancelFormBtn = document.getElementById('cancelFormBtn');
+        const saveEventBtn = document.getElementById('saveEventBtn');
+
+        // ---------- helpers ----------
+        function generateId() {
+            return Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+        }
+
+        // format date YYYY-MM-DD to a nicer display (local)
+        function formatDisplayDate(dateStr) {
+            if (!dateStr) return 'No date set';
+            const parts = dateStr.split('-');
+            if (parts.length === 3) {
+                const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+            }
+            return dateStr;
+        }
+
+        // ---------- load / save from localStorage ----------
+        function loadEvents() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                try {
+                    events = JSON.parse(stored);
+                } catch (e) {
+                    events = [];
+                }
+            } else {
+                // seed some demo events for better UX
+                events = [
+                    { id: generateId(), title: 'Design sprint', date: '2025-05-20', description: 'Remote workshop · UI/UX review' },
+                    { id: generateId(), title: 'Developer conference', date: '2025-06-12', description: 'Main hall, keynotes & networking' },
+                    { id: generateId(), title: 'Community meetup', date: '2025-04-30', description: 'Open mic & lightning talks' },
+                ];
+            }
+        }
+        function saveEvents() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+        }
+
+        // ---------- CRUD: READ (render all cards) ----------
+        function renderEvents() {
+            if (!eventGrid) return;
+
+            // sort by date (ascending)
+            const sorted = [...events].sort((a,b) => (a.date || '0').localeCompare(b.date || '0'));
+
+            let html = '';
+            if (sorted.length === 0) {
+                html = `<div class="empty-state">
+                            <i class="fas fa-party-horn"></i>
+                            <h3 style="font-weight:600; margin-top:8px;">No events yet</h3>
+                            <p style="color:#40686e;">Create your first event using the button above</p>
+                        </div>`;
+            } else {
+                sorted.forEach(event => {
+                    const displayDate = formatDisplayDate(event.date);
+                    const desc = event.description?.trim() || '✨ No description provided.';
+                    // escape basic HTML to avoid injection (simple)
+                    const safeTitle = escapeHTML(event.title || 'Untitled');
+                    const safeDesc = escapeHTML(desc);
+                    const safeDateDisp = escapeHTML(displayDate);
+                    const rawDateValue = escapeHTML(event.date || ''); // for data attribute not used but fine
+
+                    html += `<div class="event-card" data-event-id="${escapeHTML(event.id)}">
+                                <div class="event-header">
+                                    <span class="event-title">${safeTitle}</span>
+                                    <span class="event-badge"><i class="fas fa-flag"></i> event</span>
+                                </div>
+                                <div class="event-date">
+                                    <i class="fas fa-calendar"></i> ${safeDateDisp}
+                                </div>
+                                <div class="event-description">
+                                    ${safeDesc.replace(/\n/g, '<br>')}
+                                </div>
+                                <div class="card-actions">
+                                    <button class="btn-edit" data-id="${escapeHTML(event.id)}"><i class="fas fa-pencil"></i> Edit</button>
+                                    <button class="btn-delete" data-id="${escapeHTML(event.id)}"><i class="fas fa-trash-can"></i> Delete</button>
+                                </div>
+                            </div>`;
+                });
+            }
+            eventGrid.innerHTML = html;
+            eventCounter.textContent = events.length;
+
+            // attach delete & edit listeners (event delegation)
+            eventGrid.querySelectorAll('.btn-delete').forEach(btn => {
+                btn.removeEventListener('click', handleDelete);
+                btn.addEventListener('click', handleDelete);
+            });
+            eventGrid.querySelectorAll('.btn-edit').forEach(btn => {
+                btn.removeEventListener('click', handleEdit);
+                btn.addEventListener('click', handleEdit);
+            });
+        }
+
+        // simple escape
+        function escapeHTML(str) {
+            return String(str).replace(/[&<>"]/g, function(c) {
+                if (c === '&') return '&amp;';
+                if (c === '<') return '&lt;';
+                if (c === '>') return '&gt;';
+                if (c === '"') return '&quot;';
+                return c;
+            });
+        }
+
+        // ---------- CRUD: DELETE ----------
+        function handleDelete(e) {
+            e.stopPropagation();
+            const btn = e.currentTarget;
+            const id = btn.getAttribute('data-id');
+            if (!id) return;
+            if (confirm('🗑️ Delete this event permanently?')) {
+                events = events.filter(ev => ev.id !== id);
+                saveEvents();
+                renderEvents();
+
+                // if we are currently editing the same deleted event → reset form
+                if (editingIdInput.value === id) {
+                    resetFormAndHide();
+                }
+            }
+        }
+
+        // ---------- CRUD: EDIT (populate form) ----------
+        function handleEdit(e) {
+            e.stopPropagation();
+            const btn = e.currentTarget;
+            const id = btn.getAttribute('data-id');
+            const eventToEdit = events.find(ev => ev.id === id);
+            if (!eventToEdit) return;
+
+            // show form panel (if hidden)
+            panel.classList.remove('hidden');
+            // update form heading & icon to "edit" mode
+            formHeading.innerText = '✏️ Edit event';
+            formIcon.className = 'fas fa-pencil-alt';
+            saveBtnText.innerText = 'Update event';
+
+            // populate fields
+            eventTitleInput.value = eventToEdit.title || '';
+            eventDateInput.value = eventToEdit.date || '';
+            eventDescInput.value = eventToEdit.description || '';
+            editingIdInput.value = eventToEdit.id;
+
+            // scroll to form smoothly
+            panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // ---------- reset form to "create" state ----------
+        function resetFormToCreate() {
+            formHeading.innerText = '➕ Add new event';
+            formIcon.className = 'fas fa-pen-to-square';
+            saveBtnText.innerText = 'Save event';
+            eventTitleInput.value = '';
+            eventDateInput.value = '';
+            eventDescInput.value = '';
+            editingIdInput.value = '';
+        }
+
+        function resetFormAndHide() {
+            resetFormToCreate();
+            panel.classList.add('hidden');
+        }
+
+        // ---------- CRUD: CREATE / UPDATE (save) ----------
+        function handleSaveEvent() {
+            // validation: title at least 1 char
+            const title = eventTitleInput.value.trim();
+            if (!title) {
+                alert('❌ Event title is required');
+                return;
+            }
+
+            const date = eventDateInput.value;
+            const description = eventDescInput.value.trim();
+            const editingId = editingIdInput.value;
+
+            if (editingId) {
+                // ---------- UPDATE operation ----------
+                const index = events.findIndex(ev => ev.id === editingId);
+                if (index !== -1) {
+                    events[index] = {
+                        ...events[index],
+                        title: title,
+                        date: date,
+                        description: description,
+                    };
+                }
+            } else {
+                // ---------- CREATE operation ----------
+                const newEvent = {
+                    id: generateId(),
+                    title: title,
+                    date: date,
+                    description: description,
+                };
+                events.push(newEvent);
+            }
+
+            // persist and re-render
+            saveEvents();
+            renderEvents();
+
+            // reset and hide form
+            resetFormAndHide();
+        }
+
+        // ---------- show CREATE form (clear edit mode) ----------
+        function showCreateForm() {
+            resetFormToCreate();
+            panel.classList.remove('hidden');
+            // focus title input
+            setTimeout(() => eventTitleInput.focus(), 80);
+            editingIdInput.value = ''; // ensure no editing id
+        }
+
+        // ---------- initialize app, attach listeners ----------
+        function init() {
+            loadEvents();
+            renderEvents();
+
+            // show create form button
+            showCreateBtn.addEventListener('click', showCreateForm);
+
+            // cancel button
+            cancelFormBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                resetFormAndHide();
+            });
+
+            // save button (create/update)
+            saveEventBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                handleSaveEvent();
+            });
+
+            // optional: press ESC to close form (simple)
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && !panel.classList.contains('hidden')) {
+                    resetFormAndHide();
+                }
+            });
+
+            // prevent form from submitting if somehow inside a form
+            panel.addEventListener('submit', (e) => e.preventDefault());
+        }
+
+        init();
+    })();
+</script>
+
+<!-- small extra semantic for CRUD completeness -->
+</body>
+</html>

@@ -1,0 +1,26 @@
+# Dependencies
+/vendor/
+/node_modules/
+
+# Environment and Config
+.env
+config/database_local.php
+
+# Uploads and User Content
+/uploads/*
+!/uploads/.gitkeep
+
+# Logs
+/logs/*.log
+*.log
+
+# System and IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temporary and Word Files
+~$*.docx
+*.tmp
+/scratch/

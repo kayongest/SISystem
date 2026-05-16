@@ -1,0 +1,1544 @@
+<?php
+
+/**
+ * Common functions for aBility Manager
+ * COMPLETE VERSION
+ */
+
+// Define BASE_URL if not defined
+if (!defined('BASE_URL')) {
+    define('BASE_URL', '/');
+}
+
+// Check if user is logged in
+function isLoggedIn()
+{
+    // Check if session is started
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    // Check if user_id exists in session
+    return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
+}
+
+function sanitizeInput($data)
+{
+    if (is_array($data)) {
+        return array_map('sanitizeInput', $data);
+    }
+    $data = trim($data);
+    $data = stripslashes($data);
+    $data = htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
+    return $data;
+}
+
+/**
+ * Get condition badge HTML
+ */
+function getConditionBadge($condition)
+{
+    $conditions = [
+        'excellent' => ['label' => 'Excellent', 'class' => 'bg-success'],
+        'good'      => ['label' => 'Good', 'class' => 'bg-primary'],
+        'fair'      => ['label' => 'Fair', 'class' => 'bg-info'],
+        'poor'      => ['label' => 'Poor', 'class' => 'bg-warning'],
+        'broken'    => ['label' => 'Broken', 'class' => 'bg-danger'],
+        'repair'    => ['label' => 'Needs Repair', 'class' => 'bg-dark'],
+        'new'       => ['label' => 'New', 'class' => 'bg-success'],
+        'damaged'   => ['label' => 'Damaged', 'class' => 'bg-danger']
+    ];
+
+    if (isset($conditions[$condition])) {
+        $badge = $conditions[$condition];
+        return '<span class="badge ' . $badge['class'] . '">' . $badge['label'] . '</span>';
+    }
+
+    return '<span class="badge bg-secondary">' . htmlspecialchars(ucfirst($condition)) . '</span>';
+}
+
+/**
+ * Get status badge HTML
+ */
+function getStatusBadge($status)
+{
+    $statuses = [
+        'available'     => ['label' => 'Available', 'class' => 'bg-success'],
+        'in_use'        => ['label' => 'In Use', 'class' => 'bg-primary'],
+        'maintenance'   => ['label' => 'Maintenance', 'class' => 'bg-warning'],
+        'reserved'      => ['label' => 'Reserved', 'class' => 'bg-info'],
+        'disposed'      => ['label' => 'Disposed', 'class' => 'bg-secondary'],
+        'lost'          => ['label' => 'Lost', 'class' => 'bg-danger'],
+        'retired'       => ['label' => 'Retired', 'class' => 'bg-dark']
+    ];
+
+    if (isset($statuses[$status])) {
+        $badge = $statuses[$status];
+        return '<span class="badge ' . $badge['class'] . '">' . $badge['label'] . '</span>';
+    }
+
+    return '<span class="badge bg-secondary">' . htmlspecialchars(ucfirst($status)) . '</span>';
+}
+
+/**
+ * Get category badge HTML
+ */
+function getCategoryBadge($category)
+{
+    $colors = [
+        'Audio'         => 'primary',
+        'Video'         => 'success',
+        'Lighting'      => 'warning',
+        'Translation'   => 'info',
+        'IT'            => 'danger',
+        'Rigging'       => 'secondary',
+        'Electrical'    => 'dark',
+        'Furniture'     => 'purple',
+        'Other'         => 'light'
+    ];
+
+    $color = isset($colors[$category]) ? $colors[$category] : 'secondary';
+    return '<span class="badge bg-' . $color . '">' . htmlspecialchars($category) . '</span>';
+}
+
+// Get item accessories
+function getItemAccessories($item_id, $conn)
+{
+    $accessories = [];
+
+    try {
+        // Check if item_accessories table exists
+        $checkTable = $conn->query("SHOW TABLES LIKE 'item_accessories'");
+        if (!$checkTable || $checkTable->num_rows === 0) {
+            return $accessories; // Return empty array if table doesn't exist
+        }
+
+        // Use a simpler query to avoid SQL errors
+        $stmt = $conn->prepare("
+            SELECT a.id, a.name, a.description 
+            FROM accessories a
+            INNER JOIN item_accessories ia ON a.id = ia.accessory_id 
+            WHERE ia.item_id = ? AND a.is_active = 1
+        ");
+
+        // Debug: Check if prepare was successful
+        if (!$stmt) {
+            error_log("SQL prepare error: " . $conn->error);
+            return $accessories;
+        }
+
+        $stmt->bind_param("i", $item_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        while ($row = $result->fetch_assoc()) {
+            $accessories[] = $row;
+        }
+
+        $stmt->close();
+    } catch (Exception $e) {
+        error_log("Error in getItemAccessories: " . $e->getMessage());
+        // Return empty array on error
+    }
+
+    return $accessories;
+}
+
+// Get accessory badge
+function getAccessoryBadge($accessory_name)
+{
+    if (empty($accessory_name)) {
+        return '<span class="badge bg-secondary">None</span>';
+    }
+
+    $accessoryColors = [
+        'power cable' => 'danger',
+        'hdmi cable' => 'info',
+        'usb cable' => 'success',
+        'remote' => 'warning',
+        'stand' => 'dark',
+        'case' => 'secondary',
+        'battery' => 'danger',
+        'adapter' => 'primary',
+        'ethernet' => 'info',
+        'manual' => 'light text-dark',
+        'warranty' => 'success',
+        'screws' => 'secondary',
+        'lens' => 'info',
+        'memory' => 'primary',
+        'stylus' => 'warning',
+        'dongle' => 'info',
+        'microphone' => 'success',
+        'tripod' => 'dark',
+        'other' => 'secondary'
+    ];
+
+    $color = 'secondary';
+    foreach ($accessoryColors as $key => $col) {
+        if (stripos($accessory_name, $key) !== false) {
+            $color = $col;
+            break;
+        }
+    }
+
+    return '<span class="badge bg-' . $color . '">' . htmlspecialchars($accessory_name) . '</span>';
+}
+
+function formatDate($date, $format = 'M d, Y H:i')
+{
+    if (empty($date) || $date == '0000-00-00 00:00:00') {
+        return '-';
+    }
+    return date($format, strtotime($date));
+}
+
+// Add this function for low stock accessories
+function getLowStockAccessories($conn, $limit = 10)
+{
+    $low_stock = [];
+
+    try {
+        // First check if the accessories table exists
+        $checkTable = $conn->query("SHOW TABLES LIKE 'accessories'");
+        if ($checkTable->num_rows === 0) {
+            error_log("Accessories table does not exist");
+            return $low_stock;
+        }
+
+        $sql = "
+            SELECT 
+                a.id,
+                a.name,
+                a.description,
+                a.available_quantity,
+                a.minimum_stock,
+                a.total_quantity,
+                COUNT(DISTINCT ia.item_id) as assigned_count
+            FROM accessories a
+            LEFT JOIN item_accessories ia ON a.id = ia.accessory_id
+            WHERE a.is_active = 1 
+            AND a.available_quantity <= a.minimum_stock
+            GROUP BY a.id
+            ORDER BY a.available_quantity ASC
+            LIMIT ?
+        ";
+
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("i", $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $low_stock = $result->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    } catch (Exception $e) {
+        error_log("Error getting low stock accessories: " . $e->getMessage());
+    }
+
+    return $low_stock;
+}
+
+// Add this function for stock alerts
+function getStockAlerts($conn)
+{
+    $alerts = [
+        'low_stock_count' => 0,
+        'out_of_stock_count' => 0,
+        'low_stock_items' => []
+    ];
+
+    try {
+        // First check if the accessories table exists
+        $checkTable = $conn->query("SHOW TABLES LIKE 'accessories'");
+        if ($checkTable->num_rows === 0) {
+            error_log("Accessories table does not exist");
+            return $alerts;
+        }
+
+        // Get low stock count
+        $sql = "
+            SELECT 
+                COUNT(*) as low_stock,
+                SUM(CASE WHEN available_quantity = 0 THEN 1 ELSE 0 END) as out_of_stock
+            FROM accessories 
+            WHERE is_active = 1 
+            AND available_quantity <= minimum_stock
+        ";
+
+        $result = $conn->query($sql);
+        if ($result && $row = $result->fetch_assoc()) {
+            $alerts['low_stock_count'] = $row['low_stock'];
+            $alerts['out_of_stock_count'] = $row['out_of_stock'];
+        }
+
+        // Get top 5 low stock items
+        $lowStmt = $conn->prepare("
+            SELECT name, available_quantity, minimum_stock
+            FROM accessories
+            WHERE is_active = 1 
+            AND available_quantity <= minimum_stock
+            ORDER BY available_quantity ASC
+            LIMIT 5
+        ");
+
+        if ($lowStmt) {
+            $lowStmt->execute();
+            $lowResult = $lowStmt->get_result();
+            $alerts['low_stock_items'] = $lowResult->fetch_all(MYSQLI_ASSOC);
+            $lowStmt->close();
+        }
+    } catch (Exception $e) {
+        error_log("Error getting stock alerts: " . $e->getMessage());
+    }
+
+    return $alerts;
+}
+
+function getCategories()
+{
+    return [
+        'Audio'         => 'Audio Equipment',
+        'Video'         => 'Video Equipment',
+        'Lighting'      => 'Lighting Equipment',
+        'Translation'   => 'Translation Equipment',
+        'IT'            => 'IT Equipment',
+        'Rigging'       => 'Rigging Equipment',
+        'Electrical'    => 'Electrical Equipment',
+        'Furniture'     => 'Furniture',
+        'Other'         => 'Other'
+    ];
+}
+
+function getDepartments()
+{
+    return [
+        'AUD'         => 'Audio',
+        'VID'         => 'Video',
+        'LIGT'      => 'Lighting',
+        'TRN'   => 'Translation',
+        'IT'            => 'IT',
+        'RIG'       => 'Rigging',
+        'ELECTR'    => 'Electrical',
+        'FURNT'     => 'Furniture',
+    ];
+}
+
+function getLocations()
+{
+    return [
+        'BK Arena'      => 'BK Arena',
+        'Ndera'         => 'Ndera',
+        'Masoro'        => 'Masoro',
+        'KCC'           => 'KCC',
+        'Warehouse A'   => 'Warehouse A',
+        'Warehouse B'   => 'Warehouse B',
+        'On Site'       => 'On Site',
+        'In Transit'    => 'In Transit'
+    ];
+}
+
+function getConditions()
+{
+    return [
+        'new'       => 'New',
+        'good'      => 'Good',
+        'fair'      => 'Fair',
+        'poor'      => 'Poor',
+        'damaged'   => 'Damaged',
+        'repair'    => 'Needs Repair',
+        'excellent' => 'Excellent',
+        'broken'    => 'Broken'
+    ];
+}
+
+function getStatuses()
+{
+    return [
+        'available'     => 'Available',
+        'in_use'        => 'In Use',
+        'reserved'      => 'Reserved',
+        'maintenance'   => 'Maintenance',
+        'disposed'      => 'Disposed',
+        'lost'          => 'Lost',
+        'retired'       => 'Retired'
+    ];
+}
+
+// Check if user is logged in (for API endpoints)
+function requireApiAuthentication()
+{
+    if (!isLoggedIn()) {
+        header('Content-Type: application/json');
+        http_response_code(401);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Authentication required',
+            'redirect' => BASE_URL . 'login.php'
+        ]);
+        exit();
+    }
+}
+
+// Add this to your functions.php if not already there
+function redirect($url, $statusCode = 303)
+{
+    header('Location: ' . $url, true, $statusCode);
+    exit();
+}
+
+// Get dashboard statistics
+function getDashboardStats($db)
+{
+    $stats = [
+        'total_items'   => 0,
+        'available'     => 0,
+        'in_use'        => 0,
+        'maintenance'   => 0,
+        'categories'    => 0,
+        'reserved'      => 0,
+        'disposed'      => 0,
+        'lost'          => 0
+    ];
+
+    try {
+        // Total items
+        $result = $db->query("SELECT COUNT(*) as count FROM items");
+        if ($result) {
+            $row = $result->fetch_assoc();
+            $stats['total_items'] = $row['count'] ?? 0;
+        }
+
+        // Available items
+        $result = $db->query("SELECT COUNT(*) as count FROM items WHERE status = 'available'");
+        if ($result) {
+            $row = $result->fetch_assoc();
+            $stats['available'] = $row['count'] ?? 0;
+        }
+
+        // In use items
+        $result = $db->query("SELECT COUNT(*) as count FROM items WHERE status = 'in_use'");
+        if ($result) {
+            $row = $result->fetch_assoc();
+            $stats['in_use'] = $row['count'] ?? 0;
+        }
+
+        // Maintenance items
+        $result = $db->query("SELECT COUNT(*) as count FROM items WHERE status = 'maintenance'");
+        if ($result) {
+            $row = $result->fetch_assoc();
+            $stats['maintenance'] = $row['count'] ?? 0;
+        }
+
+        // Distinct categories
+        $result = $db->query("SELECT COUNT(DISTINCT category) as count FROM items");
+        if ($result) {
+            $row = $result->fetch_assoc();
+            $stats['categories'] = $row['count'] ?? 0;
+        }
+
+        // Reserved items
+        $result = $db->query("SELECT COUNT(*) as count FROM items WHERE status = 'reserved'");
+        if ($result) {
+            $row = $result->fetch_assoc();
+            $stats['reserved'] = $row['count'] ?? 0;
+        }
+
+        // Disposed items
+        $result = $db->query("SELECT COUNT(*) as count FROM items WHERE status = 'disposed'");
+        if ($result) {
+            $row = $result->fetch_assoc();
+            $stats['disposed'] = $row['count'] ?? 0;
+        }
+
+        // Lost items
+        $result = $db->query("SELECT COUNT(*) as count FROM items WHERE status = 'lost'");
+        if ($result) {
+            $row = $result->fetch_assoc();
+            $stats['lost'] = $row['count'] ?? 0;
+        }
+
+        return $stats;
+    } catch (Exception $e) {
+        error_log("Dashboard stats error: " . $e->getMessage());
+        return $stats;
+    }
+}
+
+// Get recent items
+function getRecentItems($conn, $limit = 10)
+{
+    $items = [];
+
+    // Try multiple query approaches
+    $queries = [
+        // Try with joins
+        "SELECT i.*, c.name as category, d.name as department 
+         FROM items i
+         LEFT JOIN categories c ON i.category_id = c.id
+         LEFT JOIN departments d ON i.department_id = d.id
+         WHERE i.is_active = 1 
+         ORDER BY i.created_at DESC 
+         LIMIT $limit",
+
+        // Try without departments join
+        "SELECT i.*, c.name as category 
+         FROM items i
+         LEFT JOIN categories c ON i.category_id = c.id
+         WHERE i.is_active = 1 
+         ORDER BY i.created_at DESC 
+         LIMIT $limit",
+
+        // Try simplest
+        "SELECT * FROM items 
+         WHERE is_active = 1 
+         ORDER BY created_at DESC 
+         LIMIT $limit",
+
+        // Try without created_at
+        "SELECT * FROM items 
+         WHERE is_active = 1 
+         ORDER BY id DESC 
+         LIMIT $limit",
+
+        // Last resort
+        "SELECT * FROM items LIMIT $limit"
+    ];
+
+    foreach ($queries as $sql) {
+        try {
+            $result = $conn->query($sql);
+            if ($result) {
+                $items = $result->fetch_all(MYSQLI_ASSOC);
+                $result->free();
+                if (!empty($items)) {
+                    error_log("Success with query: " . substr($sql, 0, 50) . "...");
+                    break;
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Query failed: " . $e->getMessage());
+            continue;
+        }
+    }
+
+    return $items;
+}
+
+/**
+ * Check if serial number exists
+ */
+function serialExists($serial_number, $conn)
+{
+    try {
+        $stmt = $conn->prepare("SELECT id FROM items WHERE serial_number = ?");
+        $stmt->bind_param("s", $serial_number);
+        $stmt->execute();
+        $stmt->store_result();
+        $exists = $stmt->num_rows > 0;
+        $stmt->close();
+        return $exists;
+    } catch (Exception $e) {
+        error_log("Error checking serial: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Function to get total quantity per item name (aggregating all serial numbers)
+function getTotalQuantityPerItem($conn, $item_name = null)
+{
+    if ($item_name) {
+        $stmt = $conn->prepare("
+            SELECT 
+                item_name,
+                COUNT(*) as unique_serial_numbers,
+                SUM(quantity) as total_units,
+                category,
+                brand_model,
+                GROUP_CONCAT(serial_number SEPARATOR ', ') as serial_numbers
+            FROM items 
+            WHERE item_name = ?
+            GROUP BY item_name, brand_model, category
+        ");
+        $stmt->bind_param("s", $item_name);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_assoc();
+    } else {
+        // Get all items grouped by name
+        return $conn->query("
+            SELECT 
+                item_name,
+                category,
+                brand_model,
+                COUNT(*) as unique_serial_numbers,
+                SUM(quantity) as total_units,
+                MIN(created_at) as first_added,
+                MAX(updated_at) as last_updated
+            FROM items 
+            GROUP BY item_name, brand_model, category
+            ORDER BY total_units DESC, item_name
+        ")->fetch_all(MYSQLI_ASSOC);
+    }
+}
+
+// Export equipment data to CSV
+function exportToCSV($data, $filename = 'equipment_export.csv')
+{
+    if (empty($data)) {
+        return false;
+    }
+
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+
+    $output = fopen('php://output', 'w');
+
+    // Add UTF-8 BOM for Excel compatibility
+    fwrite($output, "\xEF\xBB\xBF");
+
+    // Add header
+    fputcsv($output, array_keys($data[0]));
+
+    // Add data
+    foreach ($data as $row) {
+        fputcsv($output, $row);
+    }
+
+    fclose($output);
+    exit();
+}
+
+// Calculate depreciation
+function calculateDepreciation($purchasePrice, $purchaseDate, $lifespanYears = 5, $depreciationMethod = 'straight')
+{
+    if (empty($purchaseDate) || $purchasePrice <= 0) {
+        return $purchasePrice;
+    }
+
+    $purchaseTimestamp = strtotime($purchaseDate);
+    $currentTimestamp = time();
+
+    if ($purchaseTimestamp === false || $purchaseTimestamp > $currentTimestamp) {
+        return $purchasePrice;
+    }
+
+    $secondsInYear = 365 * 24 * 60 * 60;
+    $yearsUsed = ($currentTimestamp - $purchaseTimestamp) / $secondsInYear;
+
+    if ($depreciationMethod === 'straight') {
+        $annualDepreciation = $purchasePrice / $lifespanYears;
+        $totalDepreciation = $annualDepreciation * min($yearsUsed, $lifespanYears);
+        $currentValue = $purchasePrice - $totalDepreciation;
+    } else {
+        // Double declining balance method
+        $rate = 2 / $lifespanYears;
+        $currentValue = $purchasePrice;
+        for ($i = 0; $i < min($yearsUsed, $lifespanYears); $i++) {
+            $currentValue -= $currentValue * $rate;
+        }
+    }
+
+    return max(0, round($currentValue, 2));
+}
+
+// Generate next equipment code
+function generateNextEquipmentCode($db)
+{
+    try {
+        $sql = "SELECT MAX(id) as max_id FROM items";
+        $result = $db->query($sql);
+
+        if ($result) {
+            $row = $result->fetch_assoc();
+            $nextId = ($row['max_id'] ?? 0) + 1;
+            return 'EQ-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+        }
+    } catch (Exception $e) {
+        error_log("Equipment code error: " . $e->getMessage());
+        return 'EQ-' . date('Ymd') . rand(100, 999);
+    }
+}
+
+// Get equipment by ID
+function getEquipmentById($db, $id)
+{
+    try {
+        $sql = "SELECT * FROM items WHERE id = ?";
+        $stmt = $db->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        $stmt->close();
+
+        return $row;
+    } catch (Exception $e) {
+        error_log("Get equipment error: " . $e->getMessage());
+        return null;
+    }
+}
+
+// Search equipment
+function searchEquipment($db, $searchTerm, $category = '', $status = '', $location = '')
+{
+    $items = [];
+
+    try {
+        $sql = "SELECT * FROM items WHERE 1=1";
+        $params = [];
+        $types = '';
+
+        if (!empty($searchTerm)) {
+            $sql .= " AND (item_name LIKE ? OR serial_number LIKE ? OR description LIKE ? OR brand_model LIKE ?)";
+            $searchTerm = "%$searchTerm%";
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+            $types .= 'ssss';
+        }
+
+        if (!empty($category)) {
+            $sql .= " AND category = ?";
+            $params[] = $category;
+            $types .= 's';
+        }
+
+        if (!empty($status)) {
+            $sql .= " AND status = ?";
+            $params[] = $status;
+            $types .= 's';
+        }
+
+        if (!empty($location)) {
+            $sql .= " AND stock_location = ?";
+            $params[] = $location;
+            $types .= 's';
+        }
+
+        $sql .= " ORDER BY created_at DESC";
+
+        $stmt = $db->prepare($sql);
+
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        while ($row = $result->fetch_assoc()) {
+            $items[] = $row;
+        }
+
+        $stmt->close();
+        return $items;
+    } catch (Exception $e) {
+        error_log("Search equipment error: " . $e->getMessage());
+        return [];
+    }
+}
+
+// Get equipment count by status
+function getEquipmentCountByStatus($db)
+{
+    $counts = [
+        'available'     => 0,
+        'in_use'        => 0,
+        'maintenance'   => 0,
+        'reserved'      => 0,
+        'disposed'      => 0,
+        'lost'          => 0,
+        'retired'       => 0
+    ];
+
+    try {
+        $sql = "SELECT status, COUNT(*) as count FROM items GROUP BY status";
+        $result = $db->query($sql);
+
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $status = $row['status'];
+                if (isset($counts[$status])) {
+                    $counts[$status] = $row['count'];
+                }
+            }
+        }
+
+        return $counts;
+    } catch (Exception $e) {
+        error_log("Count by status error: " . $e->getMessage());
+        return $counts;
+    }
+}
+
+// Get equipment count by category
+function getEquipmentCountByCategory($db)
+{
+    $counts = [];
+
+    try {
+        $sql = "SELECT category, COUNT(*) as count FROM items GROUP BY category ORDER BY count DESC";
+        $result = $db->query($sql);
+
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $counts[$row['category']] = $row['count'];
+            }
+        }
+
+        return $counts;
+    } catch (Exception $e) {
+        error_log("Count by category error: " . $e->getMessage());
+        return $counts;
+    }
+}
+
+// Get equipment count by location
+function getEquipmentCountByLocation($db)
+{
+    $counts = [];
+
+    try {
+        $sql = "SELECT stock_location, COUNT(*) as count FROM items GROUP BY stock_location ORDER BY count DESC";
+        $result = $db->query($sql);
+
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $counts[$row['stock_location']] = $row['count'];
+            }
+        }
+
+        return $counts;
+    } catch (Exception $e) {
+        error_log("Count by location error: " . $e->getMessage());
+        return $counts;
+    }
+}
+
+// Get all items with all fields
+function getAllItems($db, $limit = null, $offset = 0)
+{
+    $items = [];
+
+    try {
+        $sql = "SELECT 
+                    id, item_name, serial_number, category, department, 
+                    description, brand_model, `condition`, stock_location, 
+                    notes, quantity, status, image, qr_code,
+                    DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') as created_at,
+                    DATE_FORMAT(updated_at, '%Y-%m-d %H:%i:%s') as updated_at
+                FROM items 
+                ORDER BY created_at DESC";
+
+        if ($limit !== null) {
+            $sql .= " LIMIT ? OFFSET ?";
+            $stmt = $db->prepare($sql);
+            $stmt->bind_param('ii', $limit, $offset);
+        } else {
+            $stmt = $db->prepare($sql);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        while ($row = $result->fetch_assoc()) {
+            $items[] = $row;
+        }
+
+        $stmt->close();
+        return $items;
+    } catch (Exception $e) {
+        error_log("Get all items error: " . $e->getMessage());
+        return [];
+    }
+}
+
+// Get item details for view page
+function getItemDetails($db, $id)
+{
+    try {
+        $sql = "SELECT 
+                    id, item_name, serial_number, category, department, 
+                    description, brand_model, `condition`, stock_location, 
+                    notes, quantity, status, image, qr_code,
+                    DATE_FORMAT(created_at, '%Y-%m-d %H:%i:%s') as created_at,
+                    DATE_FORMAT(updated_at, '%Y-%m-d %H:%i:%s') as updated_at
+                FROM items 
+                WHERE id = ?";
+
+        $stmt = $db->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $item = $result->fetch_assoc();
+        $stmt->close();
+
+        return $item;
+    } catch (Exception $e) {
+        error_log("Get item details error: " . $e->getMessage());
+        return null;
+    }
+}
+
+// Generate unique serial number
+function generateUniqueSerial($db, $prefix = 'EQ')
+{
+    try {
+        // Try to get the next ID
+        $sql = "SELECT MAX(id) as max_id FROM items";
+        $result = $db->query($sql);
+
+        if ($result) {
+            $row = $result->fetch_assoc();
+            $nextId = ($row['max_id'] ?? 0) + 1;
+
+            // Generate serial with prefix and timestamp
+            $timestamp = time();
+            $serial = $prefix . '-' . date('Ymd') . '-' . str_pad($nextId, 4, '0', STR_PAD_LEFT);
+
+            // Check if serial exists
+            $checkStmt = $db->prepare("SELECT id FROM items WHERE serial_number = ?");
+            $checkStmt->bind_param('s', $serial);
+            $checkStmt->execute();
+            $checkStmt->store_result();
+
+            if ($checkStmt->num_rows > 0) {
+                // If exists, add random number
+                $serial = $serial . '-' . rand(100, 999);
+            }
+
+            $checkStmt->close();
+            return $serial;
+        }
+    } catch (Exception $e) {
+        error_log("Generate serial error: " . $e->getMessage());
+    }
+
+    // Fallback
+    return $prefix . '-' . date('YmdHis') . '-' . rand(1000, 9999);
+}
+
+/**
+ * Generate single QR code
+ */
+function generateSingleQRCode($item_id, $item_name, $serial_number, $conn = null)
+{
+    try {
+        // Use the same logic as generate_all_qr_codes.php
+        $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http");
+        $host = $_SERVER['HTTP_HOST'];
+
+        $data = json_encode([
+            'id' => $item_id,
+            'name' => $item_name,
+            'serial' => $serial_number,
+            'system' => 'aBility Inventory',
+            'url' => $protocol . "://" . $host . '/items/view.php?id=' . $item_id,
+            'timestamp' => date('Y-m-d H:i:s')
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        // Create QR directory if it doesn't exist
+        $qrDir = '../uploads/qr_codes/';
+        if (!file_exists($qrDir)) {
+            if (!mkdir($qrDir, 0777, true)) {
+                throw new Exception("Failed to create QR directory");
+            }
+        }
+
+        // Generate filename
+        $cleanName = preg_replace('/[^a-z0-9]/i', '_', $item_name);
+        $cleanSerial = preg_replace('/[^a-z0-9]/i', '_', $serial_number);
+        $filename = 'qr_' . $item_id . '_' . $cleanName . '_' . $cleanSerial . '.png';
+        $filepath = $qrDir . $filename;
+        $qrDbPath = 'uploads/qr_codes/' . $filename;
+
+        // Try to generate QR using external API
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 10,
+                'header' => "User-Agent: aBility-Inventory/1.0\r\n",
+                'ignore_errors' => true
+            ]
+        ]);
+
+        // Try QRServer API first
+        $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' . urlencode($data);
+        $qrImage = @file_get_contents($qrUrl, false, $context);
+
+        if ($qrImage === false) {
+            // Fallback to Google Charts
+            $qrUrl = 'https://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=' . urlencode($data);
+            $qrImage = @file_get_contents($qrUrl, false, $context);
+        }
+
+        if ($qrImage !== false && file_put_contents($filepath, $qrImage) !== false) {
+            return $qrDbPath;
+        }
+
+        throw new Exception("Failed to generate QR code image");
+    } catch (Exception $e) {
+        error_log("Single QR generation error: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Check if QR code generation is working
+ */
+function checkQRCodeAPIs()
+{
+    $testData = 'Test QR Code - aBility Inventory';
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => 5,
+            'ignore_errors' => true
+        ]
+    ]);
+
+    $apis = [
+        'QRServer' => 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' . urlencode($testData),
+        'GoogleCharts' => 'https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl=' . urlencode($testData)
+    ];
+
+    $results = [];
+    foreach ($apis as $name => $url) {
+        try {
+            $response = @file_get_contents($url, false, $context);
+            $results[$name] = ($response !== false && strlen($response) > 100);
+        } catch (Exception $e) {
+            $results[$name] = false;
+        }
+    }
+
+    return $results;
+}
+
+/**
+ * Get QR code statistics
+ */
+function getQRCodeStats($conn)
+{
+    $stats = [
+        'total_items' => 0,
+        'with_qr' => 0,
+        'without_qr' => 0,
+        'pending' => 0,
+        'invalid' => 0
+    ];
+
+    try {
+        // Total items
+        $result = $conn->query("SELECT COUNT(*) as count FROM items WHERE status NOT IN ('disposed', 'lost')");
+        if ($result && $row = $result->fetch_assoc()) {
+            $stats['total_items'] = $row['count'];
+        }
+
+        // Items with valid QR codes
+        $result = $conn->query("SELECT COUNT(*) as count FROM items 
+                               WHERE qr_code IS NOT NULL 
+                               AND qr_code != '' 
+                               AND qr_code != 'pending'
+                               AND status NOT IN ('disposed', 'lost')");
+        if ($result && $row = $result->fetch_assoc()) {
+            $stats['with_qr'] = $row['count'];
+        }
+
+        // Items without QR codes
+        $result = $conn->query("SELECT COUNT(*) as count FROM items 
+                               WHERE (qr_code IS NULL OR qr_code = '')
+                               AND status NOT IN ('disposed', 'lost')");
+        if ($result && $row = $result->fetch_assoc()) {
+            $stats['without_qr'] = $row['count'];
+        }
+
+        // Items with pending QR codes
+        $result = $conn->query("SELECT COUNT(*) as count FROM items 
+                               WHERE qr_code = 'pending'
+                               AND status NOT IN ('disposed', 'lost')");
+        if ($result && $row = $result->fetch_assoc()) {
+            $stats['pending'] = $row['count'];
+        }
+
+        // Check for invalid QR codes (files that don't exist)
+        $result = $conn->query("SELECT id, qr_code FROM items 
+                               WHERE qr_code IS NOT NULL 
+                               AND qr_code != ''
+                               AND qr_code != 'pending'
+                               AND status NOT IN ('disposed', 'lost')");
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $filePath = '../' . $row['qr_code'];
+                if (!file_exists($filePath)) {
+                    $stats['invalid']++;
+                }
+            }
+        }
+    } catch (Exception $e) {
+        error_log("QR stats error: " . $e->getMessage());
+    }
+
+    return $stats;
+}
+
+/**
+ * Validate all QR codes in database
+ */
+function validateQRCodes($conn)
+{
+    $results = [
+        'valid' => 0,
+        'invalid' => 0,
+        'missing_files' => []
+    ];
+
+    try {
+        $query = "SELECT id, item_name, qr_code FROM items 
+                  WHERE qr_code IS NOT NULL 
+                  AND qr_code != '' 
+                  AND qr_code != 'pending'";
+
+        $result = $conn->query($query);
+
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $filePath = '../' . $row['qr_code'];
+
+                if (file_exists($filePath)) {
+                    // Check if it's a valid image
+                    $imageInfo = @getimagesize($filePath);
+                    if ($imageInfo !== false && $imageInfo[0] > 0) {
+                        $results['valid']++;
+                    } else {
+                        $results['invalid']++;
+                        $results['missing_files'][] = [
+                            'id' => $row['id'],
+                            'name' => $row['item_name'],
+                            'reason' => 'Invalid image file'
+                        ];
+                    }
+                } else {
+                    $results['invalid']++;
+                    $results['missing_files'][] = [
+                        'id' => $row['id'],
+                        'name' => $row['item_name'],
+                        'reason' => 'File not found'
+                    ];
+                }
+            }
+        }
+    } catch (Exception $e) {
+        error_log("QR validation error: " . $e->getMessage());
+    }
+
+    return $results;
+}
+
+/**
+ * Repair missing QR codes
+ */
+function repairQRCodes($conn, $limit = 50)
+{
+    $results = [
+        'repaired' => 0,
+        'failed' => 0,
+        'errors' => []
+    ];
+
+    try {
+        // Find items with missing QR files
+        $query = "SELECT i.id, i.item_name, i.serial_number, i.qr_code 
+                  FROM items i 
+                  WHERE i.qr_code IS NOT NULL 
+                  AND i.qr_code != '' 
+                  AND i.qr_code != 'pending'
+                  AND i.status NOT IN ('disposed', 'lost')
+                  LIMIT ?";
+
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("i", $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        while ($row = $result->fetch_assoc()) {
+            $filePath = '../' . $row['qr_code'];
+
+            if (!file_exists($filePath)) {
+                // Try to regenerate QR code
+                $newQrPath = generateSingleQRCode($row['id'], $row['item_name'], $row['serial_number'], $conn);
+
+                if ($newQrPath) {
+                    // Update database
+                    $updateStmt = $conn->prepare("UPDATE items SET qr_code = ? WHERE id = ?");
+                    $updateStmt->bind_param("si", $newQrPath, $row['id']);
+
+                    if ($updateStmt->execute()) {
+                        $results['repaired']++;
+                    } else {
+                        $results['failed']++;
+                        $results['errors'][] = "Failed to update database for item ID: " . $row['id'];
+                    }
+
+                    $updateStmt->close();
+                } else {
+                    $results['failed']++;
+                    $results['errors'][] = "Failed to generate QR for item: " . $row['item_name'];
+                }
+            }
+        }
+
+        $stmt->close();
+    } catch (Exception $e) {
+        error_log("QR repair error: " . $e->getMessage());
+        $results['errors'][] = $e->getMessage();
+    }
+
+    return $results;
+}
+
+/**
+ * Download QR code for single item
+ */
+function downloadQRCode($item_id, $conn)
+{
+    try {
+        $query = "SELECT item_name, serial_number, qr_code FROM items WHERE id = ?";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("i", $item_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($row = $result->fetch_assoc()) {
+            if (!empty($row['qr_code']) && $row['qr_code'] != 'pending') {
+                $filePath = '../' . $row['qr_code'];
+
+                if (file_exists($filePath)) {
+                    // Set headers for download
+                    header('Content-Type: image/png');
+                    header('Content-Disposition: attachment; filename="QR_' .
+                        preg_replace('/[^a-z0-9]/i', '_', $row['item_name']) . '_' .
+                        preg_replace('/[^a-z0-9]/i', '_', $row['serial_number']) . '.png"');
+                    header('Content-Length: ' . filesize($filePath));
+
+                    readfile($filePath);
+                    exit;
+                } else {
+                    throw new Exception("QR code file not found");
+                }
+            } else {
+                throw new Exception("No QR code available for this item");
+            }
+        } else {
+            throw new Exception("Item not found");
+        }
+    } catch (Exception $e) {
+        error_log("Download QR error: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Get batch QR code generation progress
+ */
+function getBatchQRProgress($batchId)
+{
+    $progressFile = '../uploads/temp/qr_progress_' . $batchId . '.json';
+
+    if (file_exists($progressFile)) {
+        $progressData = json_decode(file_get_contents($progressFile), true);
+
+        if (isset($progressData['completed'])) {
+            unlink($progressFile); // Clean up when done
+        }
+
+        return $progressData;
+    }
+
+    return [
+        'status' => 'not_found',
+        'message' => 'Progress data not found'
+    ];
+}
+
+/**
+ * Clean up old QR files
+ */
+function cleanupOldQRFiles($days = 30)
+{
+    $qrDir = '../uploads/qr_codes/';
+    $tempDir = '../uploads/temp_qr_zip/';
+
+    $deleted = 0;
+    $errors = [];
+
+    // Clean QR directory
+    if (file_exists($qrDir)) {
+        $files = glob($qrDir . '*.png');
+        $cutoffTime = time() - ($days * 24 * 60 * 60);
+
+        foreach ($files as $file) {
+            if (filemtime($file) < $cutoffTime) {
+                if (unlink($file)) {
+                    $deleted++;
+                } else {
+                    $errors[] = "Failed to delete: " . basename($file);
+                }
+            }
+        }
+    }
+
+    // Clean temp ZIP directory
+    if (file_exists($tempDir)) {
+        $dirs = glob($tempDir . '*', GLOB_ONLYDIR);
+
+        foreach ($dirs as $dir) {
+            if (is_dir($dir)) {
+                // Delete files in directory
+                $tempFiles = glob($dir . '/*');
+                foreach ($tempFiles as $tempFile) {
+                    if (is_file($tempFile)) {
+                        unlink($tempFile);
+                    }
+                }
+
+                // Delete directory
+                if (rmdir($dir)) {
+                    $deleted++;
+                } else {
+                    $errors[] = "Failed to delete temp directory: " . basename($dir);
+                }
+            }
+        }
+
+        // Clean old ZIP files
+        $zipFiles = glob($tempDir . '*.zip');
+        foreach ($zipFiles as $zipFile) {
+            if (filemtime($zipFile) < time() - (24 * 60 * 60)) { // 1 day
+                if (unlink($zipFile)) {
+                    $deleted++;
+                } else {
+                    $errors[] = "Failed to delete ZIP: " . basename($zipFile);
+                }
+            }
+        }
+    }
+
+    return [
+        'deleted' => $deleted,
+        'errors' => $errors
+    ];
+}
+
+/**
+ * Test QR code generation (for debugging)
+ */
+function testQRGeneration()
+{
+    $results = [
+        'api_test' => checkQRCodeAPIs(),
+        'directory_permissions' => [
+            'uploads' => is_writable('../uploads'),
+            'qr_codes' => is_writable('../uploads/qr_codes/'),
+            'temp_qr_zip' => is_writable('../uploads/temp_qr_zip/')
+        ],
+        'php_extensions' => [
+            'gd' => extension_loaded('gd'),
+            'zip' => class_exists('ZipArchive'),
+            'curl' => function_exists('curl_init'),
+            'json' => function_exists('json_encode')
+        ],
+        'memory_limit' => ini_get('memory_limit'),
+        'max_execution_time' => ini_get('max_execution_time')
+    ];
+
+    return $results;
+}
+
+/**
+ * Get Excel column letters for dropdown
+ */
+function getExcelColumns($maxColumns = 26)
+{
+    $columns = [];
+    for ($i = 1; $i <= $maxColumns; $i++) {
+        $columns[] = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i);
+    }
+    return $columns;
+}
+
+/**
+ * Create field mapping dropdown HTML
+ */
+function renderFieldMappingDropdown($fieldName, $label, $isRequired = false, $headers = [])
+{
+    $requiredStar = $isRequired ? ' <span class="text-danger">*</span>' : '';
+
+    $html = '<div class="mb-3">';
+    $html .= '<label for="' . htmlspecialchars($fieldName) . '" class="form-label">';
+    $html .= htmlspecialchars($label) . $requiredStar . '</label>';
+    $html .= '<select class="form-select" id="' . htmlspecialchars($fieldName) . '" ';
+    $html .= 'name="field_mapping[' . htmlspecialchars($fieldName) . ']">';
+    $html .= '<option value="">-- Select Column --</option>';
+
+    foreach ($headers as $index => $header) {
+        $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($index + 1);
+        $displayText = $colLetter . ': ' . htmlspecialchars($header);
+        $html .= '<option value="' . $colLetter . '">' . $displayText . '</option>';
+    }
+
+    $html .= '</select>';
+    $html .= '</div>';
+
+    return $html;
+}
+
+/**
+ * Quick CSV import for simple files
+ */
+function quickCSVImport($csvFile, $conn)
+{
+    $results = [
+        'success' => 0,
+        'errors' => [],
+        'skipped' => 0
+    ];
+
+    try {
+        $handle = fopen($csvFile, "r");
+        if (!$handle) {
+            throw new Exception("Cannot open CSV file");
+        }
+
+        // Read header
+        $headers = fgetcsv($handle);
+        if (!$headers) {
+            throw new Exception("CSV file is empty or invalid");
+        }
+
+        // Simple mapping - assume first 3 columns are required
+        $rowNum = 1;
+        while (($data = fgetcsv($handle)) !== FALSE) {
+            $rowNum++;
+
+            try {
+                // Basic validation - require at least 3 columns
+                if (count($data) < 3) {
+                    $results['skipped']++;
+                    continue;
+                }
+
+                $itemData = [
+                    'item_name' => $data[0] ?? '',
+                    'serial_number' => $data[1] ?? '',
+                    'category' => $data[2] ?? '',
+                    'brand' => $data[3] ?? '',
+                    'model' => $data[4] ?? '',
+                    'department' => $data[5] ?? '',
+                    'description' => $data[6] ?? '',
+                    'condition' => $data[7] ?? 'good',
+                    'stock_location' => $data[8] ?? '',
+                    'quantity' => intval($data[9] ?? 1),
+                    'status' => $data[10] ?? 'available',
+                    'notes' => $data[11] ?? ''
+                ];
+
+                // Check if serial exists
+                $checkSql = "SELECT id FROM items WHERE serial_number = ?";
+                $checkStmt = $conn->prepare($checkSql);
+                $checkStmt->bind_param('s', $itemData['serial_number']);
+                $checkStmt->execute();
+                $checkStmt->store_result();
+
+                if ($checkStmt->num_rows > 0) {
+                    // Update
+                    $updateSql = "UPDATE items SET 
+                        item_name = ?, category = ?, brand = ?, model = ?, 
+                        department = ?, description = ?, `condition` = ?, 
+                        stock_location = ?, quantity = ?, status = ?, notes = ?,
+                        updated_at = NOW()
+                        WHERE serial_number = ?";
+
+                    $updateStmt = $conn->prepare($updateSql);
+                    $updateStmt->bind_param(
+                        'ssssssssisss',
+                        $itemData['item_name'],
+                        $itemData['category'],
+                        $itemData['brand'],
+                        $itemData['model'],
+                        $itemData['department'],
+                        $itemData['description'],
+                        $itemData['condition'],
+                        $itemData['stock_location'],
+                        $itemData['quantity'],
+                        $itemData['status'],
+                        $itemData['notes'],
+                        $itemData['serial_number']
+                    );
+
+                    if ($updateStmt->execute()) {
+                        $results['success']++;
+                    }
+
+                    $updateStmt->close();
+                } else {
+                    // Insert
+                    $insertSql = "INSERT INTO items (
+                        item_name, serial_number, category, brand, model,
+                        department, description, `condition`, stock_location,
+                        quantity, status, notes, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+
+                    $insertStmt = $conn->prepare($insertSql);
+                    $insertStmt->bind_param(
+                        'sssssssssiss',
+                        $itemData['item_name'],
+                        $itemData['serial_number'],
+                        $itemData['category'],
+                        $itemData['brand'],
+                        $itemData['model'],
+                        $itemData['department'],
+                        $itemData['description'],
+                        $itemData['condition'],
+                        $itemData['stock_location'],
+                        $itemData['quantity'],
+                        $itemData['status'],
+                        $itemData['notes']
+                    );
+
+                    if ($insertStmt->execute()) {
+                        $results['success']++;
+                    }
+
+                    $insertStmt->close();
+                }
+
+                $checkStmt->close();
+            } catch (Exception $e) {
+                $results['errors'][] = "Row $rowNum: " . $e->getMessage();
+                $results['skipped']++;
+            }
+        }
+
+        fclose($handle);
+    } catch (Exception $e) {
+        $results['errors'][] = $e->getMessage();
+    }
+
+    return $results;
+}
+/ * * 
+   *   L o g   u s e r   a c t i v i t y 
+   * / 
+ f u n c t i o n   l o g A c t i v i t y ( $ p d o ,   $ u s e r I d ,   $ a c t i o n T y p e ,   $ d e s c r i p t i o n ,   $ i t e m I d   =   n u l l ,   $ s c a n I d   =   n u l l ) 
+ { 
+         t r y   { 
+                 $ s t m t   =   $ p d o - > p r e p a r e ( " 
+                         I N S E R T   I N T O   a c t i v i t y _ l o g   ( u s e r _ i d ,   a c t i o n _ t y p e ,   d e s c r i p t i o n ,   i t e m _ i d ,   s c a n _ i d ,   c r e a t e d _ a t ) 
+                         V A L U E S   ( ? ,   ? ,   ? ,   ? ,   ? ,   N O W ( ) ) 
+                 " ) ; 
+                 $ s t m t - > e x e c u t e ( [ $ u s e r I d ,   $ a c t i o n T y p e ,   $ d e s c r i p t i o n ,   $ i t e m I d ,   $ s c a n I d ] ) ; 
+                 r e t u r n   t r u e ; 
+         }   c a t c h   ( E x c e p t i o n   $ e )   { 
+                 e r r o r _ l o g ( " A c t i v i t y   l o g g i n g   e r r o r :   "   .   $ e - > g e t M e s s a g e ( ) ) ; 
+                 r e t u r n   f a l s e ; 
+         } 
+ }  
+ 

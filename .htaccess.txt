@@ -1,0 +1,28 @@
+# .htaccess
+RewriteEngine On
+
+# Ensure HTTP_HOST is set
+RewriteCond %{HTTP_HOST} !^$
+RewriteRule .* - [E=HTTP_HOST:%{HTTP_HOST}]
+
+# Ensure REQUEST_URI is set
+RewriteCond %{REQUEST_URI} !^$
+RewriteRule .* - [E=REQUEST_URI:%{REQUEST_URI}]
+
+# Ensure SERVER_PORT is set
+RewriteRule .* - [E=SERVER_PORT:%{SERVER_PORT}]
+
+$response['debug']['rootDir'] = $rootDir;
+$response['debug']['upload_target'] = $upload_path;
+$response['debug']['file_exists'] = file_exists($upload_path);
+$response['debug']['files_array'] = $_FILES;
+
+# Increase PHP time limits for imports
+php_value max_execution_time 1800
+php_value max_input_time 1800
+php_value memory_limit 512M
+
+# Enable compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>

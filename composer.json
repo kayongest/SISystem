@@ -1,0 +1,13 @@
+{
+    "require": {
+        "chillerlan/php-qrcode": "^5.0",
+        "endroid/qr-code": "^4.8",
+        "phpoffice/phpspreadsheet": "^1.28"
+    },
+    "config": {
+        "platform": {
+            "php": "8.0.30"
+        },
+        "platform-check": false
+    }
+}

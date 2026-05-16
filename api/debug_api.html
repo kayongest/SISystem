@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Debug</title>
+</head>
+<body>
+    <h1>API Endpoint Debug</h1>
+    <button onclick="testEndpoints()">Test Endpoints</button>
+    <div id="results"></div>
+    
+    <script>
+        async function testEndpoints() {
+            const endpoints = [
+                'api/get_technicians.php',
+                './api/get_technicians.php',
+                '../api/get_technicians.php',
+                '/api/get_technicians.php'
+            ];
+            
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+            
+            for (const endpoint of endpoints) {
+                const div = document.createElement('div');
+                div.style.padding = '10px';
+                div.style.margin = '5px';
+                div.style.border = '1px solid #ccc';
+                
+                div.innerHTML = `<strong>Testing: ${endpoint}</strong><br>`;
+                
+                try {
+                    const response = await fetch(endpoint);
+                    div.innerHTML += `Status: ${response.status} ${response.statusText}<br>`;
+                    
+                    if (response.ok) {
+                        const text = await response.text();
+                        div.innerHTML += `Response (first 200 chars): ${text.substring(0, 200)}...<br>`;
+                        div.style.backgroundColor = '#d4edda';
+                    } else {
+                        div.style.backgroundColor = '#f8d7da';
+                    }
+                } catch (error) {
+                    div.innerHTML += `Error: ${error.message}<br>`;
+                    div.style.backgroundColor = '#f8d7da';
+                }
+                
+                resultsDiv.appendChild(div);
+            }
+        }
+        
+        // Auto-test on load
+        testEndpoints();
+    </script>
+</body>
+</html>
