@@ -647,6 +647,13 @@ require_once 'assets/css/chart.css';
         color: #fff !important;
     }
 
+    .action-card-premium.view:hover .text-dark,
+    .action-card-premium.view:hover .text-muted,
+    .action-card-premium.view:hover .action-icon {
+        color: #fff !important;
+        background: transparent;
+    }
+
     .action-card-premium.edit {
         border-left: 4px solid #697565;
     }
@@ -659,6 +666,13 @@ require_once 'assets/css/chart.css';
     .action-card-premium.edit:hover {
         background: #697565;
         color: #fff !important;
+    }
+
+    .action-card-premium.edit:hover .text-dark,
+    .action-card-premium.edit:hover .text-muted,
+    .action-card-premium.edit:hover .action-icon {
+        color: #fff !important;
+        background: transparent;
     }
 
     /* Google Style Landing */
