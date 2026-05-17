@@ -200,6 +200,23 @@ if ($user_role === 'admin') {
         background: rgba(255, 255, 255, 0.2);
         color: white;
     }
+
+    @media (max-width: 768px) {
+        .page-header-compact .d-flex.justify-content-between {
+            flex-direction: column;
+            gap: 15px;
+            align-items: flex-start !important;
+        }
+        .header-actions-compact {
+            width: 100%;
+            justify-content: space-between;
+        }
+        .page-count-compact {
+            margin-left: 0;
+            margin-top: 5px;
+            display: inline-flex;
+        }
+    }
 </style>
 
 <div class="page-header-compact">

@@ -125,45 +125,63 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
     }
 
     @media (max-width: 992px) {
-        .page-header-unified .d-flex {
-            flex-direction: column;
-            gap: 1rem;
-            align-items: flex-start !important;
+        .page-header-unified {
+            padding: 0.75rem 1rem;
         }
-
         .nav-links-unified {
+            flex-direction: column;
             width: 100%;
+            align-items: stretch;
+            gap: 0.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin-top: 1rem;
+        }
+        .nav-link-compact {
+            justify-content: flex-start;
+            padding: 10px 15px;
+        }
+        .dropdown-compact .dropdown-menu {
+            position: static !important;
+            transform: none !important;
+            float: none;
+            margin-top: 0.5rem;
         }
     }
 </style>
 
-<div class="page-header-unified no-print">
+<nav class="navbar navbar-expand-lg page-header-unified no-print">
     <div class="container-fluid">
-        <div class="d-flex justify-content-between align-items-center">
-            <!-- Left: Brand + User Profile (Combined Header 1 & 2) -->
-            <div class="d-flex align-items-center gap-4">
-                <div class="user-info-compact">
-                    <div class="user-avatar-compact">
-                        <?php
-                        $icon = 'fa-user';
-                        if (isAdmin()) $icon = 'fa-user-shield';
-                        elseif ($user_role === 'technician') $icon = 'fa-tools';
-                        elseif ($user_role === 'stock_controller') $icon = 'fa-check-circle';
-                        ?>
-                        <i class="fas <?php echo $icon; ?>"></i>
-                    </div>
-                    <div class="user-details-compact">
-                        <h5><?php echo htmlspecialchars($user_name); ?></h5>
-                        <span class="role-badge-compact">
-                            <?php echo ucfirst(str_replace('_', ' ', $user_role)); ?>
-                        </span>
-                    </div>
+        <!-- Left: Brand + User Profile (Combined Header 1 & 2) -->
+        <div class="d-flex align-items-center gap-4">
+            <div class="user-info-compact">
+                <div class="user-avatar-compact">
+                    <?php
+                    $icon = 'fa-user';
+                    if (isAdmin()) $icon = 'fa-user-shield';
+                    elseif ($user_role === 'technician') $icon = 'fa-tools';
+                    elseif ($user_role === 'stock_controller') $icon = 'fa-check-circle';
+                    ?>
+                    <i class="fas <?php echo $icon; ?>"></i>
                 </div>
-                <div class="vr" style="height: 50px; opacity: 0.2; background-color: white;"></div>
+                <div class="user-details-compact">
+                    <h5><?php echo htmlspecialchars($user_name); ?></h5>
+                    <span class="role-badge-compact">
+                        <?php echo ucfirst(str_replace('_', ' ', $user_role)); ?>
+                    </span>
+                </div>
             </div>
+            <div class="vr d-none d-lg-block" style="height: 50px; opacity: 0.2; background-color: white;"></div>
+        </div>
 
-            <!-- Right: Nav Links (Header 1 Items in Header 2 Style) -->
-            <div class="nav-links-unified">
+        <!-- Hamburger Menu Button for Mobile -->
+        <button class="navbar-toggler border-0 shadow-none px-2" type="button" data-bs-toggle="collapse" data-bs-target="#unifiedNavbar" aria-controls="unifiedNavbar" aria-expanded="false" aria-label="Toggle navigation">
+            <i class="fas fa-bars text-white fs-4"></i>
+        </button>
+
+        <!-- Right: Nav Links (Header 1 Items in Header 2 Style) -->
+        <div class="collapse navbar-collapse" id="unifiedNavbar">
+            <div class="nav-links-unified ms-auto mt-3 mt-lg-0">
                 <!-- Dashboard -->
                 <?php if (isAdmin() || in_array($user_role, ['stock_manager', 'tech_lead'])): ?>
                     <a href="<?php echo BASE_URL; ?>dashboard_full.php" class="nav-link-compact <?php echo ($current_page == 'dashboard_full.php' || $current_page == 'dashboard_full.php') ? 'active' : ''; ?>">
@@ -266,4 +284,4 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
             </div>
         </div>
     </div>
-</div>
+</nav>
