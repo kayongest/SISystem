@@ -28,14 +28,7 @@ error_log("Dashboard accessed by: " . ($_SESSION['username'] ?? 'Unknown') . " (
 require_once 'includes/functions.php';
 $user_role = getUserRole();
 
-// RESTRICT ACCESS - Technicians and Stock Controllers have specific pages
-if ($user_role === 'technician') {
-    header('Location: technician_batch_history.php');
-    exit();
-} elseif ($user_role === 'stock_controller') {
-    header('Location: batch_history.php');
-    exit();
-}
+// RESTRICT ACCESS - removed so everyone can access dashboard_full.php
 
 $current_page = basename(__FILE__);
 $pageTitle = "Dashboard - aBility";
