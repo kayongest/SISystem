@@ -7,6 +7,59 @@ if (session_status() === PHP_SESSION_NONE) {
 $current_page = basename($_SERVER['PHP_SELF']);
 $user_role = getUserRole();
 $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
+
+// Dynamic notification counts for different roles
+$tech_batch_count = 0;
+$driver_batch_count = 0;
+$pending_approval_count = 0;
+
+try {
+    require_once __DIR__ . '/database_fix.php';
+    $nav_db = new DatabaseFix();
+    $nav_conn = $nav_db->getConnection();
+
+    if ($nav_conn) {
+        if ($user_role === 'technician' && isset($_SESSION['user_id'])) {
+            $stmt = $nav_conn->prepare("SELECT COUNT(*) as count FROM batches WHERE submitted_by = ?");
+            if ($stmt) {
+                $stmt->bind_param("i", $_SESSION['user_id']);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($row = $res->fetch_assoc()) {
+                    $tech_batch_count = $row['count'] ?? 0;
+                }
+                $stmt->close();
+            }
+        }
+
+        if ($user_role === 'driver' && isset($_SESSION['user_id'])) {
+            $stmt = $nav_conn->prepare("SELECT COUNT(*) as count FROM batches WHERE transport_driver_id = ?");
+            if ($stmt) {
+                $stmt->bind_param("i", $_SESSION['user_id']);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($row = $res->fetch_assoc()) {
+                    $driver_batch_count = $row['count'] ?? 0;
+                }
+                $stmt->close();
+            }
+        }
+
+        if (isAdmin() || $user_role === 'stock_controller') {
+            $stmt = $nav_conn->prepare("SELECT COUNT(*) as count FROM batches WHERE status = 'pending_verification'");
+            if ($stmt) {
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($row = $res->fetch_assoc()) {
+                    $pending_approval_count = $row['count'] ?? 0;
+                }
+                $stmt->close();
+            }
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error in navbar dynamic counts: " . $e->getMessage());
+}
 ?>
 
 <style>
@@ -18,6 +71,7 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
         color: white;
         position: sticky;
         top: 0;
+        z-index: 1030;
     }
 
     .user-info-compact {
@@ -128,6 +182,7 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
         .page-header-unified {
             padding: 0.75rem 1rem;
         }
+
         .nav-links-unified {
             flex-direction: column;
             width: 100%;
@@ -137,10 +192,12 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             margin-top: 1rem;
         }
+
         .nav-link-compact {
             justify-content: flex-start;
             padding: 10px 15px;
         }
+
         .dropdown-compact .dropdown-menu {
             position: static !important;
             transform: none !important;
@@ -183,8 +240,8 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
         <div class="collapse navbar-collapse" id="unifiedNavbar">
             <div class="nav-links-unified ms-auto mt-3 mt-lg-0">
                 <!-- Dashboard -->
-                <?php if (isAdmin() || in_array($user_role, ['stock_manager', 'tech_lead'])): ?>
-                    <a href="<?php echo BASE_URL; ?>dashboard_full.php" class="nav-link-compact <?php echo ($current_page == 'dashboard_full.php' || $current_page == 'dashboard_full.php') ? 'active' : ''; ?>">
+                <?php if (isAdmin() || in_array($user_role, ['stock_manager', 'tech_lead', 'technician'])): ?>
+                    <a href="<?php echo BASE_URL; ?>dashboard_full.php" class="nav-link-compact <?php echo ($current_page == 'dashboard_full.php') ? 'active' : ''; ?>">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a>
                 <?php endif; ?>
@@ -229,12 +286,33 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
                 <?php if ($user_role === 'technician'): ?>
                     <a href="<?php echo BASE_URL; ?>technician_batch_history.php" class="nav-link-compact <?php echo ($current_page == 'technician_batch_history.php') ? 'active' : ''; ?>">
                         <i class="fas fa-history"></i> My Batches
+                        <?php if ($tech_batch_count > 0): ?>
+                            <span class="badge bg-danger rounded-pill ms-2" style="font-size: 0.75rem; padding: 0.25em 0.6em;"><?php echo $tech_batch_count; ?></span>
+                        <?php endif; ?>
+                    </a>
+                <?php endif; ?>
+
+                <?php if ($user_role === 'driver'): ?>
+                    <a href="<?php echo BASE_URL; ?>driver_batches.php" class="nav-link-compact <?php echo ($current_page == 'driver_batches.php') ? 'active' : ''; ?>">
+                        <i class="fas fa-truck"></i> My Transport Batches
+                        <?php if ($driver_batch_count > 0): ?>
+                            <span class="badge bg-danger rounded-pill ms-2" style="font-size: 0.75rem; padding: 0.25em 0.6em;"><?php echo $driver_batch_count; ?></span>
+                        <?php endif; ?>
                     </a>
                 <?php endif; ?>
 
                 <?php if (isAdmin() || $user_role === 'stock_controller'): ?>
                     <a href="<?php echo BASE_URL; ?>batch_history.php" class="nav-link-compact <?php echo ($current_page == 'batch_history.php') ? 'active' : ''; ?>">
                         <i class="fas fa-check-double"></i> Batch Approvals
+                        <?php if ($pending_approval_count > 0): ?>
+                            <span class="badge bg-danger rounded-pill ms-2" style="font-size: 0.75rem; padding: 0.25em 0.6em;"><?php echo $pending_approval_count; ?></span>
+                        <?php endif; ?>
+                    </a>
+                <?php endif; ?>
+
+                <?php if (isAdmin() || in_array($user_role, ['technician', 'driver', 'stock_controller', 'manager', 'stock_manager', 'tech_lead'])): ?>
+                    <a href="<?php echo BASE_URL; ?>mobile_app.php" class="nav-link-compact <?php echo ($current_page == 'mobile_app.php') ? 'active' : ''; ?>" style="background: rgba(32, 178, 170, 0.15); border-color: rgba(32, 178, 170, 0.3);">
+                        <i class="fas fa-mobile-alt" style="color: #20B2AA;"></i> Mobile App
                     </a>
                 <?php endif; ?>
 

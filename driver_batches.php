@@ -1,46 +1,38 @@
 <?php
-// technician_batch_history.php
+// driver_batches.php
 session_start();
-
-// Include bootstrap and database connection
-require_once 'bootstrap.php';
 require_once 'includes/db_connect.php';
-require_once 'includes/functions.php';
 
 // Check if user is logged in
-if (!isLoggedIn()) {
-    $_SESSION['flash_messages']['warning'] = 'Please log in to view your batch history.';
-    header('Location: login.php');
-    exit();
-}
-
-// Get user's role
-$user_role = getUserRole();
-
-// RESTRICT ACCESS - Only technicians and admins can access this page
-$allowed_roles = ['technician', 'admin'];
-if (!in_array($user_role, $allowed_roles)) {
-    if ($user_role === 'stock_controller') {
-        header('Location: batch_history.php');
-    } else {
-        header('Location: dashboard_full.php');
-    }
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
     exit();
 }
 
 $user_id = $_SESSION['user_id'];
-$user_name = getUserFullName();
+$user_role = $_SESSION['role'] ?? 'user';
+$user_name = $_SESSION['full_name'] ?? $_SESSION['username'] ?? 'User';
 
-// Technician ID is now the same as User ID
-$technician_id = $user_id;
+// Initialize variables for filter
+$date_from = isset($_GET['date_from']) ? $_GET['date_from'] : date('Y-m-d', strtotime('-30 days'));
+$date_to = isset($_GET['date_to']) ? $_GET['date_to'] : date('Y-m-d');
 
-// Get filter parameters
-$date_from = $_GET['date_from'] ?? date('Y-m-d', strtotime('-30 days'));
-$date_to = $_GET['date_to'] ?? date('Y-m-d');
-$status = $_GET['status'] ?? '';
-$search = $_GET['search'] ?? '';
+$current_page = 'driver_batches.php';
+// Include bootstrap and database connection
+require_once 'bootstrap.php';
+require_once 'includes/functions.php';
 
-$pageTitle = "My Batches - aBility";
+// RESTRICT ACCESS - Only drivers and admins can access this page
+$allowed_roles = ['driver', 'admin'];
+if (!in_array($user_role, $allowed_roles)) {
+    header('Location: dashboard_full.php');
+    exit();
+}
+
+// Technician ID logic is not needed, we use user_id
+$driver_name = $_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Unknown';
+
+$pageTitle = "Driver Batches - aBility";
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -48,7 +40,7 @@ $pageTitle = "My Batches - aBility";
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $pageTitle; ?></title>
+    <title>Driver Transport Batches - EventTrack</title>
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -555,43 +547,31 @@ $pageTitle = "My Batches - aBility";
         }
 
 
-        /* Stats Cards - Card with List Group Layout */
+        /* Stats Cards - Premium Responsive Grid Layout */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            height: 100%;
-        }
-
-        /* For larger screens, ensure 2x2 grid */
-        @media (min-width: 768px) {
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        /* For mobile, stack vertically */
-        @media (max-width: 767px) {
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            height: auto;
         }
 
         .stat-card {
             border-radius: 12px;
             overflow: hidden;
-            background-color: #2f4f67;
             transition: transform 0.3s ease, box-shadow 0.3s ease;
             border: none;
             color: #ffffff;
-            padding-left: 15px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-            height: 70%;
+            padding: 16px 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 90px;
         }
 
         .stat-card:hover {
             transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(5, 105, 152, 0.12);
+            box-shadow: 0 8px 25px rgba(5, 105, 152, 0.15);
         }
 
         /* Filter Section - make it match height */
@@ -825,11 +805,6 @@ $pageTitle = "My Batches - aBility";
         <!-- Page Title -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <button class="btn btn-sm outline- text-white" style="background-color: #0a4483;">
-                    <a href="scan_bulk.php" style="color:#fff; text-decoration: none;">
-                        <i class="fas fa-qrcode"></i> Scan New Batch
-                    </a>
-                </button>
                 <button class="btn btn-sm outline- text-white" style="background-color: #10914c;" onclick="refreshData()">
                     <i class="fas fa-sync-alt me-1"></i> Refresh
                 </button>
@@ -893,7 +868,7 @@ $pageTitle = "My Batches - aBility";
 
         <!-- Batches Table -->
         <div class="table-container">
-            <h5 class="mb-3"><i class="fas fa-list me-2 text-primary"></i>My Batch Submissions</h5>
+            <h5 class="mb-3"><i class="fas fa-truck me-2 text-primary"></i>My Transport Batches</h5>
             <table id="batchesTable" class="table table-hover" style="width:100%">
                 <thead>
                     <tr>
@@ -938,10 +913,15 @@ $pageTitle = "My Batches - aBility";
                         </div>
                     </div>
                 </div>
-
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-sm btn- text-white" style="background-color: #85160e;" data-bs-dismiss="modal">
                         <i class="fas fa-times me-1"></i> Close
+                    </button>
+                    <button type="button" id="verifyLoadBtn" class="btn btn-sm btn-success d-none" onclick="verifyDriverLoad()">
+                        <i class="fas fa-check-circle me-1"></i> Verify Loaded
+                    </button>
+                    <button type="button" id="completeDeliveryBtn" class="btn btn-sm btn-info text-white d-none" onclick="completeDriverDelivery()">
+                        <i class="fas fa-flag-checkered me-1"></i> Complete Delivery
                     </button>
                     <button type="button" class="btn btn-sm btn- text-white" style="background-color: #0f8094;" onclick="refreshBatchStatus()">
                         <i class="fas fa-sync-alt me-1"></i> Refresh Status
@@ -962,7 +942,7 @@ $pageTitle = "My Batches - aBility";
     <script>
         let batchesTable;
         let currentBatchId = null;
-        let technicianId = <?php echo json_encode($technician_id); ?>;
+        let technicianId = null;
 
         // Logout functions
         function showLogoutToast(event) {
@@ -997,7 +977,7 @@ $pageTitle = "My Batches - aBility";
             showLoading();
 
             $.ajax({
-                url: 'api/batches/technician_list.php',
+                url: 'api/batches/driver_list.php',
                 method: 'GET',
                 data: {
                     date_from: date_from,
@@ -1015,7 +995,8 @@ $pageTitle = "My Batches - aBility";
                             total_batches: 0,
                             total_items: 0,
                             pending_batches: 0,
-                            approved_batches: 0
+                            approved_batches: 0,
+                            gate_passes: 0
                         });
                     }
                 },
@@ -1039,22 +1020,22 @@ $pageTitle = "My Batches - aBility";
                 <div class="stat-label text-white">Total Batches</div>
             </div>
         </div>
-        <div class="stat-card" style="background-color: #3c4f6f;">
-            <div class="stat-content">
-                <div class="stat-value">${stats.total_items || 0}</div>
-                <div class="stat-label text-white">Total Items</div>
-            </div>
-        </div>
         <div class="stat-card" style="background-color: #a06f27;">
             <div class="stat-content">
                 <div class="stat-value">${stats.pending_batches || 0}</div>
                 <div class="stat-label text-white">Pending Approval</div>
             </div>
         </div>
-        <div class="stat-card" style="background-color: #279960;">
+        <div class="stat-card" style="background-color: #1f6f8b;">
             <div class="stat-content">
                 <div class="stat-value">${stats.approved_batches || 0}</div>
                 <div class="stat-label text-white">Approved</div>
+            </div>
+        </div>
+        <div class="stat-card" style="background-color: #1e6f5c;">
+            <div class="stat-content">
+                <div class="stat-value">${stats.completed_batches || 0}</div>
+                <div class="stat-label text-white">Completed</div>
             </div>
         </div>
         <div class="stat-card" style="background-color: #7952b3;">
@@ -1133,7 +1114,7 @@ $pageTitle = "My Batches - aBility";
                             <button class="btn btn-sm btn-icon btn-success" onclick="viewFullReport('${data.batch_id}')" title="Download Report">
                                 <i class="fas fa-file-pdf"></i>
                             </button>
-                            ${['stock_to_stock', 'stock_to_venue_transport'].includes(data.movement_type) ? `
+                            ${['stock_to_stock', 'stock_to_venue_transport', 'transport'].includes(data.movement_type) ? `
                             <a href="gate_pass.php?batch_id=${encodeURIComponent(data.batch_id)}" class="btn btn-sm btn-icon btn-warning" title="View Gate Pass" target="_blank">
                                 <i class="fas fa-ticket-alt"></i>
                             </a>
@@ -1386,15 +1367,6 @@ $pageTitle = "My Batches - aBility";
                         <div class="info-label">Driver</div>
                         <div class="info-value">${escapeHtml(batch.transport_driver)}</div>
                     </div>
-                    <div class="info-item">
-                        <div class="info-label">Driver Load Verification</div>
-                        <div class="info-value">
-                            ${parseInt(batch.driver_verified) ? 
-                                `<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Verified</span>` : 
-                                `<span class="badge bg-warning"><i class="fas fa-clock me-1"></i> Pending Verification</span>`
-                            }
-                        </div>
-                    </div>
                     ` : ''}
                     ${batch.transport_date ? `
                     <div class="info-item">
@@ -1445,9 +1417,80 @@ $pageTitle = "My Batches - aBility";
                 <strong>Rejection Reason:</strong> ${escapeHtml(batch.rejection_reason)}
             </div>
             ` : ''}
+
+            ${(currentStatus === 'approved' && !parseInt(batch.driver_verified)) ? `
+            <div class="batch-info-card border-warning shadow-sm mt-3" style="background-color: #fffbeb; border-left: 4px solid #ffc107 !important;">
+                <div class="batch-info-title text-warning-emphasis fw-bold mb-2">
+                    <i class="fas fa-truck-loading me-2 text-warning"></i>
+                    <span>Transport Acceptance & Compliance Checklist</span>
+                </div>
+                <div class="p-1">
+                    <p class="text-muted small mb-3" style="font-size: 0.8rem;">To accept receipt of these items and authorize transport, please verify the following conditions:</p>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input driver-agreement" type="checkbox" id="agreeEquipment" style="cursor: pointer; width: 1.2rem; height: 1.2rem;">
+                        <label class="form-check-label small fw-semibold text-dark ms-2" for="agreeEquipment" style="cursor: pointer; line-height: 1.4;">
+                            i) I approve that all listed equipment is fully loaded and secured in my vehicle.
+                        </label>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input driver-agreement" type="checkbox" id="agreeTechnician" style="cursor: pointer; width: 1.2rem; height: 1.2rem;">
+                        <label class="form-check-label small fw-semibold text-dark ms-2" for="agreeTechnician" style="cursor: pointer; line-height: 1.4;">
+                            ii) I approve that the technician is in my vehicle for transport.
+                        </label>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input driver-agreement" type="checkbox" id="agreeRequest" style="cursor: pointer; width: 1.2rem; height: 1.2rem;">
+                        <label class="form-check-label small fw-semibold text-dark ms-2" for="agreeRequest" style="cursor: pointer; line-height: 1.4;">
+                            iii) I accept the transport request and responsibility for these items.
+                        </label>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
         `;
 
             $('#batchDetailContent').html(html);
+
+            // Toggle verify load and complete delivery buttons based on verification status and approval status
+            if (currentStatus === 'approved') {
+                if (!parseInt(batch.driver_verified)) {
+                    $('#verifyLoadBtn').removeClass('d-none');
+                    $('#completeDeliveryBtn').addClass('d-none');
+
+                    // Setup dynamic interlock logic
+                    const verifyBtn = document.getElementById('verifyLoadBtn');
+                    if (verifyBtn) {
+                        verifyBtn.disabled = true;
+                        verifyBtn.innerHTML = '<i class="fas fa-lock me-1"></i> Accept Receipt';
+                        verifyBtn.className = 'btn btn-sm btn-secondary';
+
+                        const checkboxes = document.querySelectorAll('.driver-agreement');
+                        checkboxes.forEach(cb => {
+                            cb.addEventListener('change', () => {
+                                const allChecked = Array.from(checkboxes).every(c => c.checked);
+                                if (allChecked) {
+                                    verifyBtn.disabled = false;
+                                    verifyBtn.innerHTML = '<i class="fas fa-check-circle me-1"></i> Confirm & Accept Receipt';
+                                    verifyBtn.className = 'btn btn-sm btn-success';
+                                } else {
+                                    verifyBtn.disabled = true;
+                                    verifyBtn.innerHTML = '<i class="fas fa-lock me-1"></i> Accept Receipt';
+                                    verifyBtn.className = 'btn btn-sm btn-secondary';
+                                }
+                            });
+                        });
+                    }
+                } else {
+                    $('#verifyLoadBtn').addClass('d-none');
+                    $('#completeDeliveryBtn').removeClass('d-none');
+                }
+            } else {
+                $('#verifyLoadBtn').addClass('d-none');
+                $('#completeDeliveryBtn').addClass('d-none');
+            }
 
             // Update modal footer buttons based on status
             const footer = $('#batchDetailModal .modal-footer');
@@ -1461,7 +1504,7 @@ $pageTitle = "My Batches - aBility";
                 `);
                 footer.prepend(downloadBtn);
                 
-                if (['stock_to_stock', 'stock_to_venue_transport'].includes(batch.movement_type)) {
+                if (['stock_to_stock', 'stock_to_venue_transport', 'transport'].includes(batch.movement_type)) {
                     const gatePassBtn = $(`
                         <a href="gate_pass.php?batch_id=${encodeURIComponent(batch.batch_id)}" class="btn btn-sm btn-warning download-report-btn ms-2" target="_blank">
                             <i class="fas fa-ticket-alt me-1"></i> Gate Pass
@@ -1504,6 +1547,53 @@ $pageTitle = "My Batches - aBility";
                 },
                 error: function() {
                     showNotification('error', 'Failed to refresh status');
+                },
+                complete: function() {
+                    hideLoading();
+                }
+            });
+        }
+
+        // Verify Driver Load
+        function verifyDriverLoad() {
+            if (!currentBatchId) return;
+            showLoading();
+            $.ajax({
+                url: 'api/batches/driver_verify.php',
+                method: 'POST',
+                data: { batch_id: currentBatchId },
+                success: function(response) {
+                    if(response.success) {
+                        showNotification('success', 'Equipment load verified successfully!');
+                        refreshBatchStatus();
+                    } else {
+                        showNotification('error', response.message || 'Failed to verify');
+                    }
+                },
+                complete: function() {
+                    hideLoading();
+                }
+            });
+        }
+
+        // Complete Driver Delivery
+        function completeDriverDelivery() {
+            if (!currentBatchId) return;
+            showLoading();
+            $.ajax({
+                url: 'api/batches/driver_complete.php',
+                method: 'POST',
+                data: { batch_id: currentBatchId },
+                success: function(response) {
+                    if(response.success) {
+                        showNotification('success', 'Delivery completed successfully!');
+                        refreshBatchStatus();
+                    } else {
+                        showNotification('error', response.message || 'Failed to complete delivery');
+                    }
+                },
+                error: function() {
+                    showNotification('error', 'Failed to complete delivery');
                 },
                 complete: function() {
                     hideLoading();

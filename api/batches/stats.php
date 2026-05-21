@@ -27,7 +27,7 @@ $userRole = $_SESSION['role'] ?? '';
 $userId = $_SESSION['user_id'] ?? 0;
 $roleFilter = "";
 if ($userRole === 'stock_controller') {
-    $roleFilter = " AND stock_controller_id = " . intval($userId);
+    $roleFilter = " AND (stock_controller_id = " . intval($userId) . " OR movement_type IN ('transport', 'stock_to_venue_transport', 'stock_to_stock'))";
 }
 
 // Total batches in date range
@@ -55,6 +55,10 @@ $stats['rejected_batches'] = $result ? ($result->fetch_assoc()['total'] ?? 0) : 
 
 $result = $conn->query("SELECT COUNT(*) as total FROM stock_movements WHERE (status = 'completed' OR approval_status = 'completed') $roleFilter");
 $stats['completed_batches'] = $result ? ($result->fetch_assoc()['total'] ?? 0) : 0;
+
+// Gate passes count
+$result = $conn->query("SELECT COUNT(*) as total FROM stock_movements WHERE movement_type IN ('stock_to_stock', 'stock_to_venue_transport') AND (DATE(created_at) BETWEEN '$date_from' AND '$date_to') $roleFilter");
+$stats['gate_passes'] = $result ? ($result->fetch_assoc()['total'] ?? 0) : 0;
 
 $stats['batch_trend'] = 0;
 $stats['items_trend'] = 0;

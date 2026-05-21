@@ -47,28 +47,24 @@ if ($conn->connect_error) {
 
 $conn->set_charset("utf8mb4");
 
+// Ensure jobsheet_file column exists in stock_movements table
+$checkCol = $conn->query("SHOW COLUMNS FROM stock_movements LIKE 'jobsheet_file'");
+if ($checkCol && $checkCol->num_rows == 0) {
+    $conn->query("ALTER TABLE stock_movements ADD COLUMN jobsheet_file VARCHAR(255) DEFAULT NULL");
+}
+
 // Generate unique batch number
 $batchNumber = 'BATCH-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6));
-
-// Count the placeholders: There are 24 ? marks in the query
-// Let me write them explicitly:
-// 1.batch_number, 2.technician_id, 3.submitted_by, 
-// 4.stock_controller_id, 5.stock_controller_name, 6.stock_location_name,
-// 7.movement_type, 8.source_type, 9.source_id, 10.source_name,
-// 11.destination_type, 12.destination_id, 13.destination_name, 14.destination_room,
-// 15.event_name, 16.job_sheet, 17.project_manager, 18.notes,
-// 19.transport_vehicle_type, 20.transport_vehicle_number, 21.transport_driver, 22.transport_date,
-// 23.status, 24.created_at
 
 $batchSql = "INSERT INTO stock_movements (
     batch_number, technician_id, submitted_by,
     stock_controller_id, stock_controller_name, stock_location_name,
     movement_type, source_type, source_id, source_name,
     destination_type, destination_id, destination_name, destination_room,
-    event_name, job_sheet, project_manager, notes,
+    event_name, job_sheet, jobsheet_file, project_manager, notes,
     transport_vehicle_type, transport_vehicle_number, transport_driver, transport_date,
     status, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())";
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())";
 
 $stmt = $conn->prepare($batchSql);
 
@@ -87,6 +83,7 @@ $destinationName = $data['destination']['name'] ?? null;
 $destinationRoom = $data['destination']['room'] ?? null;
 $eventName = $data['event_name'] ?? null;
 $jobSheet = $data['job_sheet'] ?? null;
+$jobsheetFile = $data['jobsheet_file'] ?? null;
 $projectManager = $data['project_manager'] ?? null;
 $notes = $data['notes'] ?? null;
 $transportVehicleType = $data['transport']['vehicle_type'] ?? null;
@@ -97,9 +94,9 @@ $stockControllerId = isset($data['stock_controller_id']) && !empty($data['stock_
 $stockControllerName = !empty($data['stock_controller_name']) ? $data['stock_controller_name'] : null;
 $stockLocationName = !empty($data['stock_location']) ? $data['stock_location'] : null;
 
-// Bind parameters - 22 parameters (status and created_at are hardcoded)
+// Bind parameters - 23 parameters (status and created_at are hardcoded)
 $stmt->bind_param(
-    "sisissssssssssssssssss",  // 22 characters for 22 parameters
+    "sisisssssssssssssssssss",  // 23 characters for 23 parameters
     $batchNumber,                    // 1 - string
     $data['technician_id'],         // 2 - int
     $submittedBy,                   // 3 - string
@@ -116,12 +113,13 @@ $stmt->bind_param(
     $destinationRoom,               // 14 - string (can be null)
     $eventName,                     // 15 - string (can be null)
     $jobSheet,                      // 16 - string (can be null)
-    $projectManager,                // 17 - string (can be null)
-    $notes,                         // 18 - string (can be null)
-    $transportVehicleType,          // 19 - string (can be null)
-    $transportVehicleNumber,        // 20 - string (can be null)
-    $transportDriver,               // 21 - string (can be null)
-    $transportDate                  // 22 - string (can be null)
+    $jobsheetFile,                  // 17 - string (can be null)
+    $projectManager,                // 18 - string (can be null)
+    $notes,                         // 19 - string (can be null)
+    $transportVehicleType,          // 20 - string (can be null)
+    $transportVehicleNumber,        // 21 - string (can be null)
+    $transportDriver,               // 22 - string (can be null)
+    $transportDate                  // 23 - string (can be null)
 );
 
 if (!$stmt->execute()) {

@@ -445,6 +445,7 @@ $departments = [
     'rigging' => 'Rigging',
     'electrical' => 'Electrical',
     'furniture' => 'Furniture',
+    'transport' => 'Transport',
     'admin' => 'Administration'
 ];
 ?>
@@ -1297,7 +1298,13 @@ $departments = [
                                         <select class="form-select form-select-lg bg-light border-0 px-4" name="department">
                                             <option value="">Select Department</option>
                                             <?php foreach ($departments as $key => $value): ?>
-                                                <option value="<?php echo $key; ?>" <?php echo ($user['department'] ?? '') == $key ? 'selected' : ''; ?>>
+                                                <?php 
+                                                $user_dept = strtolower($user['department'] ?? '');
+                                                $key_lower = strtolower($key);
+                                                $val_lower = strtolower($value);
+                                                $is_selected = ($user_dept === $key_lower || $user_dept === $val_lower || (!empty($user_dept) && strpos($user_dept, $key_lower) !== false));
+                                                ?>
+                                                <option value="<?php echo $key; ?>" <?php echo $is_selected ? 'selected' : ''; ?>>
                                                     <?php echo $value; ?>
                                                 </option>
                                             <?php endforeach; ?>

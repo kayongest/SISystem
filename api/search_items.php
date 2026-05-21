@@ -17,10 +17,11 @@ if (strlen($search) < 2) {
 $searchTerm = "%{$search}%";
 
 $stmt = $conn->prepare("
-    SELECT id, item_name, serial_number, status, stock_location, image 
-    FROM items 
-    WHERE item_name LIKE ? OR serial_number LIKE ?
-    ORDER BY item_name 
+    SELECT id, item_name, serial_number, status, stock_location, image,
+           (SELECT COUNT(*) FROM items WHERE item_name = i.item_name) as total_group_count
+    FROM items i
+    WHERE i.item_name LIKE ? OR i.serial_number LIKE ?
+    ORDER BY i.item_name 
     LIMIT 20
 ");
 $stmt->bind_param("ss", $searchTerm, $searchTerm);

@@ -134,6 +134,11 @@ $pageTitle = "Batch History - aBility";
             color: #dc3545;
         }
 
+        .stat-icon.purple {
+            background: rgba(111, 66, 193, 0.1);
+            color: #6f42c1;
+        }
+
         .stat-value {
             font-size: 2rem;
             font-weight: 700;
@@ -632,6 +637,7 @@ $pageTitle = "Batch History - aBility";
                             <th>Location</th>
                             <th>Event/Job</th>
                             <th>Status</th>
+                            <th>Driver Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -893,6 +899,11 @@ function displayStatistics(stats) {
             <div class="stat-value">${stats.pending_batches || 0}</div>
             <div class="stat-label">Pending Approval</div>
         </div>
+        <div class="stat-card">
+            <div class="stat-icon purple"><i class="fas fa-ticket-alt"></i></div>
+            <div class="stat-value">${stats.gate_passes || 0}</div>
+            <div class="stat-label">Gate Passes</div>
+        </div>
     `;
     $('#statsContainer').html(html);
 }
@@ -972,6 +983,12 @@ function updateBatchesTable(batches) {
                 <td><small>${escapeHtml(batch.job_sheet || '-')}</small></td>
                 <td><span class="batch-badge ${statusClass}">${batch.status}</span></td>
                 <td>
+                    ${['transport', 'stock_to_venue_transport', 'stock_to_stock'].includes(batch.movement_type) ? 
+                        (parseInt(batch.driver_verified) === 1 ? '<span class="badge bg-success" style="font-size: 0.75rem;"><i class="fas fa-check-circle"></i> Verified</span>' : '<span class="badge bg-warning text-dark" style="font-size: 0.75rem;"><i class="fas fa-clock"></i> Pending Load</span>') +
+                        '<br><small class="text-muted">' + escapeHtml(batch.transport_driver || 'N/A') + '</small>'
+                    : '<span class="text-muted" style="font-size: 0.8rem;">N/A</span>'}
+                </td>
+                <td>
                     <div class="action-buttons">
                         <button class="btn btn-sm btn-info btn-icon" onclick="viewBatchDetails('${batch.batch_id}')" title="View Details">
                             <i class="fas fa-eye"></i>
@@ -980,6 +997,11 @@ function updateBatchesTable(batches) {
                             <a href="batch_report.php?batch_id=${encodeURIComponent(batch.batch_id)}&download=1" class="btn btn-sm btn-success btn-icon" title="Download Report" target="_blank">
                                 <i class="fas fa-file-pdf"></i>
                             </a>
+                            ${['stock_to_stock', 'stock_to_venue_transport'].includes(batch.movement_type) ? `
+                            <a href="gate_pass.php?batch_id=${encodeURIComponent(batch.batch_id)}" class="btn btn-sm btn-warning btn-icon" title="View Gate Pass" target="_blank">
+                                <i class="fas fa-ticket-alt"></i>
+                            </a>
+                            ` : ''}
                         ` : ''}
                     </div>
                 </td>
@@ -1109,6 +1131,15 @@ function displayBatchDetails(batch) {
                             <div class="detail-label">Total Items</div>
                             <div class="detail-value">${batch.item_count || 0} items (${batch.total_quantity || 0} units)</div>
                         </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Driver</div>
+                            <div class="detail-value">
+                                ${escapeHtml(batch.transport_driver || 'N/A')}
+                                ${['transport', 'stock_to_venue_transport', 'stock_to_stock'].includes(batch.movement_type) && batch.transport_driver ? 
+                                    (parseInt(batch.driver_verified) === 1 ? '<span class="badge bg-success ms-2"><i class="fas fa-check-circle"></i> Verified</span>' : '<span class="badge bg-warning text-dark ms-2"><i class="fas fa-clock"></i> Pending Load</span>') 
+                                : ''}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1154,7 +1185,16 @@ function displayBatchDetails(batch) {
                     <div class="detail-grid">
                         <div class="detail-item">
                             <div class="detail-label">Job Sheet</div>
-                            <div class="detail-value">${escapeHtml(batch.job_sheet || 'N/A')}</div>
+                            <div class="detail-value">
+                                ${escapeHtml(batch.job_sheet || 'N/A')}
+                                ${batch.jobsheet_file ? `
+                                    <div class="mt-2">
+                                        <a href="${escapeHtml(batch.jobsheet_file)}" target="_blank" class="btn btn-xs btn-outline-primary py-1 px-2 fw-bold" style="font-size: 0.75rem; border-radius: 6px;">
+                                            <i class="fas fa-file-download me-1"></i> View Uploaded Jobsheet
+                                        </a>
+                                    </div>
+                                ` : ''}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1217,6 +1257,15 @@ function displayBatchDetails(batch) {
             </a>
         `);
         footer.prepend(downloadBtn);
+        
+        if (['stock_to_stock', 'stock_to_venue_transport'].includes(batch.movement_type)) {
+            const gatePassBtn = $(`
+                <a href="gate_pass.php?batch_id=${encodeURIComponent(batch.batch_id)}" class="btn btn-warning action-btn" target="_blank">
+                    <i class="fas fa-ticket-alt me-1"></i>Gate Pass
+                </a>
+            `);
+            footer.prepend(gatePassBtn);
+        }
     }
 }
 
@@ -1276,6 +1325,11 @@ function updateTimelineView(timelineData) {
                                     <a href="batch_report.php?batch_id=${encodeURIComponent(item.batch_id)}&download=1" class="btn btn-xs btn-outline-success py-0 px-2" title="Download Report" target="_blank" style="font-size: 0.7rem;">
                                         <i class="fas fa-file-pdf"></i> Report
                                     </a>
+                                    ${['stock_to_stock', 'stock_to_venue_transport'].includes(item.movement_type) ? `
+                                    <a href="gate_pass.php?batch_id=${encodeURIComponent(item.batch_id)}" class="btn btn-xs btn-outline-warning py-0 px-2" title="Download Gate Pass" target="_blank" style="font-size: 0.7rem;">
+                                        <i class="fas fa-ticket-alt"></i> Gate Pass
+                                    </a>
+                                    ` : ''}
                                 ` : ''}
                             </div>
                         </div>
@@ -1344,6 +1398,11 @@ function updateCardsView(batches) {
                                 <a href="batch_report.php?batch_id=${encodeURIComponent(batch.batch_id)}&download=1" class="btn btn-sm btn-success" target="_blank">
                                     <i class="fas fa-file-pdf me-1"></i>Report
                                 </a>
+                                ${['stock_to_stock', 'stock_to_venue_transport'].includes(batch.movement_type) ? `
+                                <a href="gate_pass.php?batch_id=${encodeURIComponent(batch.batch_id)}" class="btn btn-sm btn-warning" target="_blank">
+                                    <i class="fas fa-ticket-alt me-1"></i>Gate Pass
+                                </a>
+                                ` : ''}
                             ` : ''}
                         </div>
                     </div>

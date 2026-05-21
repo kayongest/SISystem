@@ -32,6 +32,7 @@ $sql = "SELECT
             b.status,
             b.approval_status,
             b.job_sheet,
+            b.jobsheet_file,
             b.event_name,
             b.source_name,
             b.destination_name,
@@ -44,7 +45,10 @@ $sql = "SELECT
             b.submitted_by,
             b.project_manager,
             b.stock_controller_id,
-            b.stock_controller_name
+            b.stock_controller_name,
+            b.movement_type,
+            b.transport_driver,
+            b.driver_verified
         FROM stock_movements b
         LEFT JOIN users t ON b.technician_id = t.id
         WHERE 1=1";
@@ -57,7 +61,7 @@ $userRole = $_SESSION['role'] ?? '';
 $userId = $_SESSION['user_id'] ?? 0;
 
 if ($userRole === 'stock_controller') {
-    $sql .= " AND b.stock_controller_id = ?";
+    $sql .= " AND (b.stock_controller_id = ? OR b.movement_type IN ('transport', 'stock_to_venue_transport', 'stock_to_stock'))";
     $params[] = $userId;
     $types .= "i";
 }

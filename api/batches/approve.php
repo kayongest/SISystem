@@ -42,7 +42,7 @@ if (!in_array($action, ['approve', 'reject'])) {
 }
 
 // Check if batch exists and is pending
-$checkSql = "SELECT status, approval_status, stock_controller_id FROM stock_movements WHERE batch_number = ?";
+$checkSql = "SELECT status, approval_status, stock_controller_id, movement_type FROM stock_movements WHERE batch_number = ?";
 $checkStmt = $conn->prepare($checkSql);
 $checkStmt->bind_param("s", $batch_id);
 $checkStmt->execute();
@@ -57,8 +57,9 @@ if ($result->num_rows === 0) {
 
 $batch = $result->fetch_assoc();
 
-// Role-Based Restriction: Stock Controllers can only approve batches assigned to them
-if ($_SESSION['role'] === 'stock_controller' && $batch['stock_controller_id'] != $_SESSION['user_id']) {
+// Role-Based Restriction: Stock Controllers can only approve batches assigned to them OR transport batches (involving a driver)
+$isTransport = in_array($batch['movement_type'], ['transport', 'stock_to_venue_transport', 'stock_to_stock']);
+if ($_SESSION['role'] === 'stock_controller' && !$isTransport && $batch['stock_controller_id'] != $_SESSION['user_id']) {
     echo json_encode(['success' => false, 'message' => 'Access denied. You can only manage batches assigned to you.']);
     $checkStmt->close();
     $conn->close();

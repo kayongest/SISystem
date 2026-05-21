@@ -840,6 +840,334 @@ if (!$isIframe) {
                 padding: 1rem;
             }
         }
+
+        /* ===== EVENT MOVEMENTS OVERLAY & DETAILS CUSTOM STYLES ===== */
+        .btn-movements {
+            background: #044A42 !important; /* Dark Emerald Teal */
+            color: white !important;
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: 1px solid #3A9188 !important;
+            text-decoration: none;
+            margin-right: auto; /* Push edit and delete to the right */
+        }
+
+        .btn-movements:hover {
+            background: #3A9188 !important; /* Medium Teal */
+            color: #B8E1DD !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(4, 74, 66, 0.25);
+        }
+
+        .btn-movements i {
+            font-size: 0.85rem;
+        }
+
+        /* Modal custom dark/teal design styling */
+        .movements-modal-dialog {
+            max-width: 900px;
+        }
+
+        .movements-modal-content {
+            background: #062925; /* Deep Hunter Teal */
+            color: #B8E1DD; /* Soft Mint Teal for high-contrast premium text */
+            border: 1.5px solid #3A9188;
+            border-radius: var(--radius-md);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        .movements-modal-header {
+            border-bottom: 1px solid rgba(58, 145, 136, 0.3);
+            background: rgba(4, 74, 66, 0.5);
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .movements-modal-title {
+            color: white;
+            font-weight: 700;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 0;
+        }
+
+        .movements-modal-title i {
+            color: #3A9188;
+        }
+
+        .movements-modal-body {
+            padding: 1.5rem;
+            max-height: 75vh;
+            overflow-y: auto;
+        }
+
+        /* Milestone Tracker styling */
+        .milestone-tracker {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            margin: 1.5rem 0 2.5rem 0;
+            padding: 0 10px;
+        }
+
+        .milestone-tracker::before {
+            content: '';
+            position: absolute;
+            top: 22px;
+            left: 10%;
+            right: 10%;
+            height: 4px;
+            background: #044A42; /* Dark Emerald Teal path line */
+            z-index: 1;
+        }
+
+        .milestone-tracker-fill {
+            position: absolute;
+            top: 22px;
+            left: 10%;
+            height: 4px;
+            background: linear-gradient(90deg, #3A9188, #B8E1DD);
+            z-index: 1;
+            transition: width 0.4s ease;
+            width: 0%;
+        }
+
+        .milestone-step {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 25%;
+        }
+
+        .milestone-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #062925;
+            border: 3px solid #044A42;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            color: #3A9188;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .milestone-step.active .milestone-icon {
+            border-color: #3A9188;
+            color: white;
+            background: #3A9188;
+            box-shadow: 0 0 15px rgba(58, 145, 136, 0.5);
+        }
+
+        .milestone-step.completed .milestone-icon {
+            border-color: #B8E1DD;
+            color: #062925;
+            background: #B8E1DD;
+            box-shadow: 0 0 12px rgba(184, 225, 221, 0.4);
+        }
+
+        .milestone-step.rejected .milestone-icon {
+            border-color: #dc3545;
+            color: white;
+            background: #dc3545;
+        }
+
+        .milestone-label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin-top: 10px;
+            color: #3A9188;
+            text-align: center;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .milestone-step.active .milestone-label {
+            color: white;
+        }
+
+        .milestone-step.completed .milestone-label {
+            color: #B8E1DD;
+        }
+
+        .milestone-step.rejected .milestone-label {
+            color: #dc3545;
+        }
+
+        .milestone-sublabel {
+            font-size: 0.7rem;
+            color: rgba(184, 225, 221, 0.6);
+            text-align: center;
+            margin-top: 3px;
+            max-width: 130px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Movement cards & collapsible elements */
+        .movement-card {
+            background: rgba(4, 74, 66, 0.4);
+            border: 1px solid rgba(58, 145, 136, 0.3);
+            border-radius: var(--radius-sm);
+            margin-bottom: 1rem;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+
+        .movement-card:hover {
+            border-color: #3A9188;
+        }
+
+        .movement-card-header {
+            padding: 1rem 1.25rem;
+            background: rgba(4, 74, 66, 0.6);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            user-select: none;
+        }
+
+        .movement-card-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: white;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .movement-card-title code {
+            background: rgba(0, 0, 0, 0.2);
+            color: #B8E1DD;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        .movement-card-meta {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 0.85rem;
+            color: rgba(184, 225, 221, 0.8);
+        }
+
+        .movement-card-meta i {
+            color: #3A9188;
+        }
+
+        .movement-card-body {
+            padding: 1.25rem;
+            border-top: 1px solid rgba(58, 145, 136, 0.2);
+            background: rgba(6, 41, 37, 0.6);
+            display: none; /* Controlled dynamically by JS collapse handler */
+        }
+
+        .movement-card-body.show {
+            display: block;
+        }
+
+        /* Logistics Table Info Card styles */
+        .logistics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .logistics-card {
+            background: rgba(6, 41, 37, 0.8);
+            border: 1px solid rgba(58, 145, 136, 0.2);
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+        }
+
+        .logistics-card-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #3A9188;
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+
+        .logistics-card-value {
+            font-size: 0.85rem;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* Custom Table for items inside movements */
+        .movements-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .movements-items-table th {
+            background: rgba(4, 74, 66, 0.8);
+            color: white;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 2px solid #3A9188;
+        }
+
+        .movements-items-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(58, 145, 136, 0.2);
+            color: #B8E1DD;
+            background: rgba(0,0,0,0.1);
+        }
+
+        .movements-items-table tr:hover td {
+            background: rgba(58, 145, 136, 0.1);
+        }
+
+        .movements-items-table code {
+            background: rgba(0,0,0,0.3);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .accordion-arrow-btn {
+            background: none;
+            border: none;
+            color: #3A9188;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s ease;
+        }
+
+        .movement-card-header.collapsed-state .accordion-arrow-btn {
+            transform: rotate(-90deg);
+        }
     </style>
 </head>
 
@@ -1476,6 +1804,9 @@ if (!$isIframe) {
                                     ` : ''}
                                     
                                     <div class="event-card-actions">
+                                        <button class="btn-movements" onclick="viewEventMovements('${escapeHTML(event.id)}')">
+                                            <i class="fas fa-truck-ramp-box"></i> Movements (${event.batches ? event.batches.length : 0})
+                                        </button>
                                         <button class="btn-edit" data-id="${escapeHTML(event.id)}">
                                             <i class="fas fa-edit"></i> Edit
                                         </button>
@@ -1603,16 +1934,438 @@ if (!$isIframe) {
 
             // Global functions for pagination
             window.changePage = function(newPage) {
-                if (newPage < 1 || newPage > totalPages || newPage === currentPage) return;
-                currentPage = newPage;
-                filterAndRenderEvents();
-            };
+                                <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                                    <a class="page-link" href="#" onclick="changePage(${currentPage + 1}); return false;" ${currentPage === totalPages ? 'tabindex="-1"' : ''}>
+                                        <i class="fas fa-chevron-right"></i>
+                                    </a>
+                                </li>
+                            `;
 
-            window.changeItemsPerPage = function(newValue) {
-                itemsPerPage = parseInt(newValue);
-                currentPage = 1;
-                filterAndRenderEvents();
-            };
+                            paginationHtml += `
+                                    </ul>
+                                    <select class="items-per-page" onchange="changeItemsPerPage(this.value)">
+                                        <option value="4" ${itemsPerPage === 4 ? 'selected' : ''}>4 per page</option>
+                                        <option value="8" ${itemsPerPage === 8 ? 'selected' : ''}>8 per page</option>
+                                        <option value="12" ${itemsPerPage === 12 ? 'selected' : ''}>12 per page</option>
+                                        <option value="16" ${itemsPerPage === 16 ? 'selected' : ''}>16 per page</option>
+                                        <option value="20" ${itemsPerPage === 20 ? 'selected' : ''}>20 per page</option>
+                                    </select>
+                                </div>
+                            `;
+
+                            paginationContainer.innerHTML = paginationHtml;
+                            elements.grid.parentNode.insertBefore(paginationContainer, elements.grid.nextSibling);
+                        }
+
+                        // Global functions for pagination
+                        window.changePage = function(newPage) {
+                            if (newPage < 1 || newPage > totalPages || newPage === currentPage) return;
+                            currentPage = newPage;
+                            filterAndRenderEvents();
+                        };
+
+                        window.changeItemsPerPage = function(newValue) {
+                            itemsPerPage = parseInt(newValue);
+                            currentPage = 1;
+                            filterAndRenderEvents();
+                        };
+
+                        // ===== EVENT MOVEMENTS CONTROLLERS =====
+                        window.viewEventMovements = function(eventId) {
+                            const event = events.find(e => e.id === eventId);
+                            if (!event) {
+                                showToast('Event not found', 'error');
+                                return;
+                            }
+
+                            // Set Title & Meta
+                            document.getElementById('movementsEventTitle').textContent = event.title || 'Untitled Event';
+                            const formattedDate = event.date ? formatDate(event.date) : 'No date set';
+                            const location = event.location || event.event_location || 'No location set';
+                            document.getElementById('movementsEventMeta').innerHTML = `
+                                <i class="fas fa-calendar-day me-1"></i> ${escapeHTML(formattedDate)} &nbsp;&bull;&nbsp; 
+                                <i class="fas fa-map-marker-alt me-1"></i> ${escapeHTML(location)}
+                            `;
+
+                            // Calculate milestones based on all batches/movements combined (summary of flow status)
+                            const batches = event.batches || [];
+                            const totalBatchesCount = batches.length;
+
+                            // Default milestones status
+                            let isSubmitted = totalBatchesCount > 0;
+                            let isApproved = false;
+                            let isLoaded = false;
+                            let isCompleted = false;
+                            let isRejected = false;
+
+                            let submittedBy = '-';
+                            let approvedBy = '-';
+                            let driverName = '-';
+                            let completedMeta = '-';
+
+                            if (totalBatchesCount > 0) {
+                                // We check if at least one is approved/completed, and if all are completed
+                                let approvedCount = 0;
+                                let loadedCount = 0;
+                                let completedCount = 0;
+                                let rejectedCount = 0;
+
+                                const uniqueSubmitters = new Set();
+                                const uniqueDrivers = new Set();
+                                const uniqueApprovers = new Set();
+
+                                batches.forEach(b => {
+                                    if (b.submitted_by) uniqueSubmitters.add(b.submitted_by);
+                                    
+                                    const appStatus = (b.approval_status || '').toLowerCase();
+                                    const bStatus = (b.status || '').toLowerCase();
+
+                                    if (appStatus === 'approved' || appStatus === 'completed' || bStatus === 'approved' || bStatus === 'completed') {
+                                        approvedCount++;
+                                    }
+                                    if (appStatus === 'rejected' || bStatus === 'rejected') {
+                                        rejectedCount++;
+                                    }
+                                    if (parseInt(b.driver_verified) === 1) {
+                                        loadedCount++;
+                                    }
+                                    if (bStatus === 'completed') {
+                                        completedCount++;
+                                    }
+
+                                    // Get driver display name and standardise to Bembeleza Valentin if needed
+                                    let dName = b.transport_driver || '';
+                                    if (dName === 'Valetine' || dName === 'valentinb') {
+                                        dName = 'Bembeleza Valentin';
+                                    }
+                                    if (dName && dName !== 'N/A') {
+                                        uniqueDrivers.add(dName);
+                                    }
+                                });
+
+                                // Assign sublabels
+                                submittedBy = uniqueSubmitters.size > 0 ? Array.from(uniqueSubmitters).join(', ') : '-';
+                                
+                                if (approvedCount > 0) {
+                                    isApproved = true;
+                                    approvedBy = 'Approved';
+                                }
+                                if (rejectedCount > 0 && approvedCount === 0) {
+                                    isRejected = true;
+                                    approvedBy = 'Rejected';
+                                }
+                                if (loadedCount > 0) {
+                                    isLoaded = true;
+                                    driverName = uniqueDrivers.size > 0 ? Array.from(uniqueDrivers).join(', ') : 'Driver Loaded';
+                                }
+                                if (completedCount === totalBatchesCount && totalBatchesCount > 0) {
+                                    isCompleted = true;
+                                    completedMeta = 'All Completed';
+                                } else if (completedCount > 0) {
+                                    completedMeta = `${completedCount}/${totalBatchesCount} Done`;
+                                }
+                            }
+
+                            // Update Milestone Tracker Classes & Width
+                            const fillEl = document.getElementById('milestoneFill');
+                            const stepSubmitted = document.getElementById('step-submitted');
+                            const stepApproved = document.getElementById('step-approved');
+                            const stepLoaded = document.getElementById('step-loaded');
+                            const stepCompleted = document.getElementById('step-completed');
+
+                            // Reset all
+                            [stepSubmitted, stepApproved, stepLoaded, stepCompleted].forEach(el => {
+                                el.classList.remove('active', 'completed', 'rejected');
+                            });
+
+                            // Calculate progress line fill percentage
+                            let fillPercent = 0;
+
+                            // Step 1: Submitted
+                            if (isSubmitted) {
+                                stepSubmitted.classList.add('completed');
+                                document.getElementById('sublabel-submitted').textContent = submittedBy;
+                                fillPercent = 10;
+                            } else {
+                                document.getElementById('sublabel-submitted').textContent = '-';
+                            }
+
+                            // Step 2: Approved / Rejected
+                            if (isRejected) {
+                                stepApproved.classList.add('rejected');
+                                document.getElementById('sublabel-approved').textContent = 'Rejected';
+                                fillPercent = 40;
+                            } else if (isApproved) {
+                                // Check if approved is the current active step or completed
+                                if (isLoaded) {
+                                    stepApproved.classList.add('completed');
+                                } else {
+                                    stepApproved.classList.add('active');
+                                }
+                                document.getElementById('sublabel-approved').textContent = approvedBy;
+                                fillPercent = 40;
+                            } else if (isSubmitted) {
+                                stepApproved.classList.add('active');
+                                document.getElementById('sublabel-approved').textContent = 'Awaiting Approval';
+                                fillPercent = 25;
+                            } else {
+                                document.getElementById('sublabel-approved').textContent = '-';
+                            }
+
+                            // Step 3: Driver Loaded
+                            if (isLoaded) {
+                                if (isCompleted) {
+                                    stepLoaded.classList.add('completed');
+                                } else {
+                                    stepLoaded.classList.add('active');
+                                }
+                                document.getElementById('sublabel-loaded').textContent = driverName;
+                                fillPercent = 75;
+                            } else if (isApproved && !isRejected) {
+                                stepLoaded.classList.add('active');
+                                document.getElementById('sublabel-loaded').textContent = 'Awaiting Dispatch';
+                                fillPercent = 55;
+                            } else {
+                                document.getElementById('sublabel-loaded').textContent = '-';
+                            }
+
+                            // Step 4: Completed
+                            if (isCompleted) {
+                                stepCompleted.classList.add('completed');
+                                document.getElementById('sublabel-completed').textContent = completedMeta;
+                                fillPercent = 100;
+                            } else if (isLoaded) {
+                                stepCompleted.classList.add('active');
+                                document.getElementById('sublabel-completed').textContent = 'In Transit';
+                                fillPercent = 88;
+                            } else {
+                                document.getElementById('sublabel-completed').textContent = '-';
+                            }
+
+                            fillEl.style.width = fillPercent + '%';
+
+                            // Render collapsible Batches/Movements cards
+                            const listEl = document.getElementById('movementsBatchesList');
+                            if (batches.length === 0) {
+                                listEl.innerHTML = `
+                                    <div class="text-center py-4 text-muted">
+                                        <i class="fas fa-boxes fa-2x mb-2 d-block text-muted" style="opacity: 0.5;"></i>
+                                        No stock movements recorded for this event title yet.
+                                    </div>
+                                `;
+                            } else {
+                                let html = '';
+                                batches.forEach((b, idx) => {
+                                    const batchNum = b.batch_id || b.batch_number || '';
+                                    const dateStr = b.date ? formatDate(b.date) : 'N/A';
+                                    const source = b.source_name || 'N/A';
+                                    const dest = b.destination_name || 'N/A';
+                                    const room = b.destination_room ? ` (${b.destination_room})` : '';
+                                    const itemsCount = b.item_count || 0;
+                                    const qty = b.total_quantity || 0;
+                                    const mType = b.movement_type || '';
+                                    
+                                    const isReq = mType === 'requisition' || mType === 'stock_to_venue_transport';
+                                    const typeBadge = isReq ? 
+                                        `<span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1"><i class="fas fa-arrow-right-from-bracket me-1"></i> Requisition</span>` : 
+                                        `<span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1"><i class="fas fa-arrow-left-to-bracket me-1"></i> Return</span>`;
+
+                                    // Status Badge
+                                    const rawStatus = (b.approval_status || b.status || 'pending').toLowerCase();
+                                    let statusColor = '#ffc107';
+                                    let statusText = 'Pending';
+                                    if (rawStatus === 'approved') {
+                                        statusColor = '#3A9188';
+                                        statusText = 'Approved';
+                                    } else if (rawStatus === 'completed') {
+                                        statusColor = '#B8E1DD';
+                                        statusText = 'Completed';
+                                    } else if (rawStatus === 'rejected') {
+                                        statusColor = '#dc3545';
+                                        statusText = 'Rejected';
+                                    }
+
+                                    const statusBadge = `<span class="badge" style="background-color: ${statusColor}20; color: ${statusColor}; border: 1px solid ${statusColor}50; padding: 4px 8px;">${statusText}</span>`;
+
+                                    // Resolve Driver display name standard
+                                    let driverDisp = b.transport_driver || 'N/A';
+                                    if (driverDisp === 'Valetine' || driverDisp === 'valentinb') {
+                                        driverDisp = 'Bembeleza Valentin';
+                                    }
+
+                                    const vehicleType = b.transport_vehicle_type || 'N/A';
+                                    const vehicleNo = b.transport_vehicle_number || 'N/A';
+                                    const tDate = b.transport_date ? formatDate(b.transport_date) : 'N/A';
+                                    const isDriverVerified = parseInt(b.driver_verified) === 1;
+                                    const verificationBadge = isDriverVerified ?
+                                        `<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="fas fa-check-circle me-1"></i> Verified</span>` :
+                                        `<span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="fas fa-clock me-1"></i> Pending Verification</span>`;
+
+                                    const uniqueId = `batch-card-${idx}-${batchNum}`;
+
+                                    html += `
+                                        <div class="movement-card">
+                                            <div class="movement-card-header collapsed-state" id="header-${uniqueId}" onclick="window.toggleAccordion('${uniqueId}', '${batchNum}')">
+                                                <div class="movement-card-title">
+                                                    <i class="fas fa-box-open text-muted"></i>
+                                                    <span>Movement <code>${escapeHTML(batchNum)}</code></span>
+                                                    ${typeBadge}
+                                                </div>
+                                                <div class="movement-card-meta">
+                                                    <span><i class="fas fa-calendar-alt"></i> ${escapeHTML(dateStr)}</span>
+                                                    <span><i class="fas fa-cubes"></i> ${itemsCount} items (${qty} total)</span>
+                                                    ${statusBadge}
+                                                    <button class="accordion-arrow-btn"><i class="fas fa-chevron-down"></i></button>
+                                                </div>
+                                            </div>
+                                            <div class="movement-card-body" id="body-${uniqueId}">
+                                                <!-- Logistics Grid Details -->
+                                                <div class="logistics-grid">
+                                                    <div class="logistics-card">
+                                                        <div class="logistics-card-label">Flow Context</div>
+                                                        <div class="logistics-card-value">${escapeHTML(source)} <i class="fas fa-arrow-right mx-1 small text-muted"></i> ${escapeHTML(dest)}${escapeHTML(room)}</div>
+                                                    </div>
+                                                    <div class="logistics-card">
+                                                        <div class="logistics-card-label">Logistics Driver</div>
+                                                        <div class="logistics-card-value"><i class="fas fa-user-circle me-1 text-muted"></i> ${escapeHTML(driverDisp)}</div>
+                                                    </div>
+                                                    <div class="logistics-card">
+                                                        <div class="logistics-card-label">Vehicle Details</div>
+                                                        <div class="logistics-card-value"><i class="fas fa-truck me-1 text-muted"></i> ${escapeHTML(vehicleType)} ${vehicleNo !== 'N/A' ? `(${escapeHTML(vehicleNo)})` : ''}</div>
+                                                    </div>
+                                                    <div class="logistics-card">
+                                                        <div class="logistics-card-label">Digital Handshake</div>
+                                                        <div class="logistics-card-value">${verificationBadge}</div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Scanned Gear Subtable Header -->
+                                                <div class="d-flex align-items-center justify-content-between mb-2 mt-3 border-bottom pb-2" style="border-color: rgba(58, 145, 136, 0.2) !important;">
+                                                    <span class="text-white fw-bold" style="font-size: 0.9rem;"><i class="fas fa-barcode me-1 text-muted"></i> Scanned Gear Details</span>
+                                                    <span class="small text-muted">Items inside this movement</span>
+                                                </div>
+
+                                                <!-- Gear items list target div -->
+                                                <div id="items-list-${uniqueId}">
+                                                    <div class="text-center py-3 text-muted">
+                                                        <i class="fas fa-spinner fa-spin me-2"></i> Loading scanned gear...
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                });
+                                listEl.innerHTML = html;
+                            }
+
+                            // Show Bootstrap Modal
+                            const modal = new bootstrap.Modal(document.getElementById('eventMovementsModal'));
+                            modal.show();
+                        };
+
+                        window.toggleAccordion = function(uniqueId, batchNum) {
+                            const header = document.getElementById(`header-${uniqueId}`);
+                            const body = document.getElementById(`body-${uniqueId}`);
+                            
+                            if (!body.classList.contains('show')) {
+                                // Open accordion
+                                body.classList.add('show');
+                                header.classList.remove('collapsed-state');
+                                header.querySelector('.accordion-arrow-btn i').className = 'fas fa-chevron-up';
+                                
+                                // Fetch gear items dynamically
+                                window.toggleItemsSection(batchNum, uniqueId);
+                            } else {
+                                // Close accordion
+                                body.classList.remove('show');
+                                header.classList.add('collapsed-state');
+                                header.querySelector('.accordion-arrow-btn i').className = 'fas fa-chevron-down';
+                            }
+                        };
+
+                        window.toggleItemsSection = async function(batchNum, uniqueId) {
+                            const targetDiv = document.getElementById(`items-list-${uniqueId}`);
+                            
+                            // If items already loaded, don't refetch
+                            if (targetDiv.querySelector('table')) return;
+
+                            try {
+                                const response = await fetch(`api/batches/details.php?batch_id=${encodeURIComponent(batchNum)}`);
+                                const text = await response.text();
+                                
+                                let result;
+                                try {
+                                    result = JSON.parse(text);
+                                } catch (e) {
+                                    console.error('Invalid JSON batch details response:', text);
+                                    targetDiv.innerHTML = `
+                                        <div class="text-danger py-2">
+                                            <i class="fas fa-exclamation-circle me-1"></i> Failed to parse scanned gear details from server.
+                                        </div>
+                                    `;
+                                    return;
+                                }
+
+                                if (result.success && result.batch && result.batch.items) {
+                                    const items = result.batch.items;
+                                    if (items.length === 0) {
+                                        targetDiv.innerHTML = `
+                                            <div class="text-muted py-2 text-center">
+                                                No scanned gear items registered for this batch movement.
+                                            </div>
+                                        `;
+                                    } else {
+                                        let tableHtml = `
+                                            <table class="movements-items-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Gear / Item Name</th>
+                                                        <th>Serial Number</th>
+                                                        <th class="text-center">Qty</th>
+                                                        <th>Current Destination</th>
+                                                        <th class="text-center">Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                        `;
+                                        
+                                        items.forEach(item => {
+                                            const statusClass = item.status === 'available' ? 'success' : item.status === 'in_use' ? 'warning' : 'danger';
+                                            const statusVal = item.status || 'available';
+                                            
+                                            tableHtml += `
+                                                <tr>
+                                                    <td><strong>${escapeHTML(item.name)}</strong></td>
+                                                    <td><code>${escapeHTML(item.serial || 'N/A')}</code></td>
+                                                    <td class="text-center fw-bold text-white">${item.quantity || 1}</td>
+                                                    <td><span class="badge" style="background-color: rgba(58, 145, 136, 0.2); color: #B8E1DD;">${escapeHTML(item.location || 'N/A')}</span></td>
+                                                    <td class="text-center"><span class="badge bg-${statusClass}">${statusVal}</span></td>
+                                                </tr>
+                                            `;
+                                        });
+                                        
+                                        tableHtml += `
+                                                </tbody>
+                                            </table>
+                                        `;
+                                        targetDiv.innerHTML = tableHtml;
+                                    }
+                                } else {
+                                    targetDiv.innerHTML = `
+                                        <div class="text-danger py-2">
+                                            <i class="fas fa-exclamation-circle me-1"></i> ${escapeHTML(result.message || 'Failed to fetch items details.')}
+                                        </div>
+                                    `;
+                                }
+                            } catch (error) {
+                                console.error('Error fetching batch items details:', error);
+                                targetDiv.innerHTML = `
+                                    <div class="text-danger py-2">
+                                        <i class="fas fa-exclamation-circle me-1"></i> Network error loading gear details.
+                                    </div>
+                                `;
+                            }
+                        };
 
             // ===== FORM HANDLING =====
             function handleImagePreview() {
@@ -1796,6 +2549,69 @@ if (!$isIframe) {
             init();
         })();
     </script>
+
+    <!-- EVENT MOVEMENTS MODAL -->
+    <div class="modal fade" id="eventMovementsModal" tabindex="-1" aria-labelledby="eventMovementsModalLabel" aria-hidden="true">
+        <div class="modal-dialog movements-modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content movements-modal-content">
+                <div class="movements-modal-header">
+                    <h5 class="modal-title movements-modal-title" id="eventMovementsModalLabel">
+                        <i class="fas fa-truck-ramp-box"></i> Stock Movements Flow
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" style="background-color: transparent; border: none; font-size: 1.25rem; color: white;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="movements-modal-body">
+                    <!-- Event Title & Info -->
+                    <div class="mb-4">
+                        <h4 id="movementsEventTitle" class="text-white fw-bold mb-1">Event Title</h4>
+                        <p id="movementsEventMeta" class="text-muted small mb-0">Event details metadata</p>
+                    </div>
+
+                    <!-- Flow Milestone Handshake Tracker -->
+                    <div class="milestone-tracker">
+                        <div class="milestone-tracker-fill" id="milestoneFill"></div>
+                        
+                        <div class="milestone-step" id="step-submitted">
+                            <div class="milestone-icon"><i class="fas fa-file-import"></i></div>
+                            <div class="milestone-label">Submitted</div>
+                            <div class="milestone-sublabel" id="sublabel-submitted">-</div>
+                        </div>
+                        
+                        <div class="milestone-step" id="step-approved">
+                            <div class="milestone-icon"><i class="fas fa-clipboard-check"></i></div>
+                            <div class="milestone-label">Approved</div>
+                            <div class="milestone-sublabel" id="sublabel-approved">-</div>
+                        </div>
+                        
+                        <div class="milestone-step" id="step-loaded">
+                            <div class="milestone-icon"><i class="fas fa-truck-loading"></i></div>
+                            <div class="milestone-label">Driver Loaded</div>
+                            <div class="milestone-sublabel" id="sublabel-loaded">-</div>
+                        </div>
+                        
+                        <div class="milestone-step" id="step-completed">
+                            <div class="milestone-icon"><i class="fas fa-flag-checkered"></i></div>
+                            <div class="milestone-label">Completed</div>
+                            <div class="milestone-sublabel" id="sublabel-completed">-</div>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible List of Requisition & Return Batches -->
+                    <div class="mt-4">
+                        <h6 class="text-white fw-bold mb-3 border-bottom pb-2" style="border-color: rgba(58, 145, 136, 0.3) !important;">Requisition & Return Movements</h6>
+                        <div id="movementsBatchesList">
+                            <!-- Populated dynamically by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>

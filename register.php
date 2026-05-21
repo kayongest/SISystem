@@ -508,6 +508,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <option value="LIGHTING" <?php echo (isset($_POST['department']) && $_POST['department'] == 'LIGHTING') ? 'selected' : ''; ?>>LIGHTING</option>
                                 <option value="RIGGING" <?php echo (isset($_POST['department']) && $_POST['department'] == 'RIGGING') ? 'selected' : ''; ?>>RIGGING</option>
                                 <option value="WAREHOUSE" <?php echo (isset($_POST['department']) && $_POST['department'] == 'WAREHOUSE') ? 'selected' : ''; ?>>WAREHOUSE</option>
+                                <option value="TRANSPORT" <?php echo (isset($_POST['department']) && $_POST['department'] == 'TRANSPORT') ? 'selected' : ''; ?>>TRANSPORT</option>
                             </select>
                         </div>
 

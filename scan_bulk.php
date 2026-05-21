@@ -83,9 +83,6 @@ require_once 'includes/functions.php';
 // Define user role
 $user_role = getUserRole();
 $is_stock_controller = ($user_role === 'stock_controller');
-$is_technician = ($user_role === 'technician');
-$logged_in_user_id = $_SESSION['user_id'] ?? 0;
-$logged_in_full_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
 
 // Stock Controller Details
 $stock_controller_id = $_SESSION['user_id'] ?? 0;
@@ -115,7 +112,7 @@ $stock_controller_display = !empty($stock_controller_fullname) ? $stock_controll
 // Load technicians from database
 $technicians = [];
 if ($db_connected) {
-    $techQuery = "SELECT id, username, full_name, department FROM users WHERE role = 'technician' AND is_active = 1 ORDER BY full_name";
+    $techQuery = "SELECT id, username, full_name, department FROM technicians WHERE is_active = 1 ORDER BY full_name";
     $techResult = $conn->query($techQuery);
     if ($techResult) {
         $technicians = $techResult->fetch_all(MYSQLI_ASSOC);
@@ -151,10 +148,90 @@ $pageTitle = "Scan & Batch Items - aBility";
             font-family: "Marvel", sans-serif;
         }
 
-        /* Navigation Adjustment */
-        .navbar {
-            margin-bottom: 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        /* ==================== PAGE HEADER STYLES ==================== */
+        .page-header-compact {
+            background: linear-gradient(135deg, #1a2e3f 0%, #234c6a 100%);
+            padding: 0.75rem 2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .user-info-compact {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar-compact {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #20B2AA 0%, #1A8F89 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .user-details-compact h5 {
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+            line-height: 1.3;
+        }
+
+        .user-details-compact .role-badge-compact {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+
+        .back-to-dashboard {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .back-to-dashboard:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(-3px);
+        }
+
+        .header-actions-compact {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logout-btn-compact {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn-compact:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
         }
 
         /* Main Layout */
@@ -507,11 +584,57 @@ $pageTitle = "Scan & Batch Items - aBility";
 </head>
 
 <body>
-    <!-- Unified Navigation -->
-    <?php include 'includes/navbar_main.php'; ?>
+    <!-- Header -->
+    <div class="page-header-compact">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-4">
+                <div class="user-info-compact">
+                    <div class="user-avatar-compact">
+                        <i class="fas <?php echo $is_stock_controller ? 'fa-user-shield' : 'fa-tools'; ?>"></i>
+                    </div>
+                    <div class="user-details-compact">
+                        <h5><?php echo htmlspecialchars(getUserFullName()); ?></h5>
+                        <div>
+                            <span class="role-badge-compact">
+                                <i class="fas fa-<?php echo $is_stock_controller ? 'check-circle' : 'user'; ?> me-1"></i>
+                                <?php echo ucfirst(str_replace('_', ' ', $user_role)); ?>
+                            </span>
+                            <?php if ($is_stock_controller): ?>
+                                <span class="badge bg-primary ms-2">
+                                    <i class="fas fa-check-circle"></i> Verified
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-    <!-- Centered Toast Container -->
-    <div id="centered-toast-container" class="toast-container position-fixed top-50 start-50 translate-middle p-3" style="z-index: 1055;"></div>
+            <div class="header-actions-compact">
+                <a href="dashboard.php" class="back-to-dashboard">
+                    <i class="fas fa-arrow-left me-1"></i> Dashboard
+                </a>
+                <a href="#" class="logout-btn-compact" onclick="showLogoutToast(event)">
+                    <i class="fas fa-sign-out-alt me-2"></i>Logout
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logout Toast -->
+    <div id="logoutToast" class="logout-toast" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 12px; padding: 20px; box-shadow: 0 5px 30px rgba(0,0,0,0.3); z-index: 10000; min-width: 300px; text-align: center;">
+        <div class="mb-3">
+            <div class="rounded-circle bg-warning bg-opacity-10 d-inline-flex align-items-center justify-content-center p-3">
+                <i class="fas fa-sign-out-alt fa-2x text-warning"></i>
+            </div>
+        </div>
+        <h5 class="mb-2">Confirm Logout</h5>
+        <p class="text-muted mb-3">Are you sure you want to logout?</p>
+        <div class="d-flex gap-2 justify-content-center">
+            <button class="btn btn-secondary" onclick="hideLogoutToast()">Cancel</button>
+            <a href="logout.php" class="btn btn-primary">Yes, Logout</a>
+        </div>
+    </div>
+    <div id="toastOverlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999;" onclick="hideLogoutToast()"></div>
 
     <!-- Batch Submission Modal -->
     <div class="modal fade" id="batchSubmitModal" tabindex="-1" aria-labelledby="batchSubmitModalLabel" aria-hidden="true">
@@ -525,17 +648,6 @@ $pageTitle = "Scan & Batch Items - aBility";
                 </div>
 
                 <div class="modal-body">
-                    <?php
-                    // Fetch technicians from database for selection if not already defined or if admin/stock controller
-                    $technicians = [];
-                    if ($db_connected) {
-                        $techQuery = "SELECT id, username, full_name, department FROM users WHERE role = 'technician' AND is_active = 1 ORDER BY full_name";
-                        $techResult = $conn->query($techQuery);
-                        if ($techResult) {
-                            $technicians = $techResult->fetch_all(MYSQLI_ASSOC);
-                        }
-                    }
-                    ?>
                     <!-- Authentication Section -->
                     <div id="authenticationSection" class="card mb-4 border-" style="border-color: #317e97;">
                         <div class="card-header bg- text-white" style="background-color: #317e97;">
@@ -550,28 +662,18 @@ $pageTitle = "Scan & Batch Items - aBility";
 
                                 <div class="row g-3">
                                     <div class="col-md-6">
-                                        <label class="form-label">Technician</label>
-                                        <?php if ($is_technician): ?>
-                                            <div class="input-group">
-                                                <span class="input-group-text bg-light"><i class="fas fa-user"></i></span>
-                                                <input type="text" class="form-control bg-light" value="<?php echo htmlspecialchars($logged_in_full_name); ?>" readonly>
-                                                <input type="hidden" id="technicianSelect" value="<?php echo $logged_in_user_id; ?>">
-                                            </div>
-                                            <small class="text-muted mt-1 d-block">Authenticated as current user</small>
-                                        <?php else: ?>
-                                            <select class="form-select" id="technicianSelect" required>
-                                                <option value="">-- Select Technician --</option>
-                                                <?php foreach ($technicians as $tech): ?>
-                                                    <option value="<?php echo $tech['id']; ?>"
-                                                        data-fullname="<?php echo htmlspecialchars($tech['full_name']); ?>"
-                                                        data-username="<?php echo htmlspecialchars($tech['username']); ?>"
-                                                        data-department="<?php echo htmlspecialchars($tech['department']); ?>"
-                                                        <?php echo ($tech['id'] == $logged_in_user_id) ? 'selected' : ''; ?>>
-                                                        <?php echo htmlspecialchars($tech['full_name'] . ' (' . $tech['username'] . ') - ' . ($tech['department'] ?? 'No Department')); ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        <?php endif; ?>
+                                        <label class="form-label">Select Technician</label>
+                                        <select class="form-select" id="technicianSelect" required>
+                                            <option value="">-- Select Technician --</option>
+                                            <?php foreach ($technicians as $tech): ?>
+                                                <option value="<?php echo $tech['id']; ?>"
+                                                    data-fullname="<?php echo htmlspecialchars($tech['full_name']); ?>"
+                                                    data-username="<?php echo htmlspecialchars($tech['username']); ?>"
+                                                    data-department="<?php echo htmlspecialchars($tech['department']); ?>">
+                                                    <?php echo htmlspecialchars($tech['full_name'] . ' (' . $tech['username'] . ') - ' . ($tech['department'] ?? 'No Department')); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
                                     </div>
 
                                     <div class="col-md-6">
@@ -620,7 +722,7 @@ $pageTitle = "Scan & Batch Items - aBility";
                                         </div>
                                         <div class="col-md-4 border-start">
                                             <div class="info-label fw-bold text-muted small uppercase">Stock Controller</div>
-                                            <div class="info-value fw-bold" id="summaryStockControllerName"><span class="text-muted italic">Not selected</span></div>
+                                            <div class="info-value fw-bold" id="summaryStockControllerName"><?php echo htmlspecialchars($stock_controller_display); ?></div>
                                         </div>
                                     </div>
                                 </div>
@@ -751,7 +853,6 @@ $pageTitle = "Scan & Batch Items - aBility";
                                                 <div class="col-md-6">
                                                     <label class="form-label">Stock Controller *</label>
                                                     <select class="form-select" id="stockControllerSelect" required>
-                                                        <option value="">-- Select Stock Controller --</option>
                                                         <?php
                                                         // Fetch stock controllers from database
                                                         $stockControllers = [];
@@ -793,13 +894,42 @@ $pageTitle = "Scan & Batch Items - aBility";
                                                             </option>
                                                         <?php endforeach; ?>
                                                     </select>
+                                                    <script>
+                                                        function syncPersonnelSummary() {
+                                                            console.log('Syncing personnel summary...');
+                                                            // Sync Technician (if authenticated)
+                                                            if (typeof isTechnicianAuthenticated !== 'undefined' && isTechnicianAuthenticated && typeof authenticatedTechnician !== 'undefined') {
+                                                                const summaryTech = document.getElementById('summaryTechnicianName');
+                                                                const summaryReq = document.getElementById('summaryRequestedBy');
+                                                                if (summaryTech) summaryTech.textContent = authenticatedTechnician.full_name;
+                                                                if (summaryReq) summaryReq.textContent = authenticatedTechnician.full_name;
+                                                                console.log('Syncing Tech:', authenticatedTechnician.full_name);
+                                                            }
 
+                                                            // Sync Stock Controller from dropdown
+                                                            const scSelect = document.getElementById('stockControllerSelect');
+                                                            if (scSelect && scSelect.options.length > 0) {
+                                                                const selectedOption = scSelect.options[scSelect.selectedIndex];
+                                                                const fullName = selectedOption.getAttribute('data-fullname') || selectedOption.text;
+                                                                const summarySC = document.getElementById('summaryStockControllerName');
+                                                                if (summarySC) {
+                                                                    summarySC.textContent = fullName;
+                                                                    console.log('Syncing SC:', fullName);
+                                                                }
+                                                            }
+                                                        }
+
+                                                        document.getElementById('stockControllerSelect').addEventListener('change', syncPersonnelSummary);
+                                                        
+                                                        // Run once immediately after definition
+                                                        syncPersonnelSummary();
+                                                    </script>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <label class="form-label">Stock Location *</label>
                                                     <select class="form-select" id="stockLocationSelect" required>
                                                         <option value="">-- Select Stock Location --</option>
-                                                        <option value="Ndera Warehouse">Ndera Warehouse</option>
+                                                        <option value="Main Warehouse">Ndera Warehouse</option>
                                                         <option value="KCC Stock">KCC Stock</option>
                                                         <option value="BK Arena Stock">BK Arena Stock</option>
                                                     </select>
@@ -889,7 +1019,6 @@ $pageTitle = "Scan & Batch Items - aBility";
                                 </div>
                             </div>
 
-
                             <!-- Confirmation Section -->
                             <div class="card mt-4 border-primary">
                                 <div class="card-body">
@@ -900,8 +1029,7 @@ $pageTitle = "Scan & Batch Items - aBility";
                                             <ul class="mb-0 mt-2">
                                                 <li>Technician <strong id="confirmationTechnicianName"></strong> has been authenticated</li>
                                                 <li>All <strong id="confirmItemCount">0</strong> items listed are accurate</li>
-                                                <li>Movement Type: <span id="movementTypeConfirmation" class="fw-bold"></span></li>
-                                                <li>Location: <span id="movementLocationConfirmation" class="fw-bold text-primary"></span></li>
+                                                <li>Movement: <span id="movementTypeConfirmation" class="fw-bold"></span></li>
                                                 <li class="border-top pt-2 mt-2">
                                                     <strong>Submitted by:</strong> <?php echo htmlspecialchars($stock_controller_display); ?>
                                                     <span class="badge bg-<?php echo $is_stock_controller ? 'primary' : 'secondary'; ?> ms-2"><?php echo htmlspecialchars($user_role); ?></span>
@@ -919,49 +1047,6 @@ $pageTitle = "Scan & Batch Items - aBility";
                     <button type="button" class="btn btn-sm btn- text-white" style="background-color: #b00707;" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-sm btn- text-white" style="background-color: #388ba0;" id="printPreviewBtn" disabled>Print Preview</button>
                     <button type="button" class="btn btn-sm btn- text-white" style="background-color: #07b056;" id="submitBatchBtn" disabled>Submit Batch</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Submission Success Modal -->
-    <div class="modal fade" id="submissionSuccessModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
-                <div class="modal-body p-0">
-                    <div class="text-center p-5 bg-success text-white">
-                        <div class="mb-4">
-                            <div class="bg-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
-                                <i class="fas fa-check text-success fa-3x"></i>
-                            </div>
-                        </div>
-                        <h4 class="fw-bold mb-2">Submission Successful!</h4>
-                        <p class="mb-0 opacity-75">Item(s) have been submitted - contact stock controller (<span id="successStockControllerName" class="fw-bold text-white"></span>) for approval</p>
-                        <div class="mt-3 small opacity-75">Batch ID: <span id="successBatchIdDisplay" class="fw-bold text-white"></span></div>
-                    </div>
-                    <div class="p-4 bg-light">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="text-uppercase fw-bold text-muted small mb-0 ls-1">Submitted Items</h6>
-                            <span class="badge bg-success-soft text-success rounded-pill px-3 py-2" id="successItemCountBadge">0 Items</span>
-                        </div>
-                        <div id="successItemsList" class="list-group list-group-flush rounded-3 border overflow-auto" style="max-height: 200px;">
-                            <!-- Items will be injected here -->
-                        </div>
-                    </div>
-                    <div class="p-4 pt-0 bg-light text-center">
-                        <hr class="mt-0 mb-4 opacity-10">
-                        <div class="d-grid gap-2">
-                            <button type="button" id="downloadReportBtn" class="btn btn-primary py-3 fw-bold shadow-sm mb-1">
-                                <i class="fas fa-file-download me-2"></i> Download Batch Report
-                            </button>
-                            <button type="button" class="btn btn-success py-3 fw-bold shadow-sm" onclick="window.location.href = 'technician_batch_history.php'">
-                                <i class="fas fa-history me-2"></i> View Batch History
-                            </button>
-                            <button type="button" class="btn btn-danger py-2 border-0" data-bs-dismiss="modal">
-                                Close
-                            </button>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -1178,8 +1263,6 @@ $pageTitle = "Scan & Batch Items - aBility";
         let batchItems = [];
         let isTechnicianAuthenticated = false;
         let authenticatedTechnician = null;
-        let isUserTechnician = <?php echo $is_technician ? 'true' : 'false'; ?>;
-        let loggedInUserId = '<?php echo $logged_in_user_id; ?>';
         let html5QrCode = null;
         let isScanning = false;
         let isScannerBusy = false;
@@ -1259,8 +1342,7 @@ $pageTitle = "Scan & Batch Items - aBility";
                 serial_number: item.serial_number,
                 quantity: 1,
                 status: item.status,
-                stock_location: item.stock_location || 'N/A',
-                image: item.image || null
+                stock_location: item.stock_location || 'N/A'
             };
             addToBatch(newItem);
             document.getElementById('searchResults').style.display = 'none';
@@ -1293,7 +1375,7 @@ $pageTitle = "Scan & Batch Items - aBility";
                     let backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear'));
                     let selectedCamera = backCamera || cameras[0];
                     cameraSelect.value = selectedCamera.id;
-
+                    
                     isScannerBusy = false; // Release lock before calling startWithCamera
                     await startScannerWithCamera(selectedCamera.id);
                 } else {
@@ -1314,7 +1396,7 @@ $pageTitle = "Scan & Batch Items - aBility";
             try {
                 console.log('--- SCANNER STARTUP SEQUENCE START ---');
                 console.log('Target Camera ID:', cameraId);
-
+                
                 const container = document.getElementById("qr-reader");
                 if (!container) {
                     console.error('CRITICAL: #qr-reader container not found in DOM');
@@ -1338,7 +1420,7 @@ $pageTitle = "Scan & Batch Items - aBility";
                 console.log('Html5Qrcode instance created successfully');
 
                 await new Promise(resolve => setTimeout(resolve, 300));
-
+                
                 console.log('Attempting to call html5QrCode.start()...');
                 // Use more flexible constraints to avoid driver-level hangs
                 const config = {
@@ -1346,22 +1428,19 @@ $pageTitle = "Scan & Batch Items - aBility";
                     qrbox: function(viewfinderWidth, viewfinderHeight) {
                         const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
                         const fontSize = Math.floor(minEdge * 0.7);
-                        return {
-                            width: fontSize,
-                            height: fontSize
-                        };
+                        return { width: fontSize, height: fontSize };
                     },
                     aspectRatio: 1.0
                 };
 
-                await html5QrCode.start(cameraId, config,
+                await html5QrCode.start(cameraId, config, 
                     (decodedText) => {
                         const now = Date.now();
                         if (lastScannedData === decodedText && (now - lastScanTime) < SCAN_DEBOUNCE_MS) return;
                         lastScannedData = decodedText;
                         lastScanTime = now;
                         processScannedItem(decodedText);
-                    },
+                    }, 
                     (errorMessage) => {
                         // Silent error - triggered on every frame where no QR is found
                     }
@@ -1493,8 +1572,7 @@ $pageTitle = "Scan & Batch Items - aBility";
                             serial_number: response.item.serial_number,
                             quantity: 1,
                             status: response.item.status,
-                            stock_location: response.item.stock_location || 'N/A',
-                            image: response.item.image || null
+                            stock_location: response.item.stock_location || 'N/A'
                         });
                         playBeep();
                     } else if (fallbackName) {
@@ -1541,8 +1619,7 @@ $pageTitle = "Scan & Batch Items - aBility";
                             serial_number: response.item.serial_number,
                             quantity: 1,
                             status: response.item.status,
-                            stock_location: response.item.stock_location || 'N/A',
-                            image: response.item.image || null
+                            stock_location: response.item.stock_location || 'N/A'
                         });
                         playBeep();
                     } else {
@@ -1703,8 +1780,7 @@ $pageTitle = "Scan & Batch Items - aBility";
                 serial_number: item.serial_number || item.serial || 'N/A',
                 quantity: item.quantity || 1,
                 status: item.status || 'available',
-                stock_location: item.stock_location || item.location || 'N/A',
-                image: item.image || null
+                stock_location: item.stock_location || item.location || 'N/A'
             };
 
             batchItems.push(newItem);
@@ -1768,38 +1844,25 @@ $pageTitle = "Scan & Batch Items - aBility";
                 } else {
                     itemsList.innerHTML = batchItems.map(item => `
                         <div class="item-card" data-item-id="${item.id}">
-                            <div class="d-flex position-relative">
-                                <div class="flex-grow-1">
-                                    <div class="d-flex align-items-center mb-3">
-                                        <div class="item-name" style="font-size: 1.2rem; font-weight: 700;">${escapeHtml(item.name)}</div>
-                                        ${item.quantity > 1 ? `<span class="badge bg-info ms-2">x${item.quantity}</span>` : ''}
-                                    </div>
-                                    <div class="item-details" style="display: block;">
-                                        <div class="detail-item mb-3">
-                                            <span class="detail-label d-block mb-1" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #999;">Serial</span>
-                                            <span class="detail-value"><code style="color: #d63384; font-size: 1rem; font-weight: 600;">${escapeHtml(item.serial_number)}</code></span>
-                                        </div>
-                                        <div class="detail-item">
-                                            <span class="detail-label d-block mb-1" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #999;">Location</span>
-                                            <span class="detail-value text-muted" style="font-size: 0.95rem;">${escapeHtml(item.stock_location)}</span>
-                                        </div>
-                                    </div>
+                            <div class="item-header">
+                                <div class="item-name">${escapeHtml(item.name)}</div>
+                                <div class="item-actions">
+                                    ${item.quantity > 1 ? `<span class="badge bg-info me-2">x${item.quantity}</span>` : ''}
+                                    <button class="btn btn-action btn-sm btn-success" onclick="updateItemStatus('${item.id}', 'available')" title="Available" ${item.status === 'available' ? 'disabled' : ''}>
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button class="btn btn-action btn-sm btn-warning" onclick="updateItemStatus('${item.id}', 'in_use')" title="In Use" ${item.status === 'in_use' ? 'disabled' : ''}>
+                                        <i class="fas fa-wrench"></i>
+                                    </button>
+                                    <button class="btn btn-action btn-sm btn-danger" onclick="removeFromBatch('${item.id}')" title="Remove">
+                                        <i class="fas fa-times"></i>
+                                    </button>
                                 </div>
-                                <div class="ms-3 text-end" style="min-width: 245px;">
-                                    <div class="position-relative d-inline-block">
-                                        ${item.image ? 
-                                            `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" style="width: 245px; height: 150px; object-fit: cover; border-radius: 4px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);" onerror="this.src='assets/images/placeholder.png'; this.onerror=null;">` : 
-                                            `<div style="width: 245px; height: 150px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6; display: flex; align-items: center; justify-content: center;"><i class="fas fa-image text-muted fa-3x"></i></div>`
-                                        }
-                                        <button class="btn btn-danger rounded-circle position-absolute" style="top: -10px; right: -10px; width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.2); border: 2px solid white; z-index: 10;" onclick="removeFromBatch('${item.id}')" title="Remove">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                    <div class="mt-3">
-                                        <span class="detail-label d-block mb-1" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #999;">Status</span>
-                                        <span class="badge-status status-${item.status}" style="font-size: 0.85rem; padding: 5px 15px;">${item.status}</span>
-                                    </div>
-                                </div>
+                            </div>
+                            <div class="item-details">
+                                <div class="detail-item"><span class="detail-label">Serial</span><span class="detail-value"><code>${escapeHtml(item.serial_number)}</code></span></div>
+                                <div class="detail-item"><span class="detail-label">Status</span><span class="detail-value"><span class="badge-status status-${item.status}">${item.status}</span></span></div>
+                                <div class="detail-item"><span class="detail-label">Location</span><span class="detail-value">${escapeHtml(item.stock_location)}</span></div>
                             </div>
                         </div>
                     `).join('');
@@ -1895,9 +1958,6 @@ $pageTitle = "Scan & Batch Items - aBility";
                     if (response.success) {
                         isTechnicianAuthenticated = true;
                         authenticatedTechnician = response.technician;
-                        if (document.getElementById('submittedByFullName')) {
-                            document.getElementById('submittedByFullName').value = authenticatedTechnician.full_name;
-                        }
                         const displayName = `${authenticatedTechnician.full_name} (ID: ${authenticatedTechnician.id})`;
 
                         // Sync personnel summary card
@@ -1935,13 +1995,7 @@ $pageTitle = "Scan & Batch Items - aBility";
             isTechnicianAuthenticated = false;
             authenticatedTechnician = null;
             const select = document.getElementById('technicianSelect');
-            if (select) {
-                if (isUserTechnician) {
-                    select.value = loggedInUserId;
-                } else {
-                    select.value = '';
-                }
-            }
+            if (select) select.value = '';
             const password = document.getElementById('technicianPassword');
             if (password) password.value = '';
             const authStatus = document.getElementById('authStatus');
@@ -1969,7 +2023,7 @@ $pageTitle = "Scan & Batch Items - aBility";
             const movementSummary = document.getElementById('movementSummaryText');
             const movementConfirm = document.getElementById('movementTypeConfirmation');
 
-            let stockLocations = ['Ndera Warehouse', 'KCC Stock', 'BK Arena'];
+            let stockLocations = ['Main Warehouse', 'KCC Stock', 'BK Arena'];
             let venues = ['Kigali Convention Centre', 'BK Arena', 'Marriot Hotel', 'Serena Hotel'];
             let venueRooms = {
                 'Kigali Convention Centre': ['Auditorium', 'MH1', 'MH2', 'MH3', 'MH4', 'MH5', 'AD1', 'AD2', 'AD3', 'AD4', 'AD5', 'AD6', 'AD7', 'AD8', 'AD9', 'AD10', 'AD11', 'AD12', 'No-MansLand', 'Meeting Room 2', 'VIP Lounge'],
@@ -2068,28 +2122,18 @@ $pageTitle = "Scan & Batch Items - aBility";
             }
 
             function updateSummary() {
-                let typeText = '';
-                let locationDetail = '';
-
+                let summary = '';
                 if (movementTypes.stockToVenueRoom?.checked) {
-                    typeText = 'Stock → Venue (Room)';
-                    locationDetail = `${getSelectedText('sourceStock') || '...'} → ${getSelectedText('destinationVenue') || '...'} (${getSelectedText('destinationRoom') || '...'})`;
+                    summary = `${getSelectedText('sourceStock') || 'Stock'} → ${getSelectedText('destinationVenue') || 'Venue'} (${getSelectedText('destinationRoom') || 'Room'})`;
                 } else if (movementTypes.venueRoomToStock?.checked) {
-                    typeText = 'Venue (Room) → Stock';
-                    locationDetail = `${getSelectedText('sourceVenue') || '...'} (${getSelectedText('sourceRoom') || '...'}) → ${getSelectedText('destinationStock') || '...'}`;
+                    summary = `${getSelectedText('sourceVenue') || 'Venue'} (${getSelectedText('sourceRoom') || 'Room'}) → ${getSelectedText('destinationStock') || 'Stock'}`;
                 } else if (movementTypes.stockToStock?.checked) {
-                    typeText = 'Stock → Stock (Transfer)';
-                    locationDetail = `${getSelectedText('sourceStock') || '...'} → ${getSelectedText('destinationStock') || '...'}`;
+                    summary = `${getSelectedText('sourceStock') || 'Stock'} → ${getSelectedText('destinationStock') || 'Stock'}`;
                 } else if (movementTypes.stockToVenueTransport?.checked) {
-                    typeText = 'Stock → Venue (Transport)';
-                    locationDetail = `${getSelectedText('sourceStock') || '...'} → ${getSelectedText('destinationVenue') || '...'}`;
+                    summary = `${getSelectedText('sourceStock') || 'Stock'} → ${getSelectedText('destinationVenue') || 'Venue'}`;
                 }
-
-                if (movementSummary) movementSummary.innerHTML = `<i class="fas fa-info-circle me-2"></i><strong>${typeText}:</strong> ${locationDetail}`;
-                if (movementConfirm) movementConfirm.textContent = typeText;
-
-                const locationConfirm = document.getElementById('movementLocationConfirmation');
-                if (locationConfirm) locationConfirm.textContent = locationDetail;
+                if (movementSummary) movementSummary.innerHTML = `<i class="fas fa-info-circle me-2"></i>${summary}`;
+                if (movementConfirm) movementConfirm.textContent = summary;
             }
 
             Object.values(movementTypes).forEach(radio => {
@@ -2114,9 +2158,6 @@ $pageTitle = "Scan & Batch Items - aBility";
             }
             resetTechnicianAuthentication();
             initializeStockMovement();
-            if (typeof window.syncPersonnelSummary === 'function') {
-                window.syncPersonnelSummary();
-            }
             const modalElement = document.getElementById('batchSubmitModal');
             if (modalElement) {
                 if (currentModal) currentModal.dispose();
@@ -2255,68 +2296,21 @@ $pageTitle = "Scan & Batch Items - aBility";
                 // In scan_bulk.php, find the success callback in submitBatch function
                 success: function(response) {
                     if (response.success) {
-                        // Capture data for success modal
-                        const submittedItems = [...batchItems];
-                        const controllerName = batchData.stock_controller_name || 'Stock Controller';
-
                         showNotification('success', response.message || 'Batch submitted successfully!');
-
-                        // Hide submission modal robustly
-                        const batchModalEl = document.getElementById('batchSubmitModal');
-                        if (batchModalEl) {
-                            const bModal = bootstrap.Modal.getInstance(batchModalEl) || new bootstrap.Modal(batchModalEl);
-                            bModal.hide();
-                        }
-
-                        // Clear batch
+                        if (currentModal) currentModal.hide();
                         batchItems = [];
-                        if (typeof updateBatchUI === 'function') updateBatchUI();
-                        if (typeof saveBatchToStorage === 'function') saveBatchToStorage();
+                        updateBatchUI();
+                        saveBatchToStorage();
 
-                        // Delay showing the success modal to avoid transition conflicts
+                        // CHANGE THIS LINE - Redirect to technician batch history instead
                         setTimeout(() => {
-                            const successModalElement = document.getElementById('submissionSuccessModal');
-                            if (successModalElement) {
-                                document.getElementById('successStockControllerName').textContent = controllerName;
-                                document.getElementById('successItemCountBadge').textContent = `${submittedItems.length} Item(s)`;
-
-                                // Display Batch ID
-                                if (response.batch_number) {
-                                    document.getElementById('successBatchIdDisplay').textContent = response.batch_number;
-                                    const downloadBtn = document.getElementById('downloadReportBtn');
-                                    if (downloadBtn) {
-                                        downloadBtn.onclick = function() {
-                                            window.open(`batch_report.php?batch_id=${response.batch_number}&download=1`, '_blank');
-                                        };
-                                        downloadBtn.style.display = 'block';
-                                    }
-                                } else {
-                                    document.getElementById('successBatchIdDisplay').textContent = 'N/A';
-                                    if (document.getElementById('downloadReportBtn')) {
-                                        document.getElementById('downloadReportBtn').style.display = 'none';
-                                    }
-                                }
-
-                                const itemsList = document.getElementById('successItemsList');
-                                itemsList.innerHTML = submittedItems.map(item => `
-                                    <div class="list-group-item bg-transparent border-0 px-0 py-3 d-flex justify-content-between align-items-center border-bottom">
-                                        <div class="d-flex align-items-center">
-                                            <div class="bg-success bg-opacity-10 text-success rounded-circle p-2 me-3 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                                                <i class="fas fa-box small"></i>
-                                            </div>
-                                            <div>
-                                                <div class="fw-bold text-dark" style="font-size: 0.9rem;">${item.name}</div>
-                                                <div class="text-muted small">SN: <code>${item.serial_number}</code></div>
-                                            </div>
-                                        </div>
-                                        <span class="badge bg-white text-success border border-success-subtle rounded-pill">x${item.quantity}</span>
-                                    </div>
-                                `).join('');
-
-                                const successModal = new bootstrap.Modal(successModalElement);
-                                successModal.show();
-                            }
-                        }, 500);
+                            // Check if user is technician or stock controller
+                            <?php if ($is_stock_controller): ?>
+                                window.location.href = 'batch_history.php';
+                            <?php else: ?>
+                                window.location.href = 'technician_batch_history.php';
+                            <?php endif; ?>
+                        }, 2000);
                     } else {
                         showNotification('error', response.message || 'Submission failed');
                     }
@@ -2390,47 +2384,18 @@ $pageTitle = "Scan & Batch Items - aBility";
             if (password) password.type = password.type === 'password' ? 'text' : 'password';
         }
 
-        // Logout Confirmation
-        window.confirmLogout = function(event) {
-            if (event) event.preventDefault();
+        function showLogoutToast(event) {
+            event.preventDefault();
+            document.getElementById('logoutToast').style.display = 'block';
+            document.getElementById('toastOverlay').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
 
-            let toastContainer = document.getElementById('centered-toast-container');
-            if (!toastContainer) {
-                toastContainer = document.createElement('div');
-                toastContainer.id = 'centered-toast-container';
-                toastContainer.className = 'toast-container position-fixed top-50 start-50 translate-middle p-3';
-                toastContainer.style.zIndex = '1055';
-                document.body.appendChild(toastContainer);
-            }
-
-            const toastId = 'logout-toast-' + Date.now();
-            const toastHtml = `
-                <div id="${toastId}" class="toast align-items-center text-white bg-dark border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" style="min-width: 320px;" data-bs-autohide="false">
-                    <div class="p-4">
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="bg-primary rounded-circle p-2 me-3">
-                                <i class="fas fa-sign-out-alt text-white"></i>
-                            </div>
-                            <h5 class="mb-0 fs-5">Logout Confirmation</h5>
-                        </div>
-                        <p class="mb-4 opacity-75">Are you sure you want to end your session?</p>
-                        <div class="d-flex gap-2">
-                            <a href="logout.php" class="btn btn-primary flex-grow-1 py-2 rounded-3">
-                                <i class="fas fa-check me-1"></i> Yes, Logout
-                            </a>
-                            <button type="button" class="btn btn-outline-light flex-grow-1 py-2 rounded-3" data-bs-dismiss="toast">
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-            const toastElement = document.getElementById(toastId);
-            const toast = new bootstrap.Toast(toastElement);
-            toast.show();
-        };
+        function hideLogoutToast() {
+            document.getElementById('logoutToast').style.display = 'none';
+            document.getElementById('toastOverlay').style.display = 'none';
+            document.body.style.overflow = '';
+        }
 
         // Add animation styles
         const style = document.createElement('style');
@@ -2458,62 +2423,10 @@ $pageTitle = "Scan & Batch Items - aBility";
         window.removeFromBatch = removeFromBatch;
         window.updateItemStatus = updateItemStatus;
         window.togglePasswordVisibility = togglePasswordVisibility;
-        window.confirmLogout = confirmLogout;
+        window.showLogoutToast = showLogoutToast;
+        window.hideLogoutToast = hideLogoutToast;
         window.startScanner = startScanner;
         window.stopScanner = stopScanner;
-        window.syncPersonnelSummary = function() {
-            console.log('Syncing personnel summary...');
-            const summaryTech = document.getElementById('summaryTechnicianName');
-            const summaryReq = document.getElementById('summaryRequestedBy');
-
-            // Sync Technician
-            if (typeof isTechnicianAuthenticated !== 'undefined' && isTechnicianAuthenticated && typeof authenticatedTechnician !== 'undefined') {
-                if (summaryTech) summaryTech.textContent = authenticatedTechnician.full_name;
-                if (summaryReq) summaryReq.textContent = authenticatedTechnician.full_name;
-            } else if (typeof isUserTechnician !== 'undefined' && isUserTechnician) {
-                // Pre-show for logged in technician
-                if (summaryTech) summaryTech.textContent = '<?php echo addslashes($logged_in_full_name); ?>';
-                if (summaryReq) summaryReq.textContent = '<?php echo addslashes($logged_in_full_name); ?>';
-            }
-
-
-            // Sync Stock Controller from dropdown
-            const scSelect = document.getElementById('stockControllerSelect');
-            const summarySC = document.getElementById('summaryStockControllerName');
-            if (scSelect && summarySC) {
-                if (scSelect.value === "") {
-                    summarySC.innerHTML = '<span class="text-muted italic">Not selected</span>';
-                } else {
-                    const selectedOption = scSelect.options[scSelect.selectedIndex];
-                    let fullName = selectedOption.getAttribute('data-fullname');
-                    if (!fullName) {
-                        fullName = selectedOption.text.split('(')[0].trim();
-                    }
-                    summarySC.textContent = fullName;
-                    console.log('Syncing SC UI:', fullName);
-                }
-            }
-        };
-
-        window.autoSelectLocation = function() {
-            const scSelect = document.getElementById('stockControllerSelect');
-            const locSelect = document.getElementById('stockLocationSelect');
-
-            if (!scSelect || !locSelect || scSelect.value === "") return;
-
-            const selectedOption = scSelect.options[scSelect.selectedIndex];
-            const department = (selectedOption.getAttribute('data-department') || "").toLowerCase();
-
-            if (department) {
-                if (department.includes('ndera') || department.includes('warehouse')) {
-                    locSelect.value = "Ndera Warehouse";
-                } else if (department.includes('bka') || department.includes('bk arena')) {
-                    locSelect.value = "BK Arena Stock";
-                } else if (department.includes('kcc')) {
-                    locSelect.value = "KCC Stock";
-                }
-            }
-        };
 
         document.addEventListener('DOMContentLoaded', function() {
             loadBatchFromStorage();
@@ -2522,18 +2435,6 @@ $pageTitle = "Scan & Batch Items - aBility";
             document.getElementById('scan-tab')?.addEventListener('shown.bs.tab', () => setTimeout(() => startScanner(), 500));
             document.getElementById('manual-tab')?.addEventListener('shown.bs.tab', () => stopScanner('manual-tab-shown'));
             document.getElementById('search-tab')?.addEventListener('shown.bs.tab', () => stopScanner('search-tab-shown'));
-
-            // Sync personnel summary on controller change (using event delegation for better reliability)
-            document.addEventListener('change', function(e) {
-                if (e.target && e.target.id === 'stockControllerSelect') {
-                    window.syncPersonnelSummary();
-                    window.autoSelectLocation();
-                }
-            });
-
-            // Initialize on load
-            window.syncPersonnelSummary();
-            window.autoSelectLocation();
         });
     </script>
 </body>
