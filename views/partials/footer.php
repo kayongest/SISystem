@@ -7,7 +7,7 @@
         <div class="row align-items-center">
             <div class="col-md-6">
                 <span class="text-muted">
-                    &copy; <?php echo date('Y'); ?> aBility v1.0
+                    &copy; <?php echo date('Y'); ?> EventORY v1.0
                 </span>
             </div>
             <div class="col-md-6 text-md-end">

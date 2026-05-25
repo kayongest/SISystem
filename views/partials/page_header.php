@@ -261,7 +261,7 @@ if ($user_role === 'admin') {
         // You can reuse the same logout toast from dashboard
         // or create a simple confirm
         if (confirm('Are you sure you want to logout?')) {
-            window.location.href = 'logout.php';
+            window.location.href = '<?php echo BASE_URL; ?>logout.php';
         }
     }
 </script>

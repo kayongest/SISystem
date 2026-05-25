@@ -153,8 +153,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
         // Log successful login
         logLoginAttempt($username, 'SUCCESS', 'AJAX verified login');
 
-        // Default redirection for all roles
+        // Default redirection based on roles
         $redirect = 'dashboard_full.php';
+        if ($role === 'driver') {
+            $redirect = 'driver_batches.php';
+        }
 
         // Override with session redirect if set (takes priority)
         if (isset($_SESSION['redirect_url']) && !empty($_SESSION['redirect_url'])) {
@@ -178,7 +181,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
             // First, get basic user info
             $stmt = $conn->prepare("SELECT id, username, email, full_name, password, role, department, is_active, signature_image, profile_image FROM users WHERE username = ? OR email = ?");
             if (!$stmt) {
-                throw new Exception("Failed to prepare statement: " . $conn->error);
+                // Fallback for schemas without newer columns
+                $stmt = $conn->prepare("SELECT id, username, email, password, role, department, is_active FROM users WHERE username = ? OR email = ?");
+                if (!$stmt) {
+                    throw new Exception("Failed to prepare statement: " . $conn->error);
+                }
             }
 
             $stmt->bind_param("ss", $username, $username);
@@ -305,8 +312,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
 
                     $debug_info[] = "Processing redirect";
 
-                    // Default redirection for all roles
+                    // Default redirection based on roles
                     $redirect = 'dashboard_full.php';
+                    if ($user['role'] === 'driver') {
+                        $redirect = 'driver_batches.php';
+                    }
 
                     // Override with session redirect if set (takes priority)
                     if (isset($_SESSION['redirect_url']) && !empty($_SESSION['redirect_url'])) {

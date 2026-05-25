@@ -77,9 +77,9 @@ $pageTitle = "My Batches - aBility";
         /* Stats Cards */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
         }
 
         .stat-card {
@@ -88,7 +88,7 @@ $pageTitle = "My Batches - aBility";
             padding: 10px;
             box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
             transition: transform 0.3s ease;
-            text-align: start;
+            text-align: center;
         }
 
         .stat-card:hover {
@@ -127,14 +127,16 @@ $pageTitle = "My Batches - aBility";
         }
 
         .stat-value {
-            font-size: 2rem;
+            font-size: 1.4rem;
             font-weight: 700;
-            margin-bottom: 5px;
+            margin-bottom: 2px;
+            color: white;
         }
 
         .stat-label {
-            color: #6c757d;
-            font-size: 0.85rem;
+            color: rgba(255,255,255,0.85) !important;
+            font-size: 0.75rem;
+            line-height: 1.1;
         }
 
         /* Filter Section */
@@ -426,6 +428,114 @@ $pageTitle = "My Batches - aBility";
 
         .modal-items-table tr:hover td {
             background: #f8f9fa;
+        }
+
+        /* Milestone Tracker styling */
+        .milestone-tracker {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            margin: 1.5rem 0 2.5rem 0;
+            padding: 0 10px;
+        }
+
+        .milestone-tracker::before {
+            content: '';
+            position: absolute;
+            top: 22px;
+            left: 10%;
+            right: 10%;
+            height: 4px;
+            background: #044A42; /* Dark Emerald Teal path line */
+            z-index: 1;
+        }
+
+        .milestone-tracker-fill {
+            position: absolute;
+            top: 22px;
+            left: 10%;
+            height: 4px;
+            background: linear-gradient(90deg, #3A9188, #B8E1DD);
+            z-index: 1;
+            transition: width 0.4s ease;
+            width: 0%;
+        }
+
+        .milestone-step {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 25%;
+        }
+
+        .milestone-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #062925;
+            border: 3px solid #044A42;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            color: #3A9188;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .milestone-step.active .milestone-icon {
+            border-color: #3A9188;
+            color: white;
+            background: #3A9188;
+            box-shadow: 0 0 15px rgba(58, 145, 136, 0.5);
+        }
+
+        .milestone-step.completed .milestone-icon {
+            border-color: #B8E1DD;
+            color: #062925;
+            background: #B8E1DD;
+            box-shadow: 0 0 12px rgba(184, 225, 221, 0.4);
+        }
+
+        .milestone-step.rejected .milestone-icon {
+            border-color: #dc3545;
+            color: white;
+            background: #dc3545;
+        }
+
+        .milestone-label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin-top: 10px;
+            color: #3A9188;
+            text-align: center;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .milestone-step.active .milestone-label {
+            color: white;
+        }
+
+        .milestone-step.completed .milestone-label {
+            color: #B8E1DD;
+        }
+
+        .milestone-step.rejected .milestone-label {
+            color: #dc3545;
+        }
+
+        .milestone-sublabel {
+            font-size: 0.7rem;
+            color: rgba(184, 225, 221, 0.6);
+            text-align: center;
+            margin-top: 3px;
+            max-width: 130px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         /* Alert styling inside modal */
@@ -833,6 +943,11 @@ $pageTitle = "My Batches - aBility";
                 <button class="btn btn-sm outline- text-white" style="background-color: #10914c;" onclick="refreshData()">
                     <i class="fas fa-sync-alt me-1"></i> Refresh
                 </button>
+                <button class="btn btn-sm text-white" style="background-color: #7952b3;">
+                    <a href="mobile_app.php" style="color:#fff; text-decoration: none;">
+                        <i class="fas fa-mobile-alt"></i> Mobile App View
+                    </a>
+                </button>
             </div>
         </div>
 
@@ -894,10 +1009,12 @@ $pageTitle = "My Batches - aBility";
                     <tr>
                         <th>Batch ID</th>
                         <th>Date</th>
+                        <th>Controller</th>
                         <th>Event Name</th>
                         <th>Job Sheet</th>
                         <th>Items</th>
                         <th>Destination</th>
+                        <th>Progress</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -977,19 +1094,21 @@ $pageTitle = "My Batches - aBility";
             if (event.key === 'Escape') hideLogoutToast();
         });
 
+
+
         // Initialize
         $(document).ready(function() {
             loadBatches();
         });
 
         // Load Batches
-        function loadBatches() {
+        function loadBatches(isSilent = false) {
             const date_from = $('#date_from').val();
             const date_to = $('#date_to').val();
             const status = $('#status').val();
             const search = $('#search').val();
 
-            showLoading();
+            if (!isSilent) showLoading();
 
             $.ajax({
                 url: 'api/batches/technician_list.php',
@@ -1052,6 +1171,12 @@ $pageTitle = "My Batches - aBility";
                 <div class="stat-label text-white">Approved</div>
             </div>
         </div>
+        <div class="stat-card" style="background-color: #7952b3;">
+            <div class="stat-content">
+                <div class="stat-value">${stats.gate_passes || 0}</div>
+                <div class="stat-label text-white">Gate Passes</div>
+            </div>
+        </div>
     `;
             $('#statsContainer').html(html);
         }
@@ -1077,6 +1202,12 @@ $pageTitle = "My Batches - aBility";
                         }
                     },
                     {
+                        data: 'stock_controller_name',
+                        render: function(data) {
+                            return escapeHtml(data || '—');
+                        }
+                    },
+                    {
                         data: 'event_name',
                         render: function(data) {
                             return data ? `<div class="event-info"><i class="fas fa-calendar-alt"></i> ${escapeHtml(data)}</div>` : '—';
@@ -1096,6 +1227,48 @@ $pageTitle = "My Batches - aBility";
                         data: 'destination',
                         render: function(data) {
                             return data ? `<div class="destination-info"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(data)}</div>` : '—';
+                        }
+                    },
+                    {
+                        data: null,
+                        render: function(data, type, row) {
+                            let isApproved = false;
+                            let isTechOnboard = false;
+                            let isLoaded = false;
+                            let isCompleted = false;
+                            let isRejected = false;
+
+                            const appStatus = (row.approval_status || '').toLowerCase();
+                            const bStatus = (row.status || '').toLowerCase();
+
+                            if (appStatus === 'approved' || appStatus === 'completed' || bStatus === 'approved' || bStatus === 'completed') isApproved = true;
+                            if (appStatus === 'rejected' || bStatus === 'rejected') { isRejected = true; isApproved = false; }
+                            if (parseInt(row.tech_onboard) === 1) isTechOnboard = true;
+                            if (parseInt(row.driver_verified) === 1) isLoaded = true;
+                            if (bStatus === 'completed') isCompleted = true;
+
+                            let fillPercent = 10;
+                            let bgClass = 'bg-secondary';
+                            let label = 'Submitted';
+
+                            if (isRejected) { fillPercent = 100; bgClass = 'bg-danger'; label = 'Rejected'; }
+                            else if (isCompleted) { fillPercent = 100; bgClass = 'bg-success'; label = 'Delivered'; }
+                            else if (isLoaded) { fillPercent = 75; bgClass = 'bg-info'; label = 'Loaded'; }
+                            else if (isTechOnboard) { fillPercent = 50; bgClass = 'bg-primary'; label = 'Tech Onboard'; }
+                            else if (isApproved) { fillPercent = 35; bgClass = 'bg-primary'; label = 'Approved'; }
+                            else { fillPercent = 25; bgClass = 'bg-warning'; label = 'Pending'; }
+
+                            return `
+                            <div style="min-width: 100px;">
+                                <div class="d-flex justify-content-between mb-1" style="font-size: 0.65rem; font-weight: 600;">
+                                    <span class="text-secondary text-uppercase">${label}</span>
+                                    <span class="text-secondary">${fillPercent}%</span>
+                                </div>
+                                <div class="progress" style="height: 5px; border-radius: 3px; background-color: #e2e8f0; box-shadow: inset 0 1px 2px rgba(0,0,0,.1);">
+                                    <div class="progress-bar ${bgClass}" role="progressbar" style="width: ${fillPercent}%; border-radius: 3px;" aria-valuenow="${fillPercent}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                            `;
                         }
                     },
                     {
@@ -1122,6 +1295,11 @@ $pageTitle = "My Batches - aBility";
                             <button class="btn btn-sm btn-icon btn-success" onclick="viewFullReport('${data.batch_id}')" title="Download Report">
                                 <i class="fas fa-file-pdf"></i>
                             </button>
+                            ${['stock_to_stock', 'stock_to_venue_transport'].includes(data.movement_type) ? `
+                            <a href="gate_pass.php?batch_id=${encodeURIComponent(data.batch_id)}" class="btn btn-sm btn-icon btn-warning" title="View Gate Pass" target="_blank">
+                                <i class="fas fa-ticket-alt"></i>
+                            </a>
+                            ` : ''}
                             ` : ''}
                         </div>
                     `;
@@ -1271,7 +1449,83 @@ $pageTitle = "My Batches - aBility";
             const sourceDisplay = formatSourceWithData(batch);
             const destinationDisplayFormatted = formatDestinationWithData(batch);
 
+            // Milestone Tracker logic
+            let isApproved = false;
+            let isTechOnboard = false;
+            let isLoaded = false;
+            let isCompleted = false;
+            let isRejected = false;
+
+            const appStatus = (batch.approval_status || '').toLowerCase();
+            const bStatus = (batch.status || '').toLowerCase();
+
+            if (appStatus === 'approved' || appStatus === 'completed' || bStatus === 'approved' || bStatus === 'completed') {
+                isApproved = true;
+            }
+            if (appStatus === 'rejected' || bStatus === 'rejected') {
+                isRejected = true;
+                isApproved = false;
+            }
+            if (parseInt(batch.tech_onboard) === 1) {
+                isTechOnboard = true;
+            }
+            if (parseInt(batch.driver_verified) === 1) {
+                isLoaded = true;
+            }
+            if (bStatus === 'completed') {
+                isCompleted = true;
+            }
+
+            let fillPercent = 10;
+            let stepSubmittedClass = 'completed';
+            let stepApprovedClass = isApproved ? (isLoaded ? 'completed' : 'active') : (isRejected ? 'rejected' : 'active');
+            let stepLoadedClass = isLoaded ? (isCompleted ? 'completed' : 'active') : (isTechOnboard ? 'active' : (isApproved && !isRejected ? 'active' : ''));
+            let stepCompletedClass = isCompleted ? 'completed' : (isLoaded ? 'active' : '');
+
+            if (isRejected) fillPercent = 40;
+            else if (isCompleted) fillPercent = 100;
+            else if (isLoaded) fillPercent = 75;
+            else if (isTechOnboard) fillPercent = 65;
+            else if (isApproved) fillPercent = 40;
+            else fillPercent = 25; // Awaiting approval
+
+            let dName = batch.transport_driver || '';
+            if (dName === 'Valetine' || dName === 'valentinb') dName = 'Bembeleza Valentin';
+            
+            let driverSublabel = isLoaded ? dName + ' (Loaded)' : (isTechOnboard ? 'Tech Onboard' : (isApproved && !isRejected ? 'Awaiting Dispatch' : '-'));
+
+            const milestoneHtml = `
+            <div class="milestone-tracker">
+                <div class="milestone-tracker-fill" style="width: ${fillPercent}%;"></div>
+                
+                <div class="milestone-step ${stepSubmittedClass}">
+                    <div class="milestone-icon"><i class="fas fa-file-import"></i></div>
+                    <div class="milestone-label">Submitted</div>
+                    <div class="milestone-sublabel">${escapeHtml(batch.submitted_by || '-')}</div>
+                </div>
+                
+                <div class="milestone-step ${stepApprovedClass}">
+                    <div class="milestone-icon"><i class="fas fa-clipboard-check"></i></div>
+                    <div class="milestone-label">Approved</div>
+                    <div class="milestone-sublabel">${isRejected ? 'Rejected' : (isApproved ? 'Approved' : 'Awaiting Approval')}</div>
+                </div>
+                
+                <div class="milestone-step ${stepLoadedClass}">
+                    <div class="milestone-icon"><i class="fas fa-truck-loading"></i></div>
+                    <div class="milestone-label">Driver Loaded</div>
+                    <div class="milestone-sublabel">${escapeHtml(driverSublabel)}</div>
+                </div>
+                
+                <div class="milestone-step ${stepCompletedClass}">
+                    <div class="milestone-icon"><i class="fas fa-flag-checkered"></i></div>
+                    <div class="milestone-label">Completed</div>
+                    <div class="milestone-sublabel">${isCompleted ? 'Delivered' : '-'}</div>
+                </div>
+            </div>
+            `;
+
             const html = `
+            ${milestoneHtml}
             <div class="batch-info-card">
                 <div class="batch-info-title">
                     <i class="fas fa-info-circle"></i>
@@ -1330,7 +1584,16 @@ $pageTitle = "My Batches - aBility";
                     </div>
                     <div class="info-item">
                         <div class="info-label">Job Sheet</div>
-                        <div class="info-value">${escapeHtml(batch.job_sheet || '—')}</div>
+                        <div class="info-value">
+                            ${escapeHtml(batch.job_sheet || '—')}
+                            ${batch.jobsheet_file ? `
+                                <div class="mt-1">
+                                    <a href="${escapeHtml(batch.jobsheet_file)}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2 fw-bold" style="font-size: 0.7rem; border-radius: 4px;">
+                                        <i class="fas fa-file-download me-1"></i> View Uploaded Jobsheet
+                                    </a>
+                                </div>
+                            ` : ''}
+                        </div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Project Manager</div>
@@ -1360,6 +1623,15 @@ $pageTitle = "My Batches - aBility";
                     <div class="info-item">
                         <div class="info-label">Driver</div>
                         <div class="info-value">${escapeHtml(batch.transport_driver)}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Driver Load Verification</div>
+                        <div class="info-value">
+                            ${parseInt(batch.driver_verified) ? 
+                                `<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Verified</span>` : 
+                                `<span class="badge bg-warning"><i class="fas fa-clock me-1"></i> Pending Verification</span>`
+                            }
+                        </div>
                     </div>
                     ` : ''}
                     ${batch.transport_date ? `
@@ -1426,6 +1698,15 @@ $pageTitle = "My Batches - aBility";
                     </button>
                 `);
                 footer.prepend(downloadBtn);
+                
+                if (['stock_to_stock', 'stock_to_venue_transport'].includes(batch.movement_type)) {
+                    const gatePassBtn = $(`
+                        <a href="gate_pass.php?batch_id=${encodeURIComponent(batch.batch_id)}" class="btn btn-sm btn-warning download-report-btn ms-2" target="_blank">
+                            <i class="fas fa-ticket-alt me-1"></i> Gate Pass
+                        </a>
+                    `);
+                    footer.prepend(gatePassBtn);
+                }
             }
 
             // Show notification if status changed from pending
@@ -1437,10 +1718,10 @@ $pageTitle = "My Batches - aBility";
         }
 
         // Refresh batch status without closing modal
-        function refreshBatchStatus() {
+        function refreshBatchStatus(isSilent = false) {
             if (!currentBatchId) return;
 
-            showLoading();
+            if (!isSilent) showLoading();
             const timestamp = new Date().getTime();
 
             $.ajax({
@@ -1453,8 +1734,8 @@ $pageTitle = "My Batches - aBility";
                 success: function(response) {
                     if (response.success) {
                         displayBatchDetails(response.batch);
-                        showNotification('success', 'Status refreshed successfully!');
-                        loadBatches(); // Refresh the main table
+                        if (!isSilent) showNotification('success', 'Status refreshed successfully!');
+                        loadBatches(true); // Silently refresh main table
                     } else {
                         showNotification('error', 'Failed to refresh status');
                     }
@@ -1514,6 +1795,16 @@ $pageTitle = "My Batches - aBility";
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);
         }
+
+        // Auto-refresh polling every 5 seconds (Silent background update)
+        setInterval(() => {
+            if (!$('#batchDetailModal').hasClass('show')) {
+                loadBatches(true); // Silently refresh the list
+            } else if (currentBatchId) {
+                // If viewing a batch, silently refresh its status
+                refreshBatchStatus(true);
+            }
+        }, 5000);
     </script>
 </body>
 

@@ -33,6 +33,7 @@ $sql = "SELECT
             (SELECT COALESCE(SUM(quantity), 0) FROM batch_items bi WHERE bi.batch_id = b.id) as total_quantity,
             b.status,
             b.job_sheet,
+            b.jobsheet_file,
             b.movement_type,
             b.source_type,
             b.source_id,
@@ -63,7 +64,9 @@ $sql = "SELECT
             b.event_name,
             b.approval_status,
             b.stock_controller_id,
-            b.stock_controller_name
+            b.stock_controller_name,
+            b.driver_verified,
+            b.tech_onboard
         FROM stock_movements b
         LEFT JOIN users u ON b.technician_id = u.id
         WHERE b.batch_number = ?";

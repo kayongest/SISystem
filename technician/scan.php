@@ -222,7 +222,7 @@ require_once '../includes/config.php';
                     <i class="fas fa-user-circle me-1"></i>
                     <?php echo htmlspecialchars(getTechnicianName()); ?>
                 </div>
-                <a href="logout.php" class="btn btn-outline-light btn-sm">
+                <a href="../logout.php" class="btn btn-outline-light btn-sm">
                     <i class="fas fa-sign-out-alt me-1"></i> Logout
                 </a>
             </div>
