@@ -746,6 +746,7 @@ $pageTitle = "Batch History - aBility";
                             <th>Progress</th>
                             <th>Event/Job</th>
                             <th>Status</th>
+                            <th>Driver Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -1130,6 +1131,12 @@ function updateBatchesTable(batches) {
                 <td>${progressHtml}</td>
                 <td><small>${escapeHtml(batch.job_sheet || '-')}</small></td>
                 <td><span class="batch-badge ${statusClass}">${batch.status}</span></td>
+                <td>
+                    ${['transport', 'stock_to_venue_transport', 'stock_to_stock'].includes(batch.movement_type) ? 
+                        (parseInt(batch.driver_verified) === 1 ? '<span class="badge bg-success" style="font-size: 0.75rem;"><i class="fas fa-check-circle"></i> Verified</span>' : '<span class="badge bg-warning text-dark" style="font-size: 0.75rem;"><i class="fas fa-clock"></i> Pending Load</span>') +
+                        '<br><small class="text-muted">' + escapeHtml(batch.transport_driver || 'N/A') + '</small>'
+                    : '<span class="text-muted" style="font-size: 0.8rem;">N/A</span>'}
+                </td>
                 <td>
                     <div class="action-buttons">
                         <button class="btn btn-sm btn-info btn-icon" onclick="viewBatchDetails('${batch.batch_id}')" title="View Details">
