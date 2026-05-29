@@ -427,6 +427,7 @@ $role_badges = [
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Department</label>
+<<<<<<< HEAD
                                 <input class="form-control" list="departmentOptions" id="department" name="department" placeholder="Select or type department...">
                                 <datalist id="departmentOptions">
                                     <option value="Warehouse">
@@ -437,6 +438,23 @@ $role_badges = [
                                     <option value="IT">
                                     <option value="Management">
                                 </datalist>
+=======
+                                <select name="department" id="department" class="form-select" required>
+                                    <option value="">Select department...</option>
+                                    <option value="Warehouse">Warehouse</option>
+                                    <option value="Transport">Transport</option>
+                                    <option value="Video">Video</option>
+                                    <option value="Audio">Audio</option>
+                                    <option value="Lighting">Lighting</option>
+                                    <option value="IT">IT</option>
+                                    <option value="Translation">Translation</option>
+                                    <option value="Rigging">Rigging</option>
+                                    <option value="Electrical">Electrical</option>
+                                    <option value="Furniture">Furniture</option>
+                                    <option value="Management">Management</option>
+                                    <option value="Administration">Administration</option>
+                                </select>
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">System Role</label>
@@ -534,7 +552,26 @@ $role_badges = [
             $('#username').val(user.username).prop('readonly', true);
             $('#full_name').val(user.full_name);
             $('#email').val(user.email);
-            $('#department').val(user.department);
+            
+            if (user.department) {
+                let deptLower = user.department.toLowerCase();
+                let found = false;
+                $('#department option').each(function() {
+                    let valLower = $(this).val().toLowerCase();
+                    if (!valLower) return true; // skip empty
+                    if (deptLower === valLower || deptLower.includes(valLower) || valLower.includes(deptLower)) {
+                        $('#department').val($(this).val());
+                        found = true;
+                        return false;
+                    }
+                });
+                if (!found) {
+                    $('#department').val('');
+                }
+            } else {
+                $('#department').val('');
+            }
+            
             $('#role').val(user.role);
             $('#technician_id_field').val(user.technician_id);
             $('#passHelp').show();

@@ -1,17 +1,9 @@
 <?php
 // accessories.php - Accessory Management Page
 $current_page = basename(__FILE__);
-session_start();
 
-// Include required files directly
-require_once 'includes/database_fix.php';
-require_once 'includes/functions.php';
-
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
+// Include bootstrap which handles session, functions, database, and BASE_URL
+require_once 'includes/bootstrap.php';
 // Check authentication using function from functions.php
 if (!isLoggedIn()) {
     $_SESSION['redirect_to'] = $_SERVER['REQUEST_URI'];

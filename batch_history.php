@@ -580,6 +580,24 @@ $pageTitle = "Batch History - aBility";
             color: #dc3545;
         }
 
+<<<<<<< HEAD
+=======
+        .milestone-step.greyed .milestone-icon {
+            border-color: #dee2e6;
+            color: #adb5bd;
+            background: #e9ecef;
+            box-shadow: none;
+        }
+
+        .milestone-step.greyed .milestone-label {
+            color: #adb5bd;
+        }
+
+        .milestone-step.greyed .milestone-sublabel {
+            color: #adb5bd;
+        }
+
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
         .milestone-sublabel {
             font-size: 0.7rem;
             color: rgba(184, 225, 221, 0.6);
@@ -1004,11 +1022,19 @@ function displayStatistics(stats) {
             <div class="stat-label">Active Technicians</div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon red"><i class="fas fa-clock"></i></div>
+            <div class="stat-icon" style="background: rgba(255, 193, 7, 0.1); color: #ffc107;"><i class="fas fa-clock"></i></div>
             <div class="stat-value">${stats.pending_batches || 0}</div>
             <div class="stat-label">Pending Approval</div>
         </div>
         <div class="stat-card">
+<<<<<<< HEAD
+=======
+            <div class="stat-icon red"><i class="fas fa-times-circle"></i></div>
+            <div class="stat-value">${stats.rejected_batches || 0}</div>
+            <div class="stat-label">Rejected</div>
+        </div>
+        <div class="stat-card">
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
             <div class="stat-icon purple"><i class="fas fa-ticket-alt"></i></div>
             <div class="stat-value">${stats.gate_passes || 0}</div>
             <div class="stat-label">Gate Passes</div>
@@ -1214,7 +1240,7 @@ function viewBatchDetails(batchId, isSilent = false) {
             console.log('Batch details response:', response);
             if (response.success && response.batch) {
                 displayBatchDetails(response.batch);
-                const modal = new bootstrap.Modal(document.getElementById('batchDetailModal'));
+                const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('batchDetailModal'));
                 modal.show();
             } else {
                 showNotification('error', response?.message || 'Failed to load batch details');
@@ -1287,6 +1313,14 @@ function displayBatchDetails(batch) {
     let stepLoadedClass = isLoaded ? (isCompleted ? 'completed' : 'active') : (isTechOnboard ? 'active' : (isApproved && !isRejected ? 'active' : ''));
     let stepCompletedClass = isCompleted ? 'completed' : (isLoaded ? 'active' : '');
 
+<<<<<<< HEAD
+=======
+    if (isRejected) {
+        stepLoadedClass += ' greyed';
+        stepCompletedClass += ' greyed';
+    }
+
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
     if (isRejected) fillPercent = 40;
     else if (isCompleted) fillPercent = 100;
     else if (isLoaded) fillPercent = 75;
@@ -1313,8 +1347,13 @@ function displayBatchDetails(batch) {
                 
                 <div class="milestone-step ${stepApprovedClass}">
                     <div class="milestone-icon"><i class="fas fa-clipboard-check"></i></div>
+<<<<<<< HEAD
                     <div class="milestone-label">Approved</div>
                     <div class="milestone-sublabel">${isRejected ? 'Rejected' : (isApproved ? 'Approved' : 'Awaiting Approval')}</div>
+=======
+                    <div class="milestone-label">${isRejected ? 'Declined' : 'Approved'}</div>
+                    <div class="milestone-sublabel">${isRejected ? 'Declined' : (isApproved ? 'Approved' : 'Awaiting Approval')}</div>
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                 </div>
                 
                 <div class="milestone-step ${stepLoadedClass}">

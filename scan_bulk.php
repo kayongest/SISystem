@@ -1329,6 +1329,26 @@ $pageTitle = "Scan & Batch Items - aBility";
                             <div class="stat-label">Faulty</div>
                         </div>
                     </div> -->
+<<<<<<< HEAD
+
+                            <!-- Live Group Breakdown / Tally -->
+                            <div class="group-breakdown-card p-3 mb-3" style="background: rgba(67, 97, 238, 0.04); border: 1px solid rgba(67, 97, 238, 0.12); border-radius: 12px; display: none;" id="groupBreakdownSection">
+                                <h6 class="fw-bold mb-2 text-primary" style="font-size: 0.85rem; letter-spacing: -0.1px;"><i class="fas fa-layer-group me-2"></i>Live Group Breakdown (Tally)</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-borderless mb-0" style="font-size: 0.82rem;">
+                                        <thead>
+                                            <tr class="text-secondary" style="border-bottom: 1px solid rgba(0,0,0,0.06); font-weight: 600; font-size: 0.78rem;">
+                                                <th>Item Group Name</th>
+                                                <th class="text-center">Booked</th>
+                                                <th class="text-center">Remaining</th>
+                                                <th class="text-center">Total Stock</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="groupBreakdownBody">
+                                            <!-- Dynamic rows -->
+                                        </tbody>
+                                    </table>
+=======
 
                             <!-- Live Group Breakdown / Tally -->
                             <div class="group-breakdown-card p-3 mb-3" style="background: rgba(67, 97, 238, 0.04); border: 1px solid rgba(67, 97, 238, 0.12); border-radius: 12px; display: none;" id="groupBreakdownSection">
@@ -2180,6 +2200,861 @@ $pageTitle = "Scan & Batch Items - aBility";
                     } else {
                         itemsList.innerHTML = batchItems.map(item => `
                         <div class="item-card" data-item-id="${item.id}">
+                            <div class="d-flex position-relative">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <div class="item-name" style="font-size: 1.2rem; font-weight: 700;">${escapeHtml(item.name)}</div>
+                                        ${item.quantity > 1 ? `<span class="badge bg-info ms-2">x${item.quantity}</span>` : ''}
+                                    </div>
+                                    <div class="item-details" style="display: block;">
+                                        <div class="detail-item mb-3">
+                                            <span class="detail-label d-block mb-1" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #999;">Serial</span>
+                                            <span class="detail-value"><code style="color: #d63384; font-size: 1rem; font-weight: 600;">${escapeHtml(item.serial_number)}</code></span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label d-block mb-1" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #999;">Location</span>
+                                            <span class="detail-value text-muted" style="font-size: 0.95rem;">${escapeHtml(item.stock_location)}</span>
+                                        </div>
+                                    </div>
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
+                                </div>
+                                <!-- Breakdown Pagination Controls -->
+                                <div id="groupBreakdownPagination" class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top" style="display: none; font-size: 0.76rem;">
+                                    <span class="text-muted" id="groupBreakdownPaginationInfo">Showing 1-5 of 6</span>
+                                    <div class="btn-group btn-group-xs">
+                                        <button class="btn btn-outline-primary btn-xs py-0 px-2" style="font-size: 0.7rem; line-height: 1.5;" id="groupBreakdownPrevBtn" onclick="changeGroupBreakdownPage(-1)"><i class="fas fa-chevron-left"></i></button>
+                                        <button class="btn btn-outline-primary btn-xs py-0 px-2" style="font-size: 0.7rem; line-height: 1.5;" id="groupBreakdownNextBtn" onclick="changeGroupBreakdownPage(1)"><i class="fas fa-chevron-right"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="items-list" id="batchItemsList">
+                                <div class="empty-state">
+                                    <div class="empty-icon"><i class="fas fa-box-open"></i></div>
+                                    <h6>No items in batch</h6>
+                                    <p class="text-muted">Scan a QR code, search, or manually add items</p>
+                                </div>
+                            </div>
+                        </div>
+<<<<<<< HEAD
+                        <div class="panel-footer">
+                            <div class="text-end">
+                                <button class="btn btn-sm btn-primary" id="openBatchModalBtn" disabled>
+                                    <i class="fas fa-external-link-alt me-1"></i> Review & Submit
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- jQuery FIRST -->
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+        <script>
+            // Prevent conflicts and ensure jQuery is fully loaded
+            if (typeof jQuery !== 'undefined') {
+                console.log('jQuery version:', jQuery.fn.jquery);
+            }
+        </script>
+
+        <!-- Bootstrap JS -->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+        <!-- QR Scanner Library -->
+        <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+        <script>
+            // ==================== GLOBAL VARIABLES ====================
+            let batchItems = [];
+            let isTechnicianAuthenticated = false;
+            let authenticatedTechnician = null;
+            let isUserTechnician = <?php echo $is_technician ? 'true' : 'false'; ?>;
+            let loggedInUserId = '<?php echo $logged_in_user_id; ?>';
+            let html5QrCode = null;
+            let isScanning = false;
+            let isScannerBusy = false;
+            let lastScannedData = null;
+            let lastScanTime = 0;
+            const SCAN_DEBOUNCE_MS = 1000;
+            let currentModal = null;
+            let lastSearchResults = [];
+            let groupBreakdownPage = 1;
+
+            // ==================== SEARCH FUNCTIONS ====================
+            let searchDebounceTimer;
+
+            function searchItemsDebounced() {
+                clearTimeout(searchDebounceTimer);
+                searchDebounceTimer = setTimeout(() => {
+                    searchItems();
+                }, 300);
+            }
+
+            function searchItems() {
+                const searchTerm = document.getElementById('itemSearchInput').value.trim();
+                if (searchTerm.length < 2) {
+                    document.getElementById('searchResults').style.display = 'none';
+                    return;
+                }
+
+                $.ajax({
+                    url: 'api/search_items.php',
+                    method: 'GET',
+                    data: {
+                        q: searchTerm
+                    },
+                    dataType: 'json',
+                    success: function(response) {
+                        if (response.success && response.items && response.items.length > 0) {
+                            displaySearchResults(response.items);
+                        } else {
+                            document.getElementById('searchResults').style.display = 'none';
+                            showNotification('info', 'No items found');
+                        }
+                    },
+                    error: function() {
+                        showNotification('error', 'Error searching items');
+                    }
+                });
+            }
+
+            function displaySearchResults(items) {
+                lastSearchResults = items;
+                const resultsDiv = document.getElementById('searchResults');
+                const resultsList = document.getElementById('searchResultsList');
+
+                resultsList.innerHTML = '';
+                items.forEach(item => {
+                    const isBooked = batchItems.some(i => i.id == item.id);
+                    const statusClass = item.status === 'available' ? 'success' : (item.status === 'in_use' ? 'warning' : 'danger');
+                    const itemElement = document.createElement('div');
+
+                    if (isBooked) {
+                        itemElement.className = 'list-group-item list-group-item-action bg-light text-muted';
+                        itemElement.style.opacity = '0.65';
+                        itemElement.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${escapeHtml(item.item_name)}</strong> <span class="badge bg-secondary ms-1" style="font-size: 0.75rem; letter-spacing: 0.5px;">Booked</span><br>
+                                <small class="text-muted">Serial: ${escapeHtml(item.serial_number)}</small><br>
+                                <small>Status: <span class="badge bg-${statusClass}">${item.status}</span> | Location: ${escapeHtml(item.stock_location || 'N/A')}</small>
+                            </div>
+                            <button class="btn btn-sm btn-secondary fw-bold px-3 py-1" style="border-radius: 6px;" disabled>
+                                <i class="fas fa-check me-1"></i> Booked
+                            </button>
+                        </div>
+                    `;
+                    } else {
+                        itemElement.className = 'list-group-item list-group-item-action';
+                        itemElement.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${escapeHtml(item.item_name)}</strong><br>
+                                <small class="text-muted">Serial: ${escapeHtml(item.serial_number)}</small><br>
+                                <small>Status: <span class="badge bg-${statusClass}">${item.status}</span> | Location: ${escapeHtml(item.stock_location || 'N/A')}</small>
+                            </div>
+                            <button class="btn btn-sm btn-success fw-bold px-3 py-1" style="border-radius: 6px; background-color: #2e7d32;" onclick='addSearchedItemToBatch(${JSON.stringify(item)})'>
+                                <i class="fas fa-plus me-1"></i> Add
+                            </button>
+                        </div>
+                    `;
+                    }
+                    resultsList.appendChild(itemElement);
+                });
+                resultsDiv.style.display = 'block';
+            }
+
+            function addSearchedItemToBatch(item) {
+                const newItem = {
+                    id: item.id,
+                    name: item.item_name,
+                    serial_number: item.serial_number,
+                    quantity: 1,
+                    status: item.status,
+                    stock_location: item.stock_location || 'N/A',
+                    image: item.image || null,
+                    totalStock: item.total_group_count
+                };
+                const added = addToBatch(newItem);
+                if (added) {
+                    document.getElementById('searchResults').style.display = 'none';
+                    document.getElementById('itemSearchInput').value = '';
+=======
+                    `).join('');
+                    }
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
+                }
+
+<<<<<<< HEAD
+            // ==================== QR SCANNER FUNCTIONS ====================
+            async function startScanner() {
+                if (isScannerBusy) {
+                    console.log('Scanner is busy, ignoring start request');
+                    return;
+                }
+                const hasPermission = await checkCameraPermissions();
+                if (!hasPermission) return;
+
+                try {
+                    isScannerBusy = true;
+                    const cameras = await Html5Qrcode.getCameras();
+                    if (cameras && cameras.length) {
+                        const cameraSelect = document.getElementById('camera-select');
+                        cameraSelect.innerHTML = '<option value="">Select Camera</option>';
+                        cameras.forEach(camera => {
+                            const option = document.createElement('option');
+                            option.value = camera.id;
+                            option.text = camera.label || `Camera ${cameraSelect.children.length}`;
+                            cameraSelect.appendChild(option);
+                        });
+
+                        let backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear'));
+                        let selectedCamera = backCamera || cameras[0];
+                        cameraSelect.value = selectedCamera.id;
+
+                        isScannerBusy = false; // Release lock before calling startWithCamera
+                        await startScannerWithCamera(selectedCamera.id);
+                    } else {
+                        showNotification('error', 'No cameras found');
+                        isScannerBusy = false;
+                    }
+                } catch (err) {
+                    console.error('Camera enumeration error:', err);
+                    showNotification('error', 'Could not access camera list');
+                    isScannerBusy = false;
+                }
+            }
+
+            async function startScannerWithCamera(cameraId) {
+                if (isScannerBusy) return;
+                isScannerBusy = true;
+
+                try {
+                    console.log('--- SCANNER STARTUP SEQUENCE START ---');
+                    console.log('Target Camera ID:', cameraId);
+
+                    const container = document.getElementById("qr-reader");
+                    if (!container) {
+                        console.error('CRITICAL: #qr-reader container not found in DOM');
+                        showNotification('error', 'Scanner container missing');
+                        return;
+                    }
+
+                    if (html5QrCode) {
+                        console.log('Cleaning up existing scanner instance...');
+                        try {
+                            await html5QrCode.stop();
+                        } catch (e) {
+                            console.warn('Note: Could not stop existing scanner (might already be stopped):', e);
+                        }
+                        container.innerHTML = "";
+                        html5QrCode = null;
+                    }
+
+                    console.log('Creating new Html5Qrcode instance...');
+                    html5QrCode = new Html5Qrcode("qr-reader");
+                    console.log('Html5Qrcode instance created successfully');
+
+                    await new Promise(resolve => setTimeout(resolve, 300));
+
+                    console.log('Attempting to call html5QrCode.start()...');
+                    // Use more flexible constraints to avoid driver-level hangs
+                    const config = {
+                        fps: 10, // Lower FPS is more stable on older devices
+                        qrbox: function(viewfinderWidth, viewfinderHeight) {
+                            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                            const fontSize = Math.floor(minEdge * 0.7);
+                            return {
+                                width: fontSize,
+                                height: fontSize
+                            };
+                        },
+                        aspectRatio: 1.0
+                    };
+
+                    await html5QrCode.start(cameraId, config,
+                        (decodedText) => {
+                            const now = Date.now();
+                            if (lastScannedData === decodedText && (now - lastScanTime) < SCAN_DEBOUNCE_MS) return;
+                            lastScannedData = decodedText;
+                            lastScanTime = now;
+                            processScannedItem(decodedText);
+                        },
+                        (errorMessage) => {
+                            // Silent error - triggered on every frame where no QR is found
+                        }
+                    );
+
+                    console.log('html5QrCode.start() resolved successfully');
+                    isScanning = true;
+                    showNotification('success', 'Scanner is now active');
+                    console.log('--- SCANNER STARTUP SEQUENCE COMPLETE ---');
+                } catch (err) {
+                    console.error('--- SCANNER STARTUP CRASHED ---');
+                    console.error('Error Details:', err);
+                    showNotification('error', 'Scanner Error: ' + (err.message || 'Unknown error'));
+                    isScanning = false;
+                    html5QrCode = null;
+                    if (container) container.innerHTML = "";
+                } finally {
+                    isScannerBusy = false;
+                }
+            }
+
+            async function stopScanner(reason = 'requested') {
+                if (isScannerBusy) return;
+                if (html5QrCode && isScanning) {
+                    isScannerBusy = true;
+                    console.log(`Stopping scanner. Reason: ${reason}`);
+                    try {
+                        await html5QrCode.stop();
+                        console.log('Scanner stopped successfully');
+                    } catch (err) {
+                        console.warn('Error stopping scanner (handled):', err);
+                    } finally {
+                        const container = document.getElementById("qr-reader");
+                        if (container) container.innerHTML = "";
+                        isScanning = false;
+                        html5QrCode = null;
+                        isScannerBusy = false;
+                    }
+                } else {
+                    isScanning = false;
+                    html5QrCode = null;
+                    const container = document.getElementById("qr-reader");
+                    if (container) container.innerHTML = "";
+                }
+            }
+
+            document.getElementById('camera-select')?.addEventListener('change', function() {
+                if (this.value) {
+                    startScannerWithCamera(this.value);
+                }
+            });
+
+            // Removed redundant playBeep definition
+
+            function processScannedItem(scanData) {
+                console.log('Processing scanned data:', scanData);
+
+                // Parse the QR code data
+                let extractedId = null;
+                let extractedName = null;
+                let extractedSerial = null;
+
+                // Parse pipe-delimited format: ID:48|SN:N15615512224110495|N:TV Screen - Neiitec
+                if (scanData.includes('|')) {
+                    const parts = scanData.split('|');
+                    for (let part of parts) {
+                        if (part.startsWith('ID:')) {
+                            extractedId = part.substring(3);
+                        } else if (part.startsWith('N:')) {
+                            extractedName = part.substring(2);
+                        } else if (part.startsWith('SN:')) {
+                            extractedSerial = part.substring(3);
+                        }
+                    }
+                }
+
+                // Parse JSON format: {"i":10,"n":"TV Screen - Neiitec","s":"N15115542147250267"}
+                if (!extractedId) {
+                    try {
+                        const parsed = JSON.parse(scanData);
+                        extractedId = parsed.i || parsed.id;
+                        extractedName = parsed.n || parsed.name;
+                        extractedSerial = parsed.s || parsed.serial;
+                    } catch (e) {}
+                }
+
+                // If we successfully parsed the QR code, add directly to batch
+                // WITHOUT checking database (for TV Screen items)
+                if (extractedId && extractedName && extractedName.includes('TV Screen')) {
+                    addToBatch({
+                        id: extractedId,
+                        name: extractedName,
+                        serial_number: extractedSerial || 'N/A',
+                        quantity: 1,
+                        status: 'available',
+                        stock_location: 'From QR Code'
+                    });
+                    return;
+                }
+
+                // For other items, try database lookup
+                if (extractedId) {
+                    fetchItemById(extractedId, extractedName, extractedSerial);
+                } else {
+                    fetchItemFromDatabase(scanData);
+                }
+            }
+
+
+            function fetchItemById(itemId, fallbackName, fallbackSerial) {
+                console.log('Fetching item by ID:', itemId);
+
+                $.ajax({
+                    url: 'api/get_item_by_scan.php',
+                    method: 'POST',
+                    data: {
+                        scan_data: itemId
+                    },
+                    dataType: 'json',
+                    success: function(response) {
+                        console.log('API Response:', response);
+
+                        if (response.success && response.item) {
+                            addToBatch({
+                                id: response.item.id,
+                                name: response.item.item_name,
+                                serial_number: response.item.serial_number,
+                                quantity: 1,
+                                status: response.item.status,
+                                stock_location: response.item.stock_location || 'N/A',
+                                image: response.item.image || null,
+                                totalStock: response.item.total_group_count
+                            });
+                        } else if (fallbackName) {
+                            // Item not in database, but we have data from QR code
+                            if (confirm(`Item ID ${itemId} not found in database.\n\nName: ${fallbackName}\nSerial: ${fallbackSerial || 'N/A'}\n\nAdd as new item to batch?`)) {
+                                addToBatch({
+                                    id: itemId,
+                                    name: fallbackName || `Item ${itemId}`,
+                                    serial_number: fallbackSerial || 'N/A',
+                                    quantity: 1,
+                                    status: 'available',
+                                    stock_location: 'From QR Code'
+                                });
+                            }
+                        } else {
+                            showNotification('error', `Item ID ${itemId} not found in database`);
+                        }
+                    },
+                    error: function(xhr, error) {
+                        console.error('API Error:', error);
+                        showNotification('error', 'Error fetching item from database');
+                    }
+                });
+            }
+
+            function fetchItemFromDatabase(searchTerm) {
+                console.log('Searching database for:', searchTerm);
+
+                $.ajax({
+                    url: 'api/get_item_by_scan.php',
+                    method: 'POST',
+                    data: {
+                        scan_data: searchTerm
+                    },
+                    dataType: 'json',
+                    success: function(response) {
+                        console.log('Search response:', response);
+
+                        if (response.success && response.item) {
+                            addToBatch({
+                                id: response.item.id,
+                                name: response.item.item_name,
+                                serial_number: response.item.serial_number,
+                                quantity: 1,
+                                status: response.item.status,
+                                stock_location: response.item.stock_location || 'N/A',
+                                image: response.item.image || null,
+                                totalStock: response.item.total_group_count
+                            });
+                        } else {
+                            const debugInfo = response.debug ?
+                                `\n\nExtracted ID: ${response.debug.extracted_id || 'none'}\nExtracted Serial: ${response.debug.extracted_serial || 'none'}` : '';
+
+                            if (confirm(`Item not found in database.\n\nScanned: "${searchTerm}"${debugInfo}\n\nAdd manually?`)) {
+                                document.getElementById('itemName').value = searchTerm;
+                                const manualTab = document.getElementById('manual-tab');
+                                if (manualTab) new bootstrap.Tab(manualTab).show();
+                            }
+                        }
+                    },
+                    error: function(xhr, error) {
+                        console.error('Search error:', error);
+                        showNotification('error', 'Error searching for item');
+                    }
+                });
+            }
+
+            // Fixed playBeep function (no audio error)
+            function playBeep() {
+                try {
+                    // Use Web Audio API - doesn't get blocked like Audio()
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        const context = new AudioContext();
+                        const oscillator = context.createOscillator();
+                        const gain = context.createGain();
+                        oscillator.connect(gain);
+                        gain.connect(context.destination);
+                        oscillator.frequency.value = 880;
+                        gain.gain.value = 0.1;
+                        oscillator.start();
+                        gain.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
+                        oscillator.stop(context.currentTime + 0.2);
+                        // Resume context if suspended (browser autoplay policy)
+                        if (context.state === 'suspended') {
+                            context.resume();
+                        }
+                    }
+                } catch (e) {
+                    console.log('Beep failed (non-critical):', e);
+                }
+            }
+
+            // Play buzzer / warning sound for duplicate or errors
+            function playWarningBeep() {
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        const context = new AudioContext();
+                        const oscillator = context.createOscillator();
+                        const gain = context.createGain();
+                        oscillator.connect(gain);
+                        gain.connect(context.destination);
+
+                        oscillator.type = 'sawtooth';
+                        oscillator.frequency.value = 120;
+                        gain.gain.value = 0.15;
+
+                        oscillator.start();
+                        gain.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.35);
+                        oscillator.stop(context.currentTime + 0.35);
+
+                        if (context.state === 'suspended') {
+                            context.resume();
+                        }
+                    }
+                } catch (e) {
+                    console.log('Warning beep failed (non-critical):', e);
+                }
+            }
+
+            // ==================== UTILITY FUNCTIONS ====================
+            function showNotification(type, message) {
+                const container = document.getElementById('centered-toast-container');
+                if (!container) {
+                    // Fallback to body append if container is missing
+                    const notification = document.createElement('div');
+                    const colors = {
+                        success: '#28a745',
+                        error: '#dc3545',
+                        warning: '#ffc107',
+                        info: '#17a2b8'
+                    };
+                    const icons = {
+                        success: 'check-circle',
+                        error: 'exclamation-triangle',
+                        warning: 'exclamation-circle',
+                        info: 'info-circle'
+                    };
+                    notification.style.cssText = `
+                    position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;
+                    background: ${colors[type] || colors.info}; color: ${type === 'warning' ? '#212529' : 'white'}; padding: 15px 20px;
+                    border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                `;
+                    notification.innerHTML = `<i class="fas fa-${icons[type] || 'info-circle'} me-2"></i>${message}`;
+                    document.body.appendChild(notification);
+                    setTimeout(() => notification.remove(), 3000);
+                    return;
+                }
+
+                const toastId = 'toast_' + Date.now();
+                let bgClass = '';
+                let textClass = 'text-white';
+                let iconClass = '';
+
+                if (type === 'success') {
+                    bgClass = 'bg-success';
+                    iconClass = 'fa-circle-check';
+                } else if (type === 'warning') {
+                    bgClass = 'bg-warning';
+                    textClass = 'text-dark';
+                    iconClass = 'fa-triangle-exclamation';
+                } else if (type === 'error') {
+                    bgClass = 'bg-danger';
+                    iconClass = 'fa-circle-exclamation';
+                } else {
+                    bgClass = 'bg-info';
+                    iconClass = 'fa-circle-info';
+                }
+
+                const html = `
+                <div class="toast align-items-center ${textClass} ${bgClass} border-0 shadow-lg mb-2" id="${toastId}" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="3000" style="border-radius: 12px; min-width: 300px;">
+                    <div class="d-flex p-3 align-items-center">
+                        <i class="fas ${iconClass} fa-lg me-3"></i>
+                        <div class="toast-body fw-bold flex-grow-1" style="font-size: 1rem; letter-spacing: -0.2px;">
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close ${type === 'warning' ? '' : 'btn-close-white'} ms-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+
+                container.insertAdjacentHTML('beforeend', html);
+                const toastEl = document.getElementById(toastId);
+                if (toastEl) {
+                    const toast = new bootstrap.Toast(toastEl, {
+                        delay: 3000
+                    });
+                    toast.show();
+
+                    toastEl.addEventListener('hidden.bs.toast', () => {
+                        toastEl.remove();
+                    });
+                }
+            }
+
+            function escapeHtml(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function saveBatchToStorage() {
+                try {
+                    localStorage.setItem('batch_items', JSON.stringify(batchItems));
+                } catch (e) {
+                    console.warn('localStorage blocked by browser:', e);
+                    // Fallback: save to sessionStorage instead
+                    try {
+                        sessionStorage.setItem('batch_items', JSON.stringify(batchItems));
+                    } catch (e2) {
+                        console.error('Both storage methods blocked');
+                    }
+                }
+            }
+
+            function loadBatchFromStorage() {
+                try {
+                    const saved = localStorage.getItem('batch_items') || sessionStorage.getItem('batch_items');
+                    if (saved) {
+                        batchItems = JSON.parse(saved);
+                        updateBatchUI();
+                    }
+                } catch (e) {
+                    console.warn('Storage access failed during load:', e);
+                }
+            }
+
+
+            async function checkCameraPermissions() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: true
+                    });
+                    stream.getTracks().forEach(track => track.stop());
+                    return true;
+                } catch (err) {
+                    if (err.name === 'NotAllowedError') {
+                        showNotification('error', 'Camera permission denied. Please allow camera access.');
+                    } else if (err.name === 'NotFoundError') {
+                        showNotification('error', 'No camera found.');
+                    }
+                    return false;
+                }
+            }
+
+
+
+            function clearManualForm() {
+                ['itemName', 'serialNumber', 'location'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = '';
+                });
+                const qty = document.getElementById('quantity');
+                if (qty) qty.value = 1;
+                const status = document.getElementById('status');
+                if (status) status.value = 'available';
+                document.getElementById('itemSearchInput').value = '';
+                document.getElementById('searchResults').style.display = 'none';
+            }
+
+            // ==================== BATCH MANAGEMENT ====================
+            function addToBatch(item) {
+                if (!item.id && !item.name) {
+                    showNotification('error', 'Invalid item data');
+                    return false;
+                }
+
+                const exists = batchItems.some(i => i.id == item.id || (i.name === item.name && i.serial_number === item.serial_number));
+                if (exists) {
+                    showNotification('warning', `Item "${item.name}" is already in this batch`);
+                    playWarningBeep();
+                    return false;
+                }
+
+                const newItem = {
+                    id: item.id || Date.now(),
+                    name: item.name || item.item_name || `Item ${Date.now()}`,
+                    serial_number: item.serial_number || item.serial || 'N/A',
+                    quantity: item.quantity || 1,
+                    status: item.status || 'available',
+                    stock_location: item.stock_location || item.location || 'N/A',
+                    image: item.image || null,
+                    totalStock: item.totalStock || null
+                };
+
+                batchItems.push(newItem);
+                updateBatchUI();
+                saveBatchToStorage();
+                showNotification('success', `Added "${newItem.name}" to batch`);
+                playBeep();
+
+                // Re-render search results to update "Booked" status in real-time
+                if (typeof lastSearchResults !== 'undefined' && lastSearchResults.length > 0) {
+                    displaySearchResults(lastSearchResults);
+                }
+
+                return true;
+            }
+
+            function removeFromBatch(itemId) {
+                const index = batchItems.findIndex(i => i.id == itemId);
+                if (index !== -1) {
+                    const itemName = batchItems[index].name;
+                    batchItems.splice(index, 1);
+                    updateBatchUI();
+                    saveBatchToStorage();
+                    showNotification('info', `Removed "${itemName}" from batch`);
+
+                    // Re-render search results to update "Booked" status in real-time
+                    if (typeof lastSearchResults !== 'undefined' && lastSearchResults.length > 0) {
+                        displaySearchResults(lastSearchResults);
+                    }
+                }
+            }
+
+            function updateItemStatus(itemId, newStatus) {
+                const index = batchItems.findIndex(i => i.id == itemId);
+                if (index !== -1) {
+                    batchItems[index].status = newStatus;
+                    updateBatchUI();
+                    saveBatchToStorage();
+                    showNotification('success', `Status updated to "${newStatus}"`);
+                }
+            }
+
+            function updateBatchUI() {
+                const totalItems = batchItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+                const available = batchItems.filter(i => i.status === 'available').length;
+                const inUse = batchItems.filter(i => i.status === 'in_use').length;
+                const maintenance = batchItems.filter(i => i.status === 'maintenance').length;
+                const batchCount = batchItems.length;
+
+                ['totalItems', 'totalItemsCount'].forEach(id => updateElementText(id, totalItems));
+                updateElementText('availableItems', available);
+                updateElementText('inUseItems', inUse);
+                updateElementText('maintenanceItems', maintenance);
+                ['batchCount', 'batchCountRight', 'batchItemCount'].forEach(id => updateElementText(id, batchCount));
+                updateElementText('summaryAvailable', available);
+                updateElementText('summaryInUse', inUse);
+                updateElementText('summaryMaintenance', maintenance);
+                updateElementText('confirmItemCount', batchCount);
+
+                // ==================== LIVE GROUP BREAKDOWN TALLY ====================
+                const breakdownSection = document.getElementById('groupBreakdownSection');
+                const breakdownBody = document.getElementById('groupBreakdownBody');
+
+                if (breakdownSection && breakdownBody) {
+                    if (batchCount === 0) {
+                        breakdownSection.style.display = 'none';
+                    } else {
+                        // Group batchItems by name
+                        const groups = {};
+                        batchItems.forEach(item => {
+                            if (!groups[item.name]) {
+                                groups[item.name] = {
+                                    name: item.name,
+                                    bookedCount: 0,
+                                    totalStock: item.totalStock || 0
+                                };
+                            }
+                            groups[item.name].bookedCount += (item.quantity || 1);
+                            if (item.totalStock && !groups[item.name].totalStock) {
+                                groups[item.name].totalStock = item.totalStock;
+                            }
+                        });
+
+                        const groupList = Object.values(groups);
+                        const totalGroupsCount = groupList.length;
+                        const itemsPerPage = 5;
+                        const maxPage = Math.ceil(totalGroupsCount / itemsPerPage) || 1;
+
+                        // Clamp page
+                        if (groupBreakdownPage > maxPage) {
+                            groupBreakdownPage = maxPage;
+                        }
+                        if (groupBreakdownPage < 1) {
+                            groupBreakdownPage = 1;
+                        }
+
+                        // Slice groups for current page
+                        const startIndex = (groupBreakdownPage - 1) * itemsPerPage;
+                        const endIndex = Math.min(startIndex + itemsPerPage, totalGroupsCount);
+                        const pageGroups = groupList.slice(startIndex, endIndex);
+
+                        // Build rows
+                        let breakdownHtml = '';
+                        pageGroups.forEach(g => {
+                            const total = g.totalStock || g.bookedCount; // fallback if no database count
+                            const remaining = Math.max(0, total - g.bookedCount);
+                            breakdownHtml += `
+                            <tr style="border-bottom: 1px solid rgba(0,0,0,0.02); vertical-align: middle;">
+                                <td class="fw-bold text-dark py-2">${escapeHtml(g.name)}</td>
+                                <td class="text-center py-2"><span class="badge bg-primary rounded-pill px-2" style="font-size: 0.85rem;">${g.bookedCount}</span></td>
+                                <td class="text-center py-2"><span class="badge bg-success rounded-pill px-2" style="font-size: 0.85rem;">${remaining}</span></td>
+                                <td class="text-center py-2 text-muted fw-bold">${total}</td>
+                            </tr>
+                            `;
+                        });
+
+                        breakdownBody.innerHTML = breakdownHtml;
+                        breakdownSection.style.display = 'block';
+
+                        // Show/hide pagination controls based on total counts
+                        const paginationContainer = document.getElementById('groupBreakdownPagination');
+                        if (paginationContainer) {
+                            if (totalGroupsCount > itemsPerPage) {
+                                paginationContainer.style.setProperty('display', 'flex', 'important');
+                                const infoSpan = document.getElementById('groupBreakdownPaginationInfo');
+                                if (infoSpan) {
+                                    infoSpan.textContent = `Showing ${startIndex + 1}-${endIndex} of ${totalGroupsCount}`;
+                                }
+                                const prevBtn = document.getElementById('groupBreakdownPrevBtn');
+                                const nextBtn = document.getElementById('groupBreakdownNextBtn');
+                                if (prevBtn) prevBtn.disabled = groupBreakdownPage === 1;
+                                if (nextBtn) nextBtn.disabled = groupBreakdownPage === maxPage;
+                            } else {
+                                paginationContainer.style.setProperty('display', 'none', 'important');
+                            }
+                        }
+                    }
+                }
+
+                const submitBtn = document.getElementById('submitBatchModalBtn');
+                if (submitBtn) {
+                    submitBtn.disabled = batchCount === 0;
+                    submitBtn.innerHTML = `Submit Batch (${batchCount})`;
+                }
+                const clearBtn = document.getElementById('clearBatchBtn');
+                if (clearBtn) clearBtn.disabled = batchCount === 0;
+                const openModalBtn = document.getElementById('openBatchModalBtn');
+                if (openModalBtn) openModalBtn.disabled = batchCount === 0;
+
+                const itemsList = document.getElementById('batchItemsList');
+                if (itemsList) {
+                    if (batchCount === 0) {
+                        itemsList.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="fas fa-box-open"></i></div><h6>No items in batch</h6><p class="text-muted">Scan a QR code, search, or manually add items</p></div>`;
+                    } else {
+                        itemsList.innerHTML = batchItems.map(item => `
+                        <div class="item-card" data-item-id="${item.id}">
                             <div class="item-header">
                                 <div class="item-name">${escapeHtml(item.name)}</div>
                                 <div class="item-actions">
@@ -2205,6 +3080,8 @@ $pageTitle = "Scan & Batch Items - aBility";
                     }
                 }
 
+=======
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                 const previewTable = document.getElementById('itemsPreviewTable');
                 if (previewTable) {
                     if (batchCount === 0) {

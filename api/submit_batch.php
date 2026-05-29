@@ -141,9 +141,22 @@ if (!empty($eventName)) {
         $checkEvent->store_result();
         if ($checkEvent->num_rows == 0) {
             $checkEvent->close();
+<<<<<<< HEAD
             $insertEvent = $conn->prepare("INSERT INTO events (id, title, location, project_manager, source) VALUES (UUID(), ?, ?, ?, 'batch')");
             if ($insertEvent) {
                 $insertEvent->bind_param("sss", $eventName, $destinationName, $projectManager);
+=======
+            $eventId = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                mt_rand(0, 0xffff),
+                mt_rand(0, 0x0fff) | 0x4000,
+                mt_rand(0, 0x3fff) | 0x8000,
+                mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+            );
+            $insertEvent = $conn->prepare("INSERT INTO events (id, title, location, project_manager, source) VALUES (?, ?, ?, ?, 'batch')");
+            if ($insertEvent) {
+                $insertEvent->bind_param("ssss", $eventId, $eventName, $destinationName, $projectManager);
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                 $insertEvent->execute();
                 $insertEvent->close();
             }

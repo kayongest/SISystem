@@ -72,8 +72,8 @@ try {
 $pageTitle = "Assign Accessory - aBility";
 $showBreadcrumb = true;
 $breadcrumbItems = [
-    'Dashboard' => '../dashboard_full.php',
-    'Accessories' => '../accessories.php',
+    'Dashboard' => 'dashboard_full.php',
+    'Accessories' => 'accessories.php',
     'Assign ' . $accessory['name'] => ''
 ];
 
@@ -207,7 +207,7 @@ require_once '../views/partials/header.php';
                                             <td><code><?php echo htmlspecialchars($item['serial_number']); ?></code></td>
                                             <td><?php echo getCategoryBadge($item['category']); ?></td>
                                             <td>
-                                                <a href="../items/view.php?id=<?php echo $item['id']; ?>"
+                                                <a href="../items.php?action=view&id=<?php echo $item['id']; ?>"
                                                     class="btn btn-sm btn-info" title="View Item">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
@@ -229,6 +229,11 @@ require_once '../views/partials/header.php';
         </div>
     </div>
 </div>
+
+<?php
+$db->close();
+require_once '../views/partials/footer.php';
+?>
 
 <script>
     $(document).ready(function() {
@@ -275,8 +280,3 @@ require_once '../views/partials/header.php';
         });
     });
 </script>
-
-<?php
-$db->close();
-require_once '../views/partials/footer.php';
-?>

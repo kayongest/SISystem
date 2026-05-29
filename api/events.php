@@ -119,8 +119,8 @@ try {
 
                 // Prepare statement - using project_manager column
                 $stmt = $db->prepare("
-                    INSERT INTO events (id, title, date, duration, location, event_image, project_manager, description) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO events (id, title, date, duration, location, event_image, project_manager, description, source) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
 
                 if (!$stmt) {
@@ -134,11 +134,12 @@ try {
                 // Map 'manager' from form to 'project_manager' in database
                 $manager = !empty($_POST['manager']) ? $_POST['manager'] : null;
                 $description = !empty($_POST['description']) ? $_POST['description'] : null;
+                $source = !empty($_POST['source']) ? $_POST['source'] : 'manual';
 
-                error_log("Binding: id={$_POST['id']}, title={$_POST['title']}, date=$date, duration=$duration, location=$location, manager=$manager");
+                error_log("Binding: id={$_POST['id']}, title={$_POST['title']}, date=$date, duration=$duration, location=$location, manager=$manager, source=$source");
 
                 $stmt->bind_param(
-                    "sssissss",
+                    "sssisssss",
                     $_POST['id'],
                     $_POST['title'],
                     $date,
@@ -146,7 +147,8 @@ try {
                     $location,
                     $imagePath,
                     $manager,  // This goes to project_manager column
-                    $description
+                    $description,
+                    $source
                 );
 
                 if (!$stmt->execute()) {

@@ -4,7 +4,9 @@
 error_log("bootstrap.php loaded at " . date('Y-m-d H:i:s'));
 
 // bootstrap.php
-session_start(); // This must be at the VERY top
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Debug session
 error_log("=== BOOTSTRAP STARTED ===");

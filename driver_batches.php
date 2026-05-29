@@ -1247,7 +1247,11 @@ $pageTitle = "Driver Batches - aBility";
                 }
             });
 
+<<<<<<< HEAD
             const modal = new bootstrap.Modal(document.getElementById('batchDetailModal'));
+=======
+            const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('batchDetailModal'));
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
             modal.show();
         }
 

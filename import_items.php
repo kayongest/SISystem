@@ -177,12 +177,12 @@ $previewData = $_SESSION['import_preview'] ?? [];
 
     <!-- Custom Styles -->
     <style>
-        @import url("https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700&display=swap");
+        @import url('https://fonts.googleapis.com/css2?family=Marvel:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 
         /* Global Styles */
         body {
             background-color: #7ca4b7;
-            font-family: "Titillium Web", sans-serif;
+            font-family: "Marvel", sans-serif;
         }
 
         .header-container {

@@ -705,7 +705,7 @@ if (!isset($_SESSION['user_id'])) {
 <body>
     <!-- Navigation -->
     <?php if (!isset($skip_navbar) || !$skip_navbar): ?>
-        <?php include 'includes/navbar_main.php'; ?>
+        <?php include dirname(__DIR__, 2) . '/includes/navbar_main.php'; ?>
     <?php endif; ?>
 
     <!-- Main Content Container -->

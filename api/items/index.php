@@ -399,7 +399,7 @@ $error = $_GET['error'] ?? '';
             <td><small class="text-muted">${lastUpdated}</small></td>
             <td>
                 <div class="action-buttons">
-                    <a href="items/view.php?id=${item.id}" class="btn btn-sm btn-info" 
+                    <a href="items.php?action=view&id=${item.id}" class="btn btn-sm btn-info" 
                        title="View Details">
                         <i class="fas fa-eye"></i>
                     </a>

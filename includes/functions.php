@@ -7,19 +7,9 @@
 
 // Define BASE_URL if not defined
 if (!defined('BASE_URL')) {
-    define('BASE_URL', '/');
-}
-
-
-
-/**
- * Common functions for aBility Manager
- * COMPLETE VERSION
- */
-
-// Define BASE_URL if not defined
-if (!defined('BASE_URL')) {
-    define('BASE_URL', '/');
+    $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'];
+    define('BASE_URL', $protocol . '://' . $host . '/ability_app_main/');
 }
 
 // Check if user is logged in - FIXED VERSION
@@ -1096,56 +1086,56 @@ function getDashboardStats($db)
 
     try {
         // Total items
-        $result = $db->query("SELECT COUNT(*) as count FROM items");
+        $result = $db->query("SELECT COALESCE(SUM(quantity), 0) as count FROM items");
         if ($result) {
             $row = $result->fetch_assoc();
             $stats['total_items'] = $row['count'] ?? 0;
         }
 
         // Available items
-        $result = $db->query("SELECT COUNT(*) as count FROM items WHERE status = 'available'");
+        $result = $db->query("SELECT COALESCE(SUM(quantity), 0) as count FROM items WHERE status = 'available'");
         if ($result) {
             $row = $result->fetch_assoc();
             $stats['available'] = $row['count'] ?? 0;
         }
 
         // In use items
-        $result = $db->query("SELECT COUNT(*) as count FROM items WHERE status = 'in_use'");
+        $result = $db->query("SELECT COALESCE(SUM(quantity), 0) as count FROM items WHERE status = 'in_use'");
         if ($result) {
             $row = $result->fetch_assoc();
             $stats['in_use'] = $row['count'] ?? 0;
         }
 
         // Maintenance items
-        $result = $db->query("SELECT COUNT(*) as count FROM items WHERE status = 'maintenance'");
+        $result = $db->query("SELECT COALESCE(SUM(quantity), 0) as count FROM items WHERE status = 'maintenance'");
         if ($result) {
             $row = $result->fetch_assoc();
             $stats['maintenance'] = $row['count'] ?? 0;
         }
 
-        // Distinct categories
-        $result = $db->query("SELECT COUNT(DISTINCT category) as count FROM items");
+        // Total Categories
+        $result = $db->query("SELECT COUNT(*) as count FROM categories");
         if ($result) {
             $row = $result->fetch_assoc();
             $stats['categories'] = $row['count'] ?? 0;
         }
 
         // Reserved items
-        $result = $db->query("SELECT COUNT(*) as count FROM items WHERE status = 'reserved'");
+        $result = $db->query("SELECT COALESCE(SUM(quantity), 0) as count FROM items WHERE status = 'reserved'");
         if ($result) {
             $row = $result->fetch_assoc();
             $stats['reserved'] = $row['count'] ?? 0;
         }
 
         // Disposed items
-        $result = $db->query("SELECT COUNT(*) as count FROM items WHERE status = 'disposed'");
+        $result = $db->query("SELECT COALESCE(SUM(quantity), 0) as count FROM items WHERE status = 'disposed'");
         if ($result) {
             $row = $result->fetch_assoc();
             $stats['disposed'] = $row['count'] ?? 0;
         }
 
         // Lost items
-        $result = $db->query("SELECT COUNT(*) as count FROM items WHERE status = 'lost'");
+        $result = $db->query("SELECT COALESCE(SUM(quantity), 0) as count FROM items WHERE status = 'lost'");
         if ($result) {
             $row = $result->fetch_assoc();
             $stats['lost'] = $row['count'] ?? 0;

@@ -1398,6 +1398,28 @@ require_once 'assets/css/chart.css';
                                     </div>
                                 </div>
 
+<<<<<<< HEAD
+=======
+                                <div class="mb-2 mt-4 checkout-info-container" style="display:none;"><label class="text-overline text-primary"><i class="fas fa-truck-loading me-2"></i>Active Checkout</label></div>
+                                <hr class="mt-0 mb-4 checkout-info-container" style="border-color:#e2e8f0; display:none;">
+                                <div class="info-grid-premium mb-4 checkout-info-container" style="display:none;">
+                                    <div class="info-item-card border" style="background-color: #f0fdf4; border-color: #bbf7d0 !important;">
+                                        <div class="info-icon" style="background-color: #dcfce7; color: #166534;"><i class="fas fa-user-check"></i></div>
+                                        <div class="info-content">
+                                            <label style="color: #166534;">Checked Out By</label>
+                                            <div id="viewCheckedOutBy" class="info-value fw-bold" style="color: #14532d;"></div>
+                                        </div>
+                                    </div>
+                                    <div class="info-item-card border" style="background-color: #f0fdf4; border-color: #bbf7d0 !important;">
+                                        <div class="info-icon" style="background-color: #dcfce7; color: #166534;"><i class="fas fa-clock"></i></div>
+                                        <div class="info-content">
+                                            <label style="color: #166534;">Checked Out At</label>
+                                            <div id="viewCheckedOutAt" class="info-value" style="color: #14532d;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                                 <div class="mb-2 mt-4"><label class="text-overline">Basic Information</label></div>
                                 <hr class="mt-0 mb-4" style="border-color:#e2e8f0;">
                                 <div class="info-grid-premium mb-4">
@@ -2390,6 +2412,30 @@ require_once 'assets/css/chart.css';
                 $('#viewDepartment').text(data.department_name || data.department || 'Not Set');
                 $('#viewCreatedAt').text(formatDateTime(data.created_at) || 'N/A');
                 $('#viewUpdatedAt').text(formatDateTime(data.updated_at) || 'N/A');
+<<<<<<< HEAD
+=======
+
+                // Show checkout info if in_use and we have the data
+                const statusNormalized = (data.status || '').toString().toLowerCase().trim().replace(/ /g, '_');
+                if (statusNormalized === 'in_use' && data.checked_out_by) {
+                    $('#viewCheckedOutBy').text(data.checked_out_by);
+                    
+                    // Format date nicely if possible
+                    let dateStr = data.checked_out_at || 'Unknown';
+                    if (dateStr !== 'Unknown') {
+                        try {
+                            const d = new Date(dateStr);
+                            if (!isNaN(d.getTime())) {
+                                dateStr = d.toLocaleString();
+                            }
+                        } catch(e) {}
+                    }
+                    $('#viewCheckedOutAt').text(dateStr);
+                    $('.checkout-info-container').show();
+                } else {
+                    $('.checkout-info-container').hide();
+                }
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                 const condMap = {
                     new: 'Excellent',
                     excellent: 'Excellent',
@@ -2399,7 +2445,25 @@ require_once 'assets/css/chart.css';
                     damaged: 'Damaged',
                     broken: 'Damaged'
                 };
+<<<<<<< HEAD
                 $('#viewCondition').text(condMap[(data.condition || 'good').toLowerCase()] || data.condition || 'Unknown');
+=======
+                const condKey = (data.condition || 'good').toLowerCase();
+                $('#viewCondition').text(condMap[condKey] || data.condition || 'Unknown');
+                
+                const $condCard = $('#viewCondition').closest('.info-item-card');
+                const $condIcon = $condCard.find('.info-icon');
+                const $condLabel = $condCard.find('label');
+                if (condKey === 'damaged' || condKey === 'broken') {
+                    $condCard.removeClass('bg-white border').addClass('bg-danger text-white border-danger');
+                    $condIcon.removeClass('bg-soft-primary').addClass('bg-white text-danger');
+                    $condLabel.addClass('text-white-50');
+                } else {
+                    $condCard.removeClass('bg-danger text-white border-danger').addClass('bg-white border');
+                    $condIcon.removeClass('bg-white text-danger').addClass('bg-soft-primary');
+                    $condLabel.removeClass('text-white-50');
+                }
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                 const stCls = {
                     available: 'bg-success',
                     in_use: 'bg-primary',
@@ -2577,10 +2641,10 @@ require_once 'assets/css/chart.css';
                                             <div class="info-value"><span class="status-pill-mini ${status === 'available' ? 'bg-soft-success text-success' : 'bg-soft-primary text-primary'}">${status.toUpperCase()}</span></div>
                                         </div>
                                     </div>
-                                    <div class="info-item-card bg-white border">
-                                        <div class="info-icon bg-soft-primary"><i class="fas fa-heartbeat"></i></div>
+                                    <div class="info-item-card ${condition === 'damaged' || condition === 'broken' ? 'bg-danger text-white border-danger' : 'bg-white border'}">
+                                        <div class="info-icon ${condition === 'damaged' || condition === 'broken' ? 'bg-white text-danger' : 'bg-soft-primary'}"><i class="fas fa-heartbeat"></i></div>
                                         <div class="info-content">
-                                            <label>Condition</label>
+                                            <label class="${condition === 'damaged' || condition === 'broken' ? 'text-white-50' : ''}">Condition</label>
                                             <div class="info-value">${condition.toUpperCase()}</div>
                                         </div>
                                     </div>

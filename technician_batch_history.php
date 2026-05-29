@@ -527,6 +527,24 @@ $pageTitle = "My Batches - aBility";
             color: #dc3545;
         }
 
+<<<<<<< HEAD
+=======
+        .milestone-step.greyed .milestone-icon {
+            border-color: #dee2e6;
+            color: #adb5bd;
+            background: #e9ecef;
+            box-shadow: none;
+        }
+
+        .milestone-step.greyed .milestone-label {
+            color: #adb5bd;
+        }
+
+        .milestone-step.greyed .milestone-sublabel {
+            color: #adb5bd;
+        }
+
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
         .milestone-sublabel {
             font-size: 0.7rem;
             color: rgba(184, 225, 221, 0.6);
@@ -1402,7 +1420,7 @@ $pageTitle = "My Batches - aBility";
                 }
             });
 
-            const modal = new bootstrap.Modal(document.getElementById('batchDetailModal'));
+            const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('batchDetailModal'));
             modal.show();
         }
 
@@ -1482,6 +1500,14 @@ $pageTitle = "My Batches - aBility";
             let stepLoadedClass = isLoaded ? (isCompleted ? 'completed' : 'active') : (isTechOnboard ? 'active' : (isApproved && !isRejected ? 'active' : ''));
             let stepCompletedClass = isCompleted ? 'completed' : (isLoaded ? 'active' : '');
 
+<<<<<<< HEAD
+=======
+            if (isRejected) {
+                stepLoadedClass += ' greyed';
+                stepCompletedClass += ' greyed';
+            }
+
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
             if (isRejected) fillPercent = 40;
             else if (isCompleted) fillPercent = 100;
             else if (isLoaded) fillPercent = 75;
@@ -1506,8 +1532,13 @@ $pageTitle = "My Batches - aBility";
                 
                 <div class="milestone-step ${stepApprovedClass}">
                     <div class="milestone-icon"><i class="fas fa-clipboard-check"></i></div>
+<<<<<<< HEAD
                     <div class="milestone-label">Approved</div>
                     <div class="milestone-sublabel">${isRejected ? 'Rejected' : (isApproved ? 'Approved' : 'Awaiting Approval')}</div>
+=======
+                    <div class="milestone-label">${isRejected ? 'Declined' : 'Approved'}</div>
+                    <div class="milestone-sublabel">${isRejected ? 'Declined' : (isApproved ? 'Approved' : 'Awaiting Approval')}</div>
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                 </div>
                 
                 <div class="milestone-step ${stepLoadedClass}">

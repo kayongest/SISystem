@@ -253,12 +253,7 @@ try {
                 </a>
                 <?php endif; ?>
 
-                <!-- Equipment -->
-                <?php if (isAdmin()): ?>
-                    <a href="<?php echo BASE_URL; ?>items.php" class="nav-link-compact <?php echo (strpos($current_page, 'items') !== false) ? 'active' : ''; ?>">
-                        <i class="fas fa-boxes"></i> Equipment
-                    </a>
-                <?php endif; ?>
+
 
                 <!-- Accessories -->
                 <?php if (isAdmin()): ?>
@@ -329,18 +324,30 @@ try {
                 <!-- Setup Dropdown (Admin Only) -->
                 <?php if (isAdmin()): ?>
                     <div class="dropdown dropdown-compact">
-                        <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['stock_locations.php', 'categories.php', 'departments.php', 'locations.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
+                        <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['users.php', 'stock_locations.php', 'categories.php', 'departments.php', 'locations.php', 'drivers.php', 'role_access_matrix.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
                             <i class="fas fa-cog"></i> Setup
                         </a>
                         <ul class="dropdown-menu shadow">
-                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>stock_locations.php"><i class="fas fa-warehouse me-2"></i> Stock Locations</a></li>
+                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>users.php"><i class="fas fa-users me-2"></i> User Management</a></li>
+                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>stock_locations.php"><i class="fas fa-warehouse me-2"></i> Stock Management</a></li>
+                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>departments.php"><i class="fas fa-building me-2"></i> Department Management</a></li>
+
                             <li>
                                 <hr class="dropdown-divider">
                             </li>
+<<<<<<< HEAD
                             <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>categories.php"><i class="fas fa-list me-2"></i> Categories</a></li>
                             <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>departments.php"><i class="fas fa-building me-2"></i> Departments</a></li>
                             <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>locations.php"><i class="fas fa-map-marker-alt me-2"></i> Locations</a></li>
                             <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>drivers.php"><i class="fas fa-truck me-2"></i> Drivers</a></li>
+=======
+                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>categories.php"><i class="fas fa-tags me-2"></i> Categories</a></li>
+
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>role_access_matrix.php"><i class="fas fa-shield-alt me-2"></i> Role Permissions</a></li>
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                         </ul>
                     </div>
                 <?php endif; ?>

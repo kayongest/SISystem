@@ -572,7 +572,11 @@ if ($user_role === 'driver') {
     <div class="modal fade details-modal" id="eventFormModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
+<<<<<<< HEAD
                 <form id="eventForm" onsubmit="saveEvent(event)">
+=======
+                <form id="eventForm" onsubmit="saveEvent(event)" enctype="multipart/form-data">
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                     <div class="modal-header">
                         <h5 class="modal-title fw-bold text-dark" id="eventFormModalLabel">Create Event</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -580,6 +584,11 @@ if ($user_role === 'driver') {
                     <div class="modal-body p-4 text-dark">
                         <input type="hidden" id="formEventId" name="id">
                         <input type="hidden" id="formMethod" name="_method" value="POST">
+<<<<<<< HEAD
+=======
+                        <input type="hidden" id="formSource" name="source" value="manual">
+                        <input type="hidden" id="existingImage" name="existingImage" value="">
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                         
                         <div class="mb-3">
                             <label class="form-label text-muted">Event Title *</label>
@@ -793,6 +802,7 @@ if ($user_role === 'driver') {
                     `;
                 }
 
+<<<<<<< HEAD
                 const cardHtml = `
                     <div class="event-card">
                         <div class="event-img-wrapper">
@@ -831,6 +841,89 @@ if ($user_role === 'driver') {
                         </div>
                     </div>
                 `;
+=======
+                let cardHtml = '';
+                if (currentView === 'list') {
+                    // Adapt admin actions for list view
+                    let listAdminActions = '';
+                    if(isAdmin) {
+                        listAdminActions = `
+                            <button class="btn btn-outline-secondary" onclick='openEditModal(${JSON.stringify(ev).replace(/'/g, "&#39;")})'>
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-outline-danger" onclick='deleteEvent(${ev.event_id ? JSON.stringify(ev.event_id).replace(/'/g, "&#39;") : "null"}, ${JSON.stringify(ev.title || "").replace(/'/g, "&#39;")})'>
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        `;
+                    }
+
+                    cardHtml = `
+                        <div class="card mb-3 w-100 shadow-sm border-0">
+                          <div class="card-header bg-light d-flex justify-content-between align-items-center fw-bold text-dark border-bottom-0 pt-3 pb-3">
+                            <span><i class="fas fa-calendar-alt me-2 text-primary"></i> ${dateStr}</span>
+                            <span class="badge bg-primary rounded-pill">Event</span>
+                          </div>
+                          <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                            <div class="mb-3 mb-md-0">
+                                <h5 class="card-title fw-bold text-dark mb-2">${escapeHtml(ev.title)}</h5>
+                                <p class="card-text text-muted mb-0" style="font-size: 0.95rem;">
+                                    <span class="me-3"><i class="fas fa-map-marker-alt me-1"></i> ${escapeHtml(ev.location || 'Location TBA')}</span>
+                                    <span class="me-3"><i class="fas fa-user-tie me-1"></i> ${escapeHtml(ev.project_manager || 'Not Assigned')}</span>
+                                    <span class="me-3"><i class="fas fa-tools me-1"></i> ${escapeHtml(ev.technician || 'Tech Not Specified')}</span>
+                                    ${(ev.movement_type && ev.movement_type.toLowerCase() === 'stock to stock' && ev.driver) ? `<span><i class="fas fa-truck me-1"></i> ${escapeHtml(ev.driver)}</span>` : ''}
+                                </p>
+                            </div>
+                            <div class="d-flex gap-2 align-items-center">
+                                <button class="btn btn-primary px-4 shadow-sm" onclick='openEventDetails(${JSON.stringify(ev).replace(/'/g, "&#39;")})'>
+                                    View Details
+                                </button>
+                                ${listAdminActions}
+                            </div>
+                          </div>
+                        </div>
+                    `;
+                } else {
+                    cardHtml = `
+                        <div class="event-card">
+                            <div class="event-img-wrapper">
+                                ${imageHtml}
+                                <div class="event-status-badge">Event</div>
+                            </div>
+                            <div class="event-content">
+                                <h3 class="event-title">${escapeHtml(ev.title)}</h3>
+                                <div class="event-meta">
+                                    <i class="fas fa-calendar-days"></i>
+                                    <span>${dateStr}</span>
+                                </div>
+                                <div class="event-meta">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    <span>${escapeHtml(ev.location || 'Location TBA')}</span>
+                                </div>
+                                <div class="event-meta">
+                                    <i class="fas fa-user-tie"></i>
+                                    <span>${escapeHtml(ev.project_manager || 'Not Assigned')}</span>
+                                </div>
+                                <div class="event-meta">
+                                    <i class="fas fa-tools"></i>
+                                    <span>${escapeHtml(ev.technician || 'Tech Not Specified')}</span>
+                                </div>
+                                ${(ev.movement_type && ev.movement_type.toLowerCase() === 'stock to stock' && ev.driver) ? `
+                                <div class="event-meta">
+                                    <i class="fas fa-truck"></i>
+                                    <span>${escapeHtml(ev.driver)}</span>
+                                </div>` : ''}
+                                
+                                <div class="event-actions d-flex flex-column gap-2 mt-auto pt-3">
+                                    <button class="btn-view-details" onclick='openEventDetails(${JSON.stringify(ev).replace(/'/g, "&#39;")})'>
+                                        View Details
+                                    </button>
+                                    ${adminActions}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                 container.append(cardHtml);
             });
 
@@ -870,10 +963,17 @@ if ($user_role === 'driver') {
             
             if (eventObj.movement_type && eventObj.movement_type.toLowerCase() === 'stock to stock' && eventObj.driver) {
                 $('#modalEventDriver').text(eventObj.driver);
+<<<<<<< HEAD
             } else {
                 $('#modalEventDriver').text('Not Applicable');
             }
             $('#modalDriverContainer').show();
+=======
+                $('#modalDriverContainer').show();
+            } else {
+                $('#modalDriverContainer').hide();
+            }
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
             
             $('#modalEventDesc').text(eventObj.description || 'No description provided.');
             
@@ -934,6 +1034,10 @@ if ($user_role === 'driver') {
         function openEditModal(ev) {
             $('#eventForm')[0].reset();
             $('#formEventId').val(ev.event_id || '');
+<<<<<<< HEAD
+=======
+            $('#formSource').val(ev.source || 'manual');
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
             $('#formMethod').val('PUT'); // Use PUT for edits
             $('#eventFormModalLabel').text('Edit Event');
             $('#saveEventBtn').text('Update Event');
@@ -981,7 +1085,11 @@ if ($user_role === 'driver') {
                         $('#eventFormModal').modal('hide');
                         loadEvents();
                     } else {
+<<<<<<< HEAD
                         alert(res.message || 'Error saving event');
+=======
+                        alert(res.error || res.message || 'Error saving event');
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                     }
                 },
                 error: function() {
@@ -1004,7 +1112,11 @@ if ($user_role === 'driver') {
                         if(res.success) {
                             loadEvents();
                         } else {
+<<<<<<< HEAD
                             alert(res.message || 'Error deleting event');
+=======
+                            alert(res.error || res.message || 'Error deleting event');
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
                         }
                     },
                     error: function() {

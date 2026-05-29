@@ -19,7 +19,11 @@ try {
         SELECT 
             e.id as event_id,
             e.title,
+<<<<<<< HEAD
             CASE WHEN COUNT(sm.id) > 0 THEN 'batch' ELSE e.source END as source,
+=======
+            e.source,
+>>>>>>> addf346 (Latest Upload - Events cards, OverView, Items status..)
             COALESCE(e.date, MIN(sm.created_at)) as date,
             COALESCE(e.location, MAX(sm.destination_name)) as location,
             COALESCE(e.project_manager, MAX(sm.project_manager)) as project_manager,

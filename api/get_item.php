@@ -162,6 +162,46 @@ try {
     // Log the final QR code value for debugging
     error_log("Final QR code for item ID $id: " . substr($qrCode, 0, 100));
 
+    // Get checked_out_by if status is in_use
+    $checkedOutBy = null;
+    $checkedOutAt = null;
+    $statusNormalized = strtolower(trim(str_replace(' ', '_', $item['status'])));
+    if ($statusNormalized === 'in_use') {
+        // Try scan_logs first
+        $scanStmt = $db->prepare("
+            SELECT u.username, sl.scan_timestamp, sl.transport_user
+            FROM scan_logs sl
+            LEFT JOIN users u ON sl.user_id = u.id
+            WHERE sl.item_id = ? AND sl.scan_type = 'check_out'
+            ORDER BY sl.scan_timestamp DESC
+            LIMIT 1
+        ");
+        $scanStmt->bind_param("i", $id);
+        $scanStmt->execute();
+        $scanResult = $scanStmt->get_result();
+        if ($scan = $scanResult->fetch_assoc()) {
+            $checkedOutBy = !empty($scan['transport_user']) ? $scan['transport_user'] : $scan['username'];
+            $checkedOutAt = $scan['scan_timestamp'];
+        } else {
+            // Fallback to scans table just in case
+            $scanStmt2 = $db->prepare("
+                SELECT u.username, s.scan_timestamp, s.transport_user
+                FROM scans s
+                LEFT JOIN users u ON s.user_id = u.id
+                WHERE s.item_id = ? AND s.scan_type = 'check_out'
+                ORDER BY s.scan_timestamp DESC
+                LIMIT 1
+            ");
+            $scanStmt2->bind_param("i", $id);
+            $scanStmt2->execute();
+            $scanResult2 = $scanStmt2->get_result();
+            if ($scan2 = $scanResult2->fetch_assoc()) {
+                $checkedOutBy = !empty($scan2['transport_user']) ? $scan2['transport_user'] : $scan2['username'];
+                $checkedOutAt = $scan2['scan_timestamp'];
+            }
+        }
+    }
+
     echo json_encode([
         'success' => true,
         'data' => [
@@ -192,7 +232,9 @@ try {
             'updated_at' => $item['updated_at'],
             'last_scanned' => $item['last_scanned'],
             'accessories' => $accessories,
-            'accessory_ids' => $accessoryIds
+            'accessory_ids' => $accessoryIds,
+            'checked_out_by' => $checkedOutBy,
+            'checked_out_at' => $checkedOutAt
         ]
     ]);
 } catch (Exception $e) {
