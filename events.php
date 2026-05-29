@@ -756,8 +756,12 @@ if ($user_role === 'driver') {
             container.empty();
 
             // Set container class based on view
-            container.removeClass('events-grid events-list');
-            container.addClass(currentView === 'grid' ? 'events-grid' : 'events-list');
+            container.removeClass('events-grid events-list row');
+            if (currentView === 'grid') {
+                container.addClass('events-grid');
+            } else {
+                container.addClass('row');
+            }
 
             if (filteredData.length === 0) {
                 $('#paginationNav').hide();
@@ -848,38 +852,40 @@ if ($user_role === 'driver') {
                     let listAdminActions = '';
                     if(isAdmin) {
                         listAdminActions = `
-                            <button class="btn btn-outline-secondary" onclick='openEditModal(${JSON.stringify(ev).replace(/'/g, "&#39;")})'>
+                            <button class="btn btn-outline-secondary" onclick='openEditModal(${JSON.stringify(ev).replace(/'/g, "&#39;")})' title="Edit">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <button class="btn btn-outline-danger" onclick='deleteEvent(${ev.event_id ? JSON.stringify(ev.event_id).replace(/'/g, "&#39;") : "null"}, ${JSON.stringify(ev.title || "").replace(/'/g, "&#39;")})'>
+                            <button class="btn btn-outline-danger" onclick='deleteEvent(${ev.event_id ? JSON.stringify(ev.event_id).replace(/'/g, "&#39;") : "null"}, ${JSON.stringify(ev.title || "").replace(/'/g, "&#39;")})' title="Delete">
                                 <i class="fas fa-trash"></i>
                             </button>
                         `;
                     }
 
                     cardHtml = `
-                        <div class="card mb-3 w-100 shadow-sm border-0">
-                          <div class="card-header bg-light d-flex justify-content-between align-items-center fw-bold text-dark border-bottom-0 pt-3 pb-3">
-                            <span><i class="fas fa-calendar-alt me-2 text-primary"></i> ${dateStr}</span>
-                            <span class="badge bg-primary rounded-pill">Event</span>
-                          </div>
-                          <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-                            <div class="mb-3 mb-md-0">
-                                <h5 class="card-title fw-bold text-dark mb-2">${escapeHtml(ev.title)}</h5>
-                                <p class="card-text text-muted mb-0" style="font-size: 0.95rem;">
-                                    <span class="me-3"><i class="fas fa-map-marker-alt me-1"></i> ${escapeHtml(ev.location || 'Location TBA')}</span>
-                                    <span class="me-3"><i class="fas fa-user-tie me-1"></i> ${escapeHtml(ev.project_manager || 'Not Assigned')}</span>
-                                    <span class="me-3"><i class="fas fa-tools me-1"></i> ${escapeHtml(ev.technician || 'Tech Not Specified')}</span>
-                                    ${(ev.movement_type && ev.movement_type.toLowerCase() === 'stock to stock' && ev.driver) ? `<span><i class="fas fa-truck me-1"></i> ${escapeHtml(ev.driver)}</span>` : ''}
-                                </p>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="card h-100 shadow-sm border-0">
+                              <div class="card-header bg-light d-flex justify-content-between align-items-center fw-bold text-dark border-bottom-0 pt-3 pb-3">
+                                <span><i class="fas fa-calendar-alt me-2 text-primary"></i> ${dateStr}</span>
+                                <span class="badge bg-primary rounded-pill">Event</span>
+                              </div>
+                              <div class="card-body d-flex flex-column">
+                                <div class="mb-3">
+                                    <h5 class="card-title fw-bold text-dark mb-3">${escapeHtml(ev.title)}</h5>
+                                    <div class="card-text text-muted" style="font-size: 0.95rem;">
+                                        <div class="mb-2"><i class="fas fa-map-marker-alt me-2"></i>${escapeHtml(ev.location || 'Location TBA')}</div>
+                                        <div class="mb-2"><i class="fas fa-user-tie me-2"></i>${escapeHtml(ev.project_manager || 'Not Assigned')}</div>
+                                        <div class="mb-2"><i class="fas fa-tools me-2"></i>${escapeHtml(ev.technician || 'Tech Not Specified')}</div>
+                                        ${(ev.movement_type && ev.movement_type.toLowerCase() === 'stock to stock' && ev.driver) ? `<div class="mb-2"><i class="fas fa-truck me-2"></i>${escapeHtml(ev.driver)}</div>` : ''}
+                                    </div>
+                                </div>
+                                <div class="mt-auto d-flex gap-2">
+                                    <button class="btn btn-primary shadow-sm flex-grow-1" onclick='openEventDetails(${JSON.stringify(ev).replace(/'/g, "&#39;")})'>
+                                        View Details
+                                    </button>
+                                    ${listAdminActions}
+                                </div>
+                              </div>
                             </div>
-                            <div class="d-flex gap-2 align-items-center">
-                                <button class="btn btn-primary px-4 shadow-sm" onclick='openEventDetails(${JSON.stringify(ev).replace(/'/g, "&#39;")})'>
-                                    View Details
-                                </button>
-                                ${listAdminActions}
-                            </div>
-                          </div>
                         </div>
                     `;
                 } else {
