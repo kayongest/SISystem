@@ -89,21 +89,29 @@ $pageTitle = "Edit Equipment - aBility";
 $showBreadcrumb = true;
 $breadcrumbItems = [
     'Dashboard' => '../dashboard_full.php',
-    'View Item' => 'view.php?id=' . $item_id,
+    'Equipment' => '../items.php',
+    'View Item' => '../items.php?action=view&id=' . $item_id,
     'Edit' => ''
 ];
 
 require_once '../views/partials/header.php';
 ?>
 
-<div class="container-fluid">
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700&display=swap');
+    body, h1, h2, h3, h4, h5, h6, input, select, textarea, button, label, table, div, span, small, strong {
+        font-family: 'Titillium Web', sans-serif !important;
+    }
+</style>
+
+<div class="container-fluid py-2">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h3 mb-0 text-gray-800">
-            <i class="fas fa-edit me-2"></i>
+        <h2 class="fw-bold mb-0 text-dark">
+            <i class="fas fa-edit me-2 text-primary"></i>
             Edit Equipment: <?php echo htmlspecialchars($item['item_name']); ?>
-        </h1>
-        <a href="view.php?id=<?php echo $item_id; ?>" class="btn btn-secondary">
-            <i class="fas fa-arrow-left me-1"></i> Back to View
+        </h2>
+        <a href="../items.php?action=view&id=<?php echo $item_id; ?>" class="btn btn-outline-secondary rounded-pill px-3">
+            <i class="fas fa-arrow-left me-1"></i> Back to Details
         </a>
     </div>
 

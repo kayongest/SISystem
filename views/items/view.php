@@ -1,6 +1,15 @@
 <?php
 // views/items/view.php - Modern Equipment Details View
+?>
 
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700&display=swap');
+    body, h1, h2, h3, h4, h5, h6, input, select, textarea, button, label, table, div, span, small, strong {
+        font-family: 'Titillium Web', sans-serif !important;
+    }
+</style>
+
+<?php
 $item_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $item = null;
 $accessories = [];
