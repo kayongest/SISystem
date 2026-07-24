@@ -10,13 +10,13 @@ if ($item_id > 0) {
     // Fetch item details with joined names
     $stmt = $conn->prepare("
         SELECT i.*, 
-               COALESCE(c.category_name, i.category) as category_label,
-               COALESCE(d.department_name, i.department) as department_label,
-               COALESCE(sl.location_name, i.stock_location) as location_label
+               COALESCE(c.name, i.category) as category_label,
+               COALESCE(d.name, i.department) as department_label,
+               COALESCE(sl.name, i.stock_location) as location_label
         FROM items i
-        LEFT JOIN categories c ON (i.category = c.id OR i.category = c.category_name)
-        LEFT JOIN departments d ON (i.department = d.id OR i.department = d.department_name)
-        LEFT JOIN stock_locations sl ON (i.stock_location = sl.id OR i.stock_location = sl.location_name)
+        LEFT JOIN categories c ON (i.category = c.id OR i.category = c.name)
+        LEFT JOIN departments d ON (i.department = d.id OR i.department = d.name)
+        LEFT JOIN stock_locations sl ON (i.stock_location = sl.id OR i.stock_location = sl.name)
         WHERE i.id = ?
     ");
     if ($stmt) {
