@@ -183,10 +183,20 @@ try {
     $statistics['top_moved_items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Demand by Category (Requests per category)
-    $stmt = $pdo->query("SELECT i.category, COUNT(bi.id) as request_count 
+    $stmt = $pdo->query("SELECT 
+                            CASE 
+                                WHEN LOWER(COALESCE(c.name, i.category, '')) IN ('1', 'cat-vid', 'video', 'video data') THEN 'Video'
+                                WHEN LOWER(COALESCE(c.name, i.category, '')) IN ('2', 'cat-aud', 'audio', 'sound', 'sound data') THEN 'Audio & Sound'
+                                WHEN LOWER(COALESCE(c.name, i.category, '')) IN ('3', 'cat-lght', 'lighting', 'lighting data') THEN 'Lighting'
+                                WHEN LOWER(COALESCE(c.name, i.category, '')) IN ('cases', 'case', 'fly case', 'cases & packaging') THEN 'Cases'
+                                WHEN TRIM(COALESCE(c.description, c.name, i.category, '')) != '' THEN COALESCE(c.description, c.name, i.category)
+                                ELSE 'Uncategorized'
+                            END as category,
+                            COUNT(bi.id) as request_count 
                          FROM batch_items bi
                          JOIN items i ON bi.item_id = i.id
-                         GROUP BY i.category
+                         LEFT JOIN categories c ON (CAST(i.category AS CHAR) = CAST(c.id AS CHAR) OR LOWER(i.category) = LOWER(c.name) OR LOWER(i.category) = LOWER(c.slug))
+                         GROUP BY 1
                          ORDER BY request_count DESC");
     $statistics['demand_by_category'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
