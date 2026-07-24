@@ -40,8 +40,7 @@ function handleDriverImageUpload($file) {
     $filename = uniqid('driver_') . '.' . $ext;
     $targetPath = $targetDir . $filename;
     if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-        $baseUrl = defined('BASE_URL') ? BASE_URL : '/ability_app_main/';
-        return '/' . ltrim($baseUrl, '/') . $targetPath;
+        return '/ability_app_main/' . $targetPath;
     }
     throw new Exception("Failed to upload driver profile image.");
 }
