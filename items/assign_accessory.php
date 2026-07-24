@@ -207,10 +207,9 @@ require_once '../views/partials/header.php';
                                             <td><code><?php echo htmlspecialchars($item['serial_number']); ?></code></td>
                                             <td><?php echo getCategoryBadge($item['category']); ?></td>
                                             <td>
-                                                <a href="../items.php?action=view&id=<?php echo $item['id']; ?>"
-                                                    class="btn btn-sm btn-info" title="View Item">
+                                                <button type="button" class="btn btn-sm btn-info text-white" onclick="openQuickViewItemModal(<?php echo $item['id']; ?>)" title="Quick View Equipment">
                                                     <i class="fas fa-eye"></i>
-                                                </a>
+                                                </button>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -280,3 +279,5 @@ require_once '../views/partials/footer.php';
         });
     });
 </script>
+
+<?php require_once __DIR__ . '/../includes/quick_item_modals.php'; ?>

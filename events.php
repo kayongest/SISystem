@@ -566,6 +566,7 @@ try {
                                                 <th>Quantity</th>
                                                 <th>Status</th>
                                                 <th>Batch #</th>
+                                                <th class="text-end">Quick Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -698,7 +699,15 @@ try {
                         else if(data === 'rejected') color = 'danger';
                         return `<span class="badge bg-${color}">${data ? data.toUpperCase() : 'N/A'}</span>`;
                     }},
-                    { data: 'batch_number', render: function(data) { return `<small class="text-muted">#${data}</small>`; } }
+                    { data: 'batch_number', render: function(data) { return `<small class="text-muted">#${data}</small>`; } },
+                    { data: null, className: 'text-end', render: function(data, type, row) {
+                        const itemId = row.item_id || row.id;
+                        if (!itemId) return '-';
+                        return `<div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-light border" onclick="openQuickViewItemModal(${itemId})" title="Quick View Equipment"><i class="fas fa-eye text-info"></i></button>
+                            <button type="button" class="btn btn-light border" onclick="openQuickEditItemModal(${itemId})" title="Quick Edit Equipment"><i class="fas fa-edit text-primary"></i></button>
+                        </div>`;
+                    }}
                 ],
                 language: {
                     emptyTable: "No equipment assigned to this event yet.",
@@ -1075,5 +1084,7 @@ try {
             }
         }
     </script>
+
+    <?php require_once 'includes/quick_item_modals.php'; ?>
 </body>
 </html>
