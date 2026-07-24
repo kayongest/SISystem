@@ -37,31 +37,10 @@ try {
         exit();
     }
 
-    // Generate QR data with item info
-    $qr_data = generateQRDataForItem(
-        $item['id'],
-        $item['item_name'],
-        $item['serial_number'],
-        $item['stock_location']
-    );
-
-    // Generate QR code image
-    $qr_image_path = generateQRCodeImage($qr_data, $item['id']);
-
-    // Update database
-    $updateStmt = $conn->prepare("UPDATE items SET qr_code = ?, updated_at = NOW() WHERE id = ?");
-    $updateStmt->bind_param('si', $qr_data, $id);
-
-    if ($updateStmt->execute()) {
-        echo json_encode([
-            'success' => true,
-            'message' => 'QR code generated successfully',
-            'qr_image' => $qr_image_path,
-            'qr_data' => json_decode($qr_data, true)
-        ]);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Failed to save QR code']);
-    }
+    // Delegate to the main QR generator logic
+    $_POST['item_id'] = $id;
+    require_once '../generate_qr.php';
+    exit();
 
     $updateStmt->close();
     $db->close();

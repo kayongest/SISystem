@@ -193,6 +193,9 @@ $stats = getEquipmentStats($conn);
                     <button type="button" class="btn btn- text-white btn-sm" style="background-color: #481E14;" id="bulkDeleteBtn" disabled>
                         <i class="fas fa-trash me-1"></i>Delete Selected
                     </button>
+                    <button type="button" class="btn text-white btn-sm" style="background-color: #8C6A5C;" id="bulkPrintLabelsBtn" disabled>
+                        <i class="fas fa-print me-1"></i>Print QR Labels
+                    </button>
                 </div>
             </div>
         </div>
@@ -570,9 +573,17 @@ $stats = getEquipmentStats($conn);
                 // Update bulk action buttons
                 function updateBulkActions() {
                     const selectedCount = $('.item-checkbox:checked').length;
-                    $('#bulkCheckoutBtn, #bulkDeleteBtn').prop('disabled', selectedCount === 0);
+                    $('#bulkCheckoutBtn, #bulkDeleteBtn, #bulkPrintLabelsBtn').prop('disabled', selectedCount === 0);
                     $('#deleteCount').text(selectedCount);
                 }
+
+                // Bulk print labels
+                $('#bulkPrintLabelsBtn').on('click', function() {
+                    const selectedIds = getSelectedIds();
+                    if (selectedIds.length > 0) {
+                        window.open('print_labels.php?ids=' + selectedIds.join(','), '_blank');
+                    }
+                });
 
                 // Bulk checkout
                 $('#bulkCheckoutBtn').on('click', function() {

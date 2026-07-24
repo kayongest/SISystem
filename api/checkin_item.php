@@ -69,7 +69,7 @@ try {
     // Update item status and condition
     $updateStmt = $conn->prepare("
         UPDATE items 
-        SET status = 'available', condition = ?, updated_at = NOW() 
+        SET status = 'available', `condition` = ?, updated_at = NOW() 
         WHERE id = ?
     ");
     $updateStmt->bind_param("si", $returnCondition, $itemId);

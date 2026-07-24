@@ -39,6 +39,9 @@ $columns = [
 ];
 
 $orderBy = $columns[$orderColumn] ?? 'id';
+if ($orderBy === 'row_number' || $orderBy === 'checkbox' || $orderBy === 'actions') {
+    $orderBy = 'id';
+}
 
 // Get custom filters
 $category = isset($_POST['category']) && $_POST['category'] !== '' ? $_POST['category'] : null;
@@ -48,6 +51,8 @@ $department = isset($_POST['department']) && $_POST['department'] !== '' ? $_POS
 $condition = isset($_POST['condition']) && $_POST['condition'] !== '' ? $_POST['condition'] : null;
 $date_from = isset($_POST['date_from']) && $_POST['date_from'] !== '' ? $_POST['date_from'] : null;
 $date_to = isset($_POST['date_to']) && $_POST['date_to'] !== '' ? $_POST['date_to'] : null;
+
+$whereClause = "";
 
 // Build the base query
 $baseQuery = "FROM items WHERE 1=1";

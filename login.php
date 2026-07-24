@@ -153,39 +153,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
         // Log successful login
         logLoginAttempt($username, 'SUCCESS', 'AJAX verified login');
 
-        // Role-based redirection
-        $redirect = 'dashboard_full.php'; // Default for admin/staff
-
-        // Check user role and redirect accordingly
-        if (isset($roles) && is_array($roles)) {
-            if (in_array('technician', $roles)) {
-                $redirect = 'technician_batch_history.php';
-            } elseif (in_array('stock_controller', $roles)) {
-                $redirect = 'batch_history.php';
-            } elseif (in_array('manager', $roles)) {
-                $redirect = 'manager_dashboard_full.php';
-            } elseif (in_array('viewer', $roles)) {
-                $redirect = 'viewer_dashboard_full.php';
-            } elseif (in_array('admin', $roles)) {
-                $redirect = 'dashboard_full.php';
-            }
-        } elseif (isset($user['role'])) {
-            switch ($user['role']) {
-                case 'technician':
-                    $redirect = 'technician_batch_history.php';
-                    break;
-                case 'stock_controller':
-                    $redirect = 'batch_history.php';
-                    break;
-                case 'viewer':
-                    $redirect = 'viewer_dashboard_full.php';
-                    break;
-                case 'admin':
-                    $redirect = 'dashboard_full.php';
-                    break;
-                default:
-                    $redirect = 'dashboard_full.php';
-            }
+        // Default redirection based on roles
+        $redirect = 'dashboard_full.php';
+        if ($role === 'driver') {
+            $redirect = 'driver_batches.php';
         }
 
         // Override with session redirect if set (takes priority)
@@ -210,7 +181,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
             // First, get basic user info
             $stmt = $conn->prepare("SELECT id, username, email, full_name, password, role, department, is_active, signature_image, profile_image FROM users WHERE username = ? OR email = ?");
             if (!$stmt) {
-                throw new Exception("Failed to prepare statement: " . $conn->error);
+                // Fallback for schemas without newer columns
+                $stmt = $conn->prepare("SELECT id, username, email, password, role, department, is_active FROM users WHERE username = ? OR email = ?");
+                if (!$stmt) {
+                    throw new Exception("Failed to prepare statement: " . $conn->error);
+                }
             }
 
             $stmt->bind_param("ss", $username, $username);
@@ -337,42 +312,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
 
                     $debug_info[] = "Processing redirect";
 
-                    // Role-based redirection
-                    $redirect = 'dashboard_full.php'; // Default for admin/staff
-
-                    // Check user role and redirect accordingly
-                    if (isset($roles) && is_array($roles)) {
-                        if (in_array('technician', $roles)) {
-                            $redirect = 'technician_batch_history.php';
-                        } elseif (in_array('stock_controller', $roles)) {
-                            $redirect = 'batch_history.php';
-                        } elseif (in_array('manager', $roles)) {
-                            $redirect = 'manager_dashboard_full.php';
-                        } elseif (in_array('viewer', $roles)) {
-                            $redirect = 'viewer_dashboard_full.php';
-                        } elseif (in_array('admin', $roles)) {
-                            $redirect = 'dashboard_full.php';
-                        }
-                    } elseif (isset($role)) {
-                        switch ($role) {
-                            case 'technician':
-                                $redirect = 'technician_batch_history.php';
-                                break;
-                            case 'stock_controller':
-                                $redirect = 'batch_history.php';
-                                break;
-                            case 'manager':
-                                $redirect = 'manager_dashboard_full.php';
-                                break;
-                            case 'viewer':
-                                $redirect = 'viewer_dashboard_full.php';
-                                break;
-                            case 'admin':
-                                $redirect = 'dashboard_full.php';
-                                break;
-                            default:
-                                $redirect = 'dashboard_full.php';
-                        }
+                    // Default redirection based on roles
+                    $redirect = 'dashboard_full.php';
+                    if ($user['role'] === 'driver') {
+                        $redirect = 'driver_batches.php';
                     }
 
                     // Override with session redirect if set (takes priority)

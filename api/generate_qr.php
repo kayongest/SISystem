@@ -41,6 +41,11 @@ try {
     }
     
     // Generate QR code
+    $qr_file = '../qrcodes/qr_' . $item['id'] . '.png';
+    if (file_exists($qr_file)) {
+        unlink($qr_file);
+    }
+    
     $qr_result = generateQRCodeForItem(
         $item['id'],
         $item['item_name'],

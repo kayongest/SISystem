@@ -69,7 +69,7 @@ try {
     }
 
     if (!empty($condition)) {
-        $whereConditions[] = "condition = ?";
+        $whereConditions[] = "`condition` = ?";
         $params[] = $condition;
         $types .= 's';
     }

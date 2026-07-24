@@ -421,7 +421,7 @@ $maintenanceItems = $maintenanceQuery->fetchAll();
             <button class="quick-action-btn btn-success" onclick="refreshDashboard()">
                 <i class="fas fa-sync-alt"></i> Refresh Dashboard
             </button>
-            <a href="logout.php" class="quick-action-btn btn-warning ms-auto">
+            <a href="../logout.php" class="quick-action-btn btn-warning ms-auto">
                 <i class="fas fa-sign-out-alt"></i> Logout
             </a>
         </div>

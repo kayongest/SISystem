@@ -38,6 +38,16 @@ if (file_exists($rate_limit_file)) {
 try {
     $conn = getConnection();
     $stmt = $conn->prepare("SELECT id, username, email, full_name, password, role, department, is_active FROM users WHERE username = ? OR email = ?");
+    
+    if (!$stmt) {
+        // If prepare fails, likely due to missing columns like full_name in older schemas, try fallback
+        $stmt = $conn->prepare("SELECT id, username, email, password, role, department, is_active FROM users WHERE username = ? OR email = ?");
+        if (!$stmt) {
+            echo json_encode(['success' => false, 'message' => 'Database error: ' . $conn->error]);
+            exit();
+        }
+    }
+    
     $stmt->bind_param("ss", $username, $username);
     $stmt->execute();
     $result = $stmt->get_result();

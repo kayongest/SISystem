@@ -1,17 +1,9 @@
 <?php
 // accessories.php - Accessory Management Page
 $current_page = basename(__FILE__);
-session_start();
 
-// Include required files directly
-require_once 'includes/database_fix.php';
-require_once 'includes/functions.php';
-
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
+// Include bootstrap which handles session, functions, database, and BASE_URL
+require_once 'includes/bootstrap.php';
 // Check authentication using function from functions.php
 if (!isLoggedIn()) {
     $_SESSION['redirect_to'] = $_SERVER['REQUEST_URI'];
@@ -27,7 +19,60 @@ $breadcrumbItems = [
 ];
 
 require_once 'views/partials/header.php';
+?>
 
+<style>
+    /* DataTables Pagination Fix - Premium Look */
+    .dataTables_wrapper .dataTables_paginate {
+        padding-top: 1.5rem;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+        border-radius: 6px !important;
+        border: 1px solid #dee2e6 !important;
+        background: white !important;
+        color: #353f48ff !important;
+        font-weight: 500 !important;
+        transition: all 0.2s ease !important;
+        cursor: pointer !important;
+        text-decoration: none !important;
+        font-size: 0.8rem !important;
+        padding: 5px 10px !important;
+        margin-left: 5px;
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+        background: #f8f9fa !important;
+        border-color: #2c6792 !important;
+        color: #2c6792 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover,
+    .active>.page-link,
+    .page-link.active {
+        background: linear-gradient(135deg, #1a2e3f 0%, #2c6792 100%) !important;
+        color: white !important;
+        border-color: #1a2e3f !important;
+        box-shadow: 0 4px 10px rgba(44, 103, 146, 0.3);
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+    .dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover {
+        background: #f8f9fa !important;
+        color: #adb5bd !important;
+        border-color: #e9ecef !important;
+        cursor: not-allowed !important;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+</style>
+
+<?php
 // Database connection
 try {
     $db = new DatabaseFix();
@@ -92,6 +137,7 @@ if ($action === 'delete' && $accessory_id && $tableExists) {
 $accessories = [];
 $search = $_GET['search'] ?? '';
 $status = $_GET['status'] ?? '';
+$category_filter = $_GET['category'] ?? '';
 $stats = [
     'total' => 0,
     'in_stock' => 0,
@@ -101,6 +147,15 @@ $stats = [
 
 if ($tableExists) {
     try {
+        // Fetch accessory categories
+        $accessory_categories_list = [];
+        $catResult = $conn->query("SELECT * FROM accessory_categories ORDER BY name");
+        if ($catResult) {
+            while ($row = $catResult->fetch_assoc()) {
+                $accessory_categories_list[] = $row;
+            }
+        }
+
         // First check if minimum_stock column exists
         $columnCheck = $conn->query("SHOW COLUMNS FROM accessories LIKE 'minimum_stock'");
         $hasMinimumStock = $columnCheck && $columnCheck->num_rows > 0;
@@ -136,6 +191,12 @@ if ($tableExists) {
             $whereConditions[] = "a.available_quantity = 0";
         } elseif ($status === 'in_stock') {
             $whereConditions[] = "a.available_quantity > 0";
+        }
+
+        if ($category_filter) {
+            $whereConditions[] = "a.category = ?";
+            $params[] = $category_filter;
+            $types .= "s";
         }
 
         if (!empty($whereConditions)) {
@@ -197,9 +258,14 @@ if ($tableExists) {
         <h1 class="h3 mb-0 text-gray-800">
             <i class="fas fa-puzzle-piece me-2"></i>Accessory Management
         </h1>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAccessoryModal" <?php echo !$tableExists ? 'disabled' : ''; ?>>
-            <i class="fas fa-plus me-1"></i> Add New Accessory
-        </button>
+        <div>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAccessoryModal" <?php echo !$tableExists ? 'disabled' : ''; ?>>
+                <i class="fas fa-plus me-1"></i> Add Accessory
+            </button>
+            <button type="button" class="btn btn-info text-white ms-2" data-bs-toggle="modal" data-bs-target="#manageCategoriesModal" <?php echo !$tableExists ? 'disabled' : ''; ?>>
+                <i class="fas fa-tags me-1"></i> Manage Categories
+            </button>
+        </div>
     </div>
 
     <?php if (!$tableExists): ?>
@@ -294,11 +360,24 @@ if ($tableExists) {
         <div class="card shadow mb-4">
             <div class="card-body">
                 <form method="GET" class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <input type="text" class="form-control" name="search" placeholder="Search accessories..."
                             value="<?php echo htmlspecialchars($search); ?>">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
+                        <select class="form-select" name="category">
+                            <option value="">All Categories</option>
+                            <?php 
+                            foreach ($accessory_categories_list ?? [] as $catRow): 
+                                $cat = $catRow['name'];
+                            ?>
+                                <option value="<?php echo htmlspecialchars($cat); ?>" <?php echo $category_filter === $cat ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($cat); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
                         <select class="form-select" name="status">
                             <option value="">All Status</option>
                             <option value="in_stock" <?php echo $status === 'in_stock' ? 'selected' : ''; ?>>In Stock</option>
@@ -354,11 +433,12 @@ if ($tableExists) {
                     </button>
                 </div>
             <?php else: ?>
-                <div class="table-responsive">
+                <div>
                     <table class="table table-bordered table-hover" id="accessoriesTable" width="100%" cellspacing="0">
                         <thead>
                             <tr>
                                 <th>Name</th>
+                                <th>Category</th>
                                 <th>Description</th>
                                 <th>Total Qty</th>
                                 <th>Available</th>
@@ -373,6 +453,9 @@ if ($tableExists) {
                                 <tr>
                                     <td>
                                         <strong><?php echo htmlspecialchars($acc['name'] ?? ''); ?></strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary"><?php echo htmlspecialchars($acc['category'] ?? 'Uncategorized'); ?></span>
                                     </td>
                                     <td>
                                         <?php echo !empty($acc['description']) ?
@@ -402,18 +485,21 @@ if ($tableExists) {
                                     <td class="text-center"><?php echo $acc['minimum_stock'] ?? 5; ?></td>
                                     <td>
                                         <?php if (($acc['assigned_count'] ?? 0) > 0): ?>
-                                            <small>
-                                                <?php echo $acc['assigned_count'] ?? 0; ?> item(s)
-                                                <?php if (!empty($acc['assigned_items'])): ?>
-                                                    <br>
-                                                    <span class="text-muted">
-                                                        <?php echo htmlspecialchars(substr($acc['assigned_items'], 0, 60)); ?>
-                                                        <?php echo strlen($acc['assigned_items']) > 60 ? '...' : ''; ?>
-                                                    </span>
-                                                <?php endif; ?>
-                                            </small>
+                                            <button type="button" class="btn btn-sm btn-outline-info view-assigned-items-btn"
+                                                data-id="<?php echo $acc['id'] ?? 0; ?>"
+                                                data-name="<?php echo htmlspecialchars($acc['name'] ?? ''); ?>"
+                                                title="Click to view assigned equipment items">
+                                                <i class="fas fa-eye me-1"></i> <?php echo $acc['assigned_count'] ?? 0; ?> item(s)
+                                            </button>
+                                            <?php if (!empty($acc['assigned_items'])): ?>
+                                                <br>
+                                                <small class="text-muted" title="<?php echo htmlspecialchars($acc['assigned_items']); ?>">
+                                                    <?php echo htmlspecialchars(substr($acc['assigned_items'], 0, 50)); ?>
+                                                    <?php echo strlen($acc['assigned_items']) > 50 ? '...' : ''; ?>
+                                                </small>
+                                            <?php endif; ?>
                                         <?php else: ?>
-                                            <span class="text-muted">Not assigned</span>
+                                            <span class="badge bg-light text-muted border">0 items</span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
@@ -432,9 +518,16 @@ if ($tableExists) {
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-info view-assigned-items-btn"
+                                                data-id="<?php echo $acc['id'] ?? 0; ?>"
+                                                data-name="<?php echo htmlspecialchars($acc['name'] ?? ''); ?>"
+                                                title="View Assigned Equipment Items">
+                                                <i class="fas fa-list-check"></i>
+                                            </button>
                                             <button class="btn btn-info edit-accessory-btn"
                                                 data-id="<?php echo $acc['id'] ?? 0; ?>"
                                                 data-name="<?php echo htmlspecialchars($acc['name'] ?? ''); ?>"
+                                                data-category="<?php echo htmlspecialchars($acc['category'] ?? ''); ?>"
                                                 data-description="<?php echo htmlspecialchars($acc['description'] ?? ''); ?>"
                                                 data-total="<?php echo $acc['total_quantity'] ?? 0; ?>"
                                                 data-available="<?php echo $acc['available_quantity'] ?? 0; ?>"
@@ -465,6 +558,51 @@ if ($tableExists) {
     </div>
 </div>
 
+<!-- Manage Categories Modal -->
+<div class="modal fade" id="manageCategoriesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-tags me-2"></i>Manage Categories</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addCategoryForm" class="mb-4">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="newCategoryName" name="name" placeholder="New Category Name" required>
+                        <button class="btn btn-primary" type="submit"><i class="fas fa-plus"></i> Add</button>
+                    </div>
+                </form>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Category Name</th>
+                                <th width="80" class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($accessory_categories_list ?? [] as $catRow): ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($catRow['name']); ?></td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-danger delete-category-btn" data-id="<?php echo $catRow['id']; ?>" title="Delete">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                            <?php if(empty($accessory_categories_list)): ?>
+                            <tr><td colspan="2" class="text-center">No categories found.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Add Accessory Modal -->
 <div class="modal fade" id="addAccessoryModal" tabindex="-1" aria-labelledby="addAccessoryModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -487,6 +625,15 @@ if ($tableExists) {
                         <label for="name" class="form-label required">Accessory Name</label>
                         <input type="text" class="form-control" id="name" name="name" required
                             placeholder="e.g., HDMI Cable, Power Adapter" <?php echo !$tableExists ? 'disabled' : ''; ?>>
+                    </div>
+                    <div class="mb-3">
+                        <label for="category" class="form-label required">Category</label>
+                        <select class="form-select" id="category" name="category" required <?php echo !$tableExists ? 'disabled' : ''; ?>>
+                            <option value="">Select Category...</option>
+                            <?php foreach ($accessory_categories_list ?? [] as $catRow): ?>
+                                <option value="<?php echo htmlspecialchars($catRow['name']); ?>"><?php echo htmlspecialchars($catRow['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
 
                     <div class="mb-3">
@@ -547,6 +694,15 @@ if ($tableExists) {
                     <div class="mb-3">
                         <label for="edit_name" class="form-label required">Accessory Name</label>
                         <input type="text" class="form-control" id="edit_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_category" class="form-label required">Category</label>
+                        <select class="form-select" id="edit_category" name="category" required>
+                            <option value="">Select Category...</option>
+                            <?php foreach ($accessory_categories_list ?? [] as $catRow): ?>
+                                <option value="<?php echo htmlspecialchars($catRow['name']); ?>"><?php echo htmlspecialchars($catRow['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
 
                     <div class="mb-3">
@@ -695,6 +851,32 @@ if ($tableExists) {
     </div>
 </div>
 
+<!-- View Assigned Items Modal -->
+<div class="modal fade" id="viewAssignedItemsModal" tabindex="-1" aria-labelledby="viewAssignedItemsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="viewAssignedItemsModalLabel">
+                    <i class="fas fa-list-check me-2"></i>Assigned Equipment Items
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="assignedItemsContainer">
+                <div class="text-center py-4">
+                    <i class="fas fa-spinner fa-spin fa-2x text-info"></i>
+                    <p class="mt-2 text-muted">Loading assigned equipment items...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="#" id="manageAssignmentsBtn" class="btn btn-primary">
+                    <i class="fas fa-link me-1"></i> Manage Assignments
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php
 // Close database connection
 $db->close();
@@ -703,47 +885,181 @@ require_once 'views/partials/footer.php';
 
 <script>
     $(document).ready(function() {
-        <?php if ($tableExists && !empty($accessories)): ?>
-            // Initialize DataTable
-            $('#accessoriesTable').DataTable({
-                pageLength: 25,
-                responsive: true,
-                order: [
-                    [0, 'asc']
-                ],
-                language: {
-                    emptyTable: "No accessories found",
-                    info: "Showing _START_ to _END_ of _TOTAL_ accessories",
-                    infoEmpty: "Showing 0 to 0 of 0 accessories",
-                    infoFiltered: "(filtered from _MAX_ total accessories)",
-                    search: "Search accessories:",
-                    paginate: {
-                        first: "First",
-                        last: "Last",
-                        next: "Next",
-                        previous: "Previous"
-                    }
-                }
-            });
+        <?php if ($tableExists): ?>
+            // View Assigned Items Modal Handler
+            $(document).on('click', '.view-assigned-items-btn', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
 
-            // Edit accessory button
-            $('.edit-accessory-btn').click(function() {
                 const id = $(this).data('id');
                 const name = $(this).data('name');
-                const description = $(this).data('description');
-                const total = $(this).data('total');
-                const available = $(this).data('available');
-                const minimum = $(this).data('minimum');
 
-                $('#edit_id').val(id);
-                $('#edit_name').val(name);
-                $('#edit_description').val(description);
-                $('#edit_total_quantity').val(total);
-                $('#edit_available_quantity').val(available);
-                $('#edit_minimum_stock').val(minimum);
+                function escapeHtml(str) {
+                    if (!str) return '';
+                    return $('<div>').text(str).html();
+                }
 
-                $('#editAccessoryModal').modal('show');
+                $('#viewAssignedItemsModalLabel').html('<i class="fas fa-list-check me-2"></i>Items assigned to: <strong>' + escapeHtml(name) + '</strong>');
+                $('#manageAssignmentsBtn').attr('href', 'items/assign_accessory.php?accessory_id=' + id);
+                $('#assignedItemsContainer').html(`
+                    <div class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x text-info mb-2"></i>
+                        <p class="text-muted mb-0">Loading assigned equipment items...</p>
+                    </div>
+                `);
+
+                const modalEl = document.getElementById('viewAssignedItemsModal');
+                if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    bsModal.show();
+                } else {
+                    $('#viewAssignedItemsModal').modal('show');
+                }
+
+                $.ajax({
+                    url: 'api/accessories/get_assigned_items.php',
+                    type: 'GET',
+                    data: { accessory_id: id },
+                    dataType: 'json',
+                    success: function(response) {
+                        if (response.success && response.items && response.items.length > 0) {
+                            if ($.fn.DataTable && $.fn.DataTable.isDataTable('#modalAssignedItemsTable')) {
+                                $('#modalAssignedItemsTable').DataTable().destroy();
+                            }
+
+                            let tableHtml = `
+                                <div class="table-responsive p-1">
+                                    <table class="table table-bordered table-hover align-middle mb-0" id="modalAssignedItemsTable" width="100%">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 50px;">#</th>
+                                                <th>Item Name</th>
+                                                <th>Serial Number</th>
+                                                <th>Category</th>
+                                                <th>Assigned Date</th>
+                                                <th style="width: 110px;">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                            `;
+                            response.items.forEach(function(item, idx) {
+                                tableHtml += `
+                                    <tr>
+                                        <td>${idx + 1}</td>
+                                        <td><strong>${escapeHtml(item.item_name)}</strong></td>
+                                        <td><code>${escapeHtml(item.serial_number)}</code></td>
+                                        <td><span class="badge bg-secondary">${escapeHtml(item.category)}</span></td>
+                                        <td><small class="text-muted">${item.assigned_at || 'N/A'}</small></td>
+                                        <td>
+                                            <a href="items/edit.php?id=${item.id}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                                <i class="fas fa-edit me-1"></i> View Item
+                                            </a>
+                                        </td>
+                                    </tr>
+                                `;
+                            });
+                            tableHtml += `
+                                        </tbody>
+                                    </table>
+                                </div>
+                            `;
+                            $('#assignedItemsContainer').html(tableHtml);
+
+                            // Initialize DataTable for assigned items
+                            if ($.fn.DataTable) {
+                                $('#modalAssignedItemsTable').DataTable({
+                                    pageLength: 5,
+                                    lengthMenu: [
+                                        [5, 10, 25, 50, -1],
+                                        [5, 10, 25, 50, "All"]
+                                    ],
+                                    responsive: true,
+                                    autoWidth: false,
+                                    order: [[1, 'asc']],
+                                    language: {
+                                        search: "Search items:",
+                                        lengthMenu: "Show _MENU_ items",
+                                        info: "Showing _START_ to _END_ of _TOTAL_ items",
+                                        infoEmpty: "Showing 0 to 0 of 0 items",
+                                        infoFiltered: "(filtered from _MAX_ total items)",
+                                        paginate: {
+                                            first: "First",
+                                            last: "Last",
+                                            next: "Next",
+                                            previous: "Previous"
+                                        }
+                                    }
+                                });
+                            }
+                        } else if (response.success === false) {
+                            $('#assignedItemsContainer').html(`
+                                <div class="alert alert-warning mb-0">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>${escapeHtml(response.message || 'Error loading assigned items.')}
+                                </div>
+                            `);
+                        } else {
+                            $('#assignedItemsContainer').html(`
+                                <div class="text-center py-4 text-muted">
+                                    <i class="fas fa-info-circle fa-3x mb-3 text-secondary"></i>
+                                    <h5>No equipment items currently assigned</h5>
+                                    <p class="mb-0">This accessory is not linked to any equipment items yet.</p>
+                                </div>
+                            `);
+                        }
+                    },
+                    error: function() {
+                        $('#assignedItemsContainer').html(`
+                            <div class="alert alert-danger mb-0">
+                                <i class="fas fa-exclamation-triangle me-2"></i>Failed to load assigned equipment items.
+                            </div>
+                        `);
+                    }
+                });
             });
+
+            // Cleanup DataTable when assigned items modal is closed
+            $('#viewAssignedItemsModal').on('hidden.bs.modal', function() {
+                if ($.fn.DataTable && $.fn.DataTable.isDataTable('#modalAssignedItemsTable')) {
+                    $('#modalAssignedItemsTable').DataTable().destroy();
+                }
+            });
+            <?php if (!empty($accessories)): ?>
+            // Initialize DataTable
+            if ($('#accessoriesTable').length) {
+                $('#accessoriesTable').DataTable({
+                    dom: "<'row mb-4 px-2'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6 d-flex justify-content-md-end'f>>" +
+                         "<'row'<'col-sm-12'tr>>" +
+                         "<'row mt-4 px-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+                    pageLength: 5,
+                    lengthMenu: [
+                        [5, 10, 25, 50, 100],
+                        [5, 10, 25, 50, 100]
+                    ],
+                    responsive: true,
+                    order: [
+                        [0, 'asc']
+                    ],
+                    language: {
+                        emptyTable: "No accessories found",
+                        info: "Showing _START_ to _END_ of _TOTAL_ accessories",
+                        infoEmpty: "Showing 0 to 0 of 0 accessories",
+                        infoFiltered: "(filtered from _MAX_ total accessories)",
+                        search: "Search accessories:",
+                        paginate: {
+                            first: "First",
+                            last: "Last",
+                            next: "Next",
+                            previous: "Previous"
+                        }
+                    },
+                    drawCallback: function() {
+                        $(this).closest('.dataTables_wrapper').find('.pagination').addClass('pagination-sm justify-content-end');
+                    }
+                });
+            }
+            <?php endif; ?>
+
+
 
             // Add accessory form submission
             $('#addAccessoryForm').on('submit', function(e) {
@@ -893,10 +1209,16 @@ require_once 'views/partials/footer.php';
             $('#edit_total_quantity, #edit_available_quantity').on('change', function() {
                 const total = parseInt($('#edit_total_quantity').val()) || 0;
                 const available = parseInt($('#edit_available_quantity').val()) || 0;
+                const assigned = parseInt($('#editAccessoryForm').data('assigned')) || 0;
 
                 if (available > total) {
                     $('#edit_available_quantity').val(total);
                     toastr.warning('Available quantity cannot exceed total quantity');
+                }
+
+                if (available < assigned) {
+                    $('#edit_available_quantity').val(assigned);
+                    toastr.warning('Available quantity cannot be less than assigned quantity (' + assigned + ')');
                 }
 
                 if (available < 0) {
@@ -906,9 +1228,11 @@ require_once 'views/partials/footer.php';
             });
 
             // When editing, show assigned count
-            $('.edit-accessory-btn').click(function() {
+            $(document).on('click', '.edit-accessory-btn', function(e) {
+                e.preventDefault();
                 const id = $(this).data('id');
                 const name = $(this).data('name');
+                const category = $(this).data('category');
                 const description = $(this).data('description');
                 const total = $(this).data('total');
                 const available = $(this).data('available');
@@ -918,6 +1242,7 @@ require_once 'views/partials/footer.php';
                 // Set form values
                 $('#edit_id').val(id);
                 $('#edit_name').val(name);
+                $('#edit_category').val(category);
                 $('#edit_description').val(description);
                 $('#edit_total_quantity').val(total);
                 $('#edit_available_quantity').val(available);
@@ -940,6 +1265,64 @@ require_once 'views/partials/footer.php';
             // Export functionality
             $('#exportBtn').click(function() {
                 window.location.href = 'api/accessories/export.php';
+            });
+            // Add Category Form
+            $('#addCategoryForm').on('submit', function(e) {
+                e.preventDefault();
+                const form = this;
+                const btn = $(this).find('button[type="submit"]');
+                const originalText = btn.html();
+
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+
+                $.ajax({
+                    url: 'api/accessories/categories_add.php',
+                    type: 'POST',
+                    data: $(form).serialize(),
+                    dataType: 'json',
+                    success: function(response) {
+                        if (response.success) {
+                            toastr.success(response.message);
+                            setTimeout(() => window.location.reload(), 1000);
+                        } else {
+                            toastr.error(response.message);
+                            btn.prop('disabled', false).html(originalText);
+                        }
+                    },
+                    error: function() {
+                        toastr.error('Failed to add category');
+                        btn.prop('disabled', false).html(originalText);
+                    }
+                });
+            });
+
+            // Delete Category Button
+            $('.delete-category-btn').click(function() {
+                if (!confirm('Are you sure you want to delete this category?')) return;
+                
+                const btn = $(this);
+                const id = btn.data('id');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+
+                $.ajax({
+                    url: 'api/accessories/categories_delete.php',
+                    type: 'POST',
+                    data: { id: id },
+                    dataType: 'json',
+                    success: function(response) {
+                        if (response.success) {
+                            toastr.success(response.message);
+                            setTimeout(() => window.location.reload(), 1000);
+                        } else {
+                            toastr.error(response.message);
+                            btn.prop('disabled', false).html('<i class="fas fa-trash"></i>');
+                        }
+                    },
+                    error: function() {
+                        toastr.error('Failed to delete category');
+                        btn.prop('disabled', false).html('<i class="fas fa-trash"></i>');
+                    }
+                });
             });
         <?php endif; ?>
     });

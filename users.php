@@ -254,6 +254,7 @@ $departments = [
     'electrical' => 'Electrical',
     'furniture' => 'Furniture',
     'warehouse' => 'Warehouse',
+    'transport' => 'Transport',
     'admin' => 'Administration'
 ];
 ?>
@@ -1081,7 +1082,24 @@ $departments = [
                         $('#email').val(user.email);
                         $('#full_name').val(user.full_name || '');
                         $('#phone').val(user.phone || '');
-                        $('#department').val(user.department || '');
+                        if (user.department) {
+                            let deptLower = user.department.toLowerCase();
+                            let found = false;
+                            $('#department option').each(function() {
+                                let valLower = $(this).val().toLowerCase();
+                                let textLower = $(this).text().toLowerCase();
+                                if (deptLower === valLower || deptLower === textLower || deptLower.includes(valLower) || valLower.includes(deptLower)) {
+                                    $('#department').val($(this).val());
+                                    found = true;
+                                    return false;
+                                }
+                            });
+                            if (!found) {
+                                $('#department').val('');
+                            }
+                        } else {
+                            $('#department').val('');
+                        }
                         $('#role').val(user.role);
                     },
                     error: function(xhr) {

@@ -1,0 +1,66 @@
+1. Offline-First Scanning & Sync (PWA Upgrade)
+Why High-stakes event venues (e.g., arenas, underground convention halls) and metal-clad warehouses are notorious for having poor cellular reception or no Wi-Fi. If a technician loses connectivity, they currently cannot load the scanner page or submit their batch.
+Recommendation Upgrade 
+mobile_scan.php
+ to function offline.
+Implementation
+Create a simple Service Worker (service-worker.js) to cache the HTML, CSS, JS, and scanning libraries (like Instascan) so the UI loads instantly without network access.
+When scanning items, store the scanned barcodesserial numbers in the browser's localStorage or IndexedDB rather than calling the database immediately.
+Provide an offline Sync Queue indicator. Once the device re-establishes a network connection, the technician can click Sync & Submit to send the cached batch payload to 
+apisubmit_batch.php
+.
+2. Standardized PDF Barcode & Asset Label Printing
+Why While the system generates QR codes, it lacks a native tool to print labels to stick onto physical equipment cases, flight cases, or individual items.
+Recommendation Build an internal Print Labels module.
+Implementation
+Integrate a PHP library (e.g., FPDF or TCPDF) inside the includes directory.
+Create a view in 
+items.php
+ where administrators can select multiple items (using checkboxes) and hit Generate Labels.
+Export a formatted PDF optimized for standard adhesive label sheets (like Avery sheet layouts). Each label should display the generated QR code from 
+includesqr_generator.php
+, the Asset ID, BrandModel, and Company Logo.
+3. Discrepancy Reporting & Damage Log Handlers
+Why In real-world event logistics, equipment frequently breaks in transit, or the quantity of items that actually arrives at the venue doesn't match what the Stock Controller originally loaded. Currently, completing a batch is binary.
+Recommendation Create a Complete with Discrepancies transition workflow during batch completion.
+Implementation
+Modify the completion form in 
+driver_batches.php
+ or the technician receipt flow.
+If the items arriving do not match the batch, allow the technician to flag specific items as Missing or Damaged.
+Update the database schema to mark these items with a state of lost or maintenance instantly, and log an entry into batch_actions_log to maintain a strict digital chain of custody.
+4. Real-time Workflow Notifications (SSE or Web Push)
+Why The lifecycle of a movement batch is highly sequential. A technician submits it 
+→
+→ Stock Controller must approve it 
+→
+→ Driver must verify it. Currently, users must manually refresh their dashboard to check for pending actions.
+Recommendation Implement Server-Sent Events (SSE) or Web Push Notifications.
+Implementation
+Create a lightweight PHP event-stream endpoint (e.g., apinotificationsstream.php).
+Add a notification bell component to 
+includesheader.php
+.
+Whenever a batch is submitted, trigger an instant push alert to the assigned Stock Controller's browser. When it is approved, notify the assigned Driver.
+5. Driver Route Map & Geolocation Verification
+Why Drivers are assigned to transport batches, but the app does not verify that the driver was physically at the sourcedestination when confirming loadingdelivery.
+Recommendation Integrate browser-based Geolocation tracking for transport verifications.
+Implementation
+In 
+driver_batches.php
+, when the driver clicks Accept & Verify Load or Deliver, use the HTML5 Geolocation API (navigator.geolocation.getCurrentPosition) to capture their exact latitude and longitude.
+Store these coordinates alongside the driver's signature in stock_movements.
+Embed a Google Maps or Leaflet.js static link in the generated 
+gate_pass.php
+ PDF, proving the driver was physically at the warehousevenue during handoff.
+6. Scheduled Preventative Maintenance & Safety Compliance
+Why You already have a Maintenance & Reliability report structure in 
+reports.php
+. However, there is no system to actively prevent booking equipment that is overdue for safety checks (e.g., PAT testing for AV gear or hardware inspections).
+Recommendation Add a proactive safety blocker to the scancheckout engine.
+Implementation
+Add a next_maintenance_date or max_deployments_limit field to the items table.
+When a technician tries to scan and add an item in 
+scan_bulk.php
+, check if the current date exceeds the maintenance due date.
+If it does, block the item from being added to the batch, display a warning stating Overdue for Safety Check, and prompt the technician to redirect it to the repair bay.

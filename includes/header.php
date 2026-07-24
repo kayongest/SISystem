@@ -47,15 +47,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     </li>
                 <?php endif; ?>
 
-                <!-- Equipment - Check permission -->
-                <?php if (hasPermission('view_equipment')): ?>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo $current_page == 'items.php' ? 'active' : ''; ?>"
-                            href="<?php echo BASE_URL; ?>items.php">
-                            <i class="fas fa-boxes me-1"></i>Equipment
-                        </a>
-                    </li>
-                <?php endif; ?>
+
 
                 <!-- Import - Check permission -->
                 <?php if (hasPermission('import_export')): ?>
@@ -117,15 +109,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     </li>
                 <?php endif; ?>
 
-                <!-- Stock Locations - Check permission -->
-                <?php if (hasPermission('manage_stock_locations')): ?>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo $current_page == 'stock_locations.php' ? 'active' : ''; ?>"
-                            href="<?php echo BASE_URL; ?>stock_locations.php">
-                            <i class="fas fa-warehouse me-1"></i>Stock Locations
-                        </a>
-                    </li>
-                <?php endif; ?>
+
 
                 <!-- Batch History - Check permission -->
                 <?php if (hasPermission('view_batch_history')): ?>
@@ -147,43 +131,44 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     </li>
                 <?php endif; ?>
 
-                <!-- User Management - Admin only -->
-                <?php if (isAdmin()): ?>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo $current_page == 'users.php' ? 'active' : ''; ?>"
-                            href="<?php echo BASE_URL; ?>users.php">
-                            <i class="fas fa-users me-1"></i>User Management
-                        </a>
-                    </li>
-                <?php endif; ?>
 
-                <!-- Settings - Admin only -->
+
+                <!-- Setup Dropdown - Admin only -->
                 <?php if (isAdmin()): ?>
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="settingsDropdown" role="button"
+                        <a class="nav-link dropdown-toggle" href="#" id="setupDropdown" role="button"
                             data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-cog me-1"></i>Settings
+                            <i class="fas fa-cog me-1"></i>Setup
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="settingsDropdown"
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="setupDropdown"
                             style="background: #2c5a7a;">
+                            <li><a class="dropdown-item <?php echo $current_page == 'users.php' ? 'active' : ''; ?>"
+                                    href="<?php echo BASE_URL; ?>users.php">
+                                    <i class="fas fa-users me-2"></i>User Management
+                                </a></li>
+                            <li><a class="dropdown-item <?php echo $current_page == 'stock_locations.php' ? 'active' : ''; ?>"
+                                    href="<?php echo BASE_URL; ?>stock_locations.php">
+                                    <i class="fas fa-warehouse me-2"></i>Stock Management
+                                </a></li>
+                            <li><a class="dropdown-item <?php echo $current_page == 'departments.php' ? 'active' : ''; ?>"
+                                    href="<?php echo BASE_URL; ?>departments.php">
+                                    <i class="fas fa-building me-2"></i>Department Management
+                                </a></li>
+
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
                             <li><a class="dropdown-item <?php echo $current_page == 'categories.php' ? 'active' : ''; ?>"
                                     href="<?php echo BASE_URL; ?>categories.php">
                                     <i class="fas fa-tags me-2"></i>Categories
                                 </a></li>
-                            <li><a class="dropdown-item <?php echo $current_page == 'departments.php' ? 'active' : ''; ?>"
-                                    href="<?php echo BASE_URL; ?>departments.php">
-                                    <i class="fas fa-building me-2"></i>Departments
-                                </a></li>
-                            <li><a class="dropdown-item <?php echo $current_page == 'locations.php' ? 'active' : ''; ?>"
-                                    href="<?php echo BASE_URL; ?>locations.php">
-                                    <i class="fas fa-map-marker-alt me-2"></i>Locations
-                                </a></li>
+
                             <li>
                                 <hr class="dropdown-divider">
                             </li>
                             <li><a class="dropdown-item <?php echo $current_page == 'role_access_matrix.php' ? 'active' : ''; ?>"
                                     href="<?php echo BASE_URL; ?>role_access_matrix.php">
-                                    <i class="fas fa-shield-alt me-2"></i>Permissions
+                                    <i class="fas fa-shield-alt me-2"></i>Role Permissions
                                 </a></li>
                         </ul>
                     </li>

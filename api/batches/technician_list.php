@@ -124,7 +124,8 @@ $statsSql = "SELECT
                 COUNT(DISTINCT sm.id) as total_batches,
                 SUM((SELECT COALESCE(SUM(quantity), 0) FROM batch_items bi WHERE bi.batch_id = sm.id)) as total_items,
                 SUM(CASE WHEN sm.status = 'pending' OR sm.approval_status = 'pending' THEN 1 ELSE 0 END) as pending_batches,
-                SUM(CASE WHEN sm.status = 'approved' OR sm.approval_status = 'approved' THEN 1 ELSE 0 END) as approved_batches
+                SUM(CASE WHEN sm.status = 'approved' OR sm.approval_status = 'approved' THEN 1 ELSE 0 END) as approved_batches,
+                SUM(CASE WHEN sm.movement_type IN ('stock_to_stock', 'stock_to_venue_transport') THEN 1 ELSE 0 END) as gate_passes
             FROM stock_movements sm
             WHERE sm.technician_id = ?
             AND DATE(sm.created_at) BETWEEN ? AND ?";
@@ -137,7 +138,7 @@ if ($stmt) {
     $stats = $statsResult->fetch_assoc();
     $stmt->close();
 } else {
-    $stats = ['total_batches' => 0, 'total_items' => 0, 'pending_batches' => 0, 'approved_batches' => 0];
+    $stats = ['total_batches' => 0, 'total_items' => 0, 'pending_batches' => 0, 'approved_batches' => 0, 'gate_passes' => 0];
 }
 
     echo json_encode([
@@ -147,7 +148,8 @@ if ($stmt) {
             'total_batches' => (int)($stats['total_batches'] ?? 0),
             'total_items' => (int)($stats['total_items'] ?? 0),
             'pending_batches' => (int)($stats['pending_batches'] ?? 0),
-            'approved_batches' => (int)($stats['approved_batches'] ?? 0)
+            'approved_batches' => (int)($stats['approved_batches'] ?? 0),
+            'gate_passes' => (int)($stats['gate_passes'] ?? 0)
         ]
     ]);
 

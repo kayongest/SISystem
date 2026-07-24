@@ -510,9 +510,11 @@ require_once 'views/partials/header.php';
     </div>
 </div>
 
+<?php
+ob_start();
+?>
 <!-- Include DataTables JS -->
-<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+<!-- Note: jquery.dataTables.min.js and dataTables.bootstrap5.min.js are already included in footer.php -->
 <script src="https://cdn.datatables.net/buttons/2.3.6/js/dataTables.buttons.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.3.6/js/buttons.bootstrap5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.3.6/js/buttons.html5.min.js"></script>
@@ -722,7 +724,7 @@ require_once 'views/partials/header.php';
                     render: function(data, type, row) {
                         if (!data) return 'N/A';
                         const itemId = row.item_id || '';
-                        return `<a href="items/view.php?id=${itemId}" class="text-primary">
+                        return `<a href="items.php?action=view&id=${itemId}" class="text-primary">
                 <i class="fas fa-box me-1"></i>${data}
             </a>`;
                     },
@@ -1199,7 +1201,7 @@ require_once 'views/partials/header.php';
                                 <div class="col-md-6">
                                     <h6><i class="fas fa-box me-2"></i>Item Information</h6>
                                     <table class="table table-sm">
-                                        <tr><th width="140">Item:</th><td><a href="items/view.php?id=${scan.item_id || ''}" class="text-primary">${scan.item_name || 'N/A'}</a></td></tr>
+                                        <tr><th width="140">Item:</th><td><a href="items.php?action=view&id=${scan.item_id || ''}" class="text-primary">${scan.item_name || 'N/A'}</a></td></tr>
                                         <tr><th>Serial:</th><td><code>${scan.serial_number || 'N/A'}</code></td></tr>
                                         <tr><th>Category:</th><td>${scan.category || 'N/A'}</td></tr>
                                         <tr><th>Status:</th><td>${scan.item_status || 'N/A'}</td></tr>
@@ -1272,5 +1274,6 @@ require_once 'views/partials/header.php';
 <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
 
 <?php
+$extra_scripts = ob_get_clean();
 require_once 'views/partials/footer.php';
 ?>
