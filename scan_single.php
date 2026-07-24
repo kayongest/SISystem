@@ -2301,7 +2301,7 @@ $pageTitle = "Scan QR Code - aBility";
                     <div class="mt-3">
                         <h6><i class="fas fa-bolt me-2"></i>Quick Actions:</h6>
                         <div class="d-flex gap-2 flex-wrap">
-                            ${item.id ? `<a href="items/view.php?id=${item.id}" class="btn btn-primary btn-sm">
+                            ${item.id ? `<a href="items.php?action=view&id=${item.id}" class="btn btn-primary btn-sm">
                                 <i class="fas fa-eye me-1"></i> View Details
                             </a>` : ''}
                             <button class="btn btn-success btn-sm" onclick="showTransportModal(${item.id || item.item_id || 'null'}, 'check_in')">
@@ -2473,7 +2473,7 @@ $pageTitle = "Scan QR Code - aBility";
 
         function testScanURL() {
             console.log('🧪 Testing URL QR code');
-            const testData = "http://localhost/ability_app/items/view.php?id=1";
+            const testData = "http://localhost/ability_app/items.php?action=view&id=1";
             processScan(testData);
         }
 
