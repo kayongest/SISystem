@@ -27,6 +27,25 @@ if (!$conn) {
 $message = '';
 $error = '';
 
+function handleDriverImageUpload($file) {
+    $targetDir = "uploads/drivers/";
+    if (!file_exists($targetDir)) {
+        mkdir($targetDir, 0777, true);
+    }
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    $allowed = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+    if (!in_array($ext, $allowed)) {
+        throw new Exception("Invalid image format. Allowed formats: JPG, PNG, WEBP, GIF.");
+    }
+    $filename = uniqid('driver_') . '.' . $ext;
+    $targetPath = $targetDir . $filename;
+    if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+        $baseUrl = defined('BASE_URL') ? BASE_URL : '/ability_app_main/';
+        return '/' . ltrim($baseUrl, '/') . $targetPath;
+    }
+    throw new Exception("Failed to upload driver profile image.");
+}
+
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
@@ -38,26 +57,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $vehicleType = $conn->real_escape_string($_POST['vehicle_type']);
             $vehicleNum = $conn->real_escape_string($_POST['vehicle_number']);
             $status = $conn->real_escape_string($_POST['status']);
+            $profileImage = $_POST['existing_profile_image'] ?? '';
 
-            if ($_POST['action'] === 'add') {
-                $sql = "INSERT INTO drivers (full_name, phone_number, email, license_number, vehicle_type, vehicle_number, status) 
-                        VALUES ('$fullName', '$phone', '$email', '$license', '$vehicleType', '$vehicleNum', '$status')";
-                if ($conn->query($sql)) {
-                    $message = "Driver added successfully.";
-                } else {
-                    $error = "Error adding driver: " . $conn->error;
+            if (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] === UPLOAD_ERR_OK) {
+                try {
+                    $profileImage = handleDriverImageUpload($_FILES['profile_image']);
+                } catch (Exception $e) {
+                    $error = $e->getMessage();
                 }
-            } else {
-                $id = (int)$_POST['id'];
-                $sql = "UPDATE drivers SET 
-                        full_name='$fullName', phone_number='$phone', email='$email', 
-                        license_number='$license', vehicle_type='$vehicleType', 
-                        vehicle_number='$vehicleNum', status='$status' 
-                        WHERE id=$id";
-                if ($conn->query($sql)) {
-                    $message = "Driver updated successfully.";
+            }
+
+            if (empty($error)) {
+                $profileImgEsc = $conn->real_escape_string($profileImage);
+                if ($_POST['action'] === 'add') {
+                    $sql = "INSERT INTO drivers (full_name, phone_number, email, profile_image, license_number, vehicle_type, vehicle_number, status) 
+                            VALUES ('$fullName', '$phone', '$email', '$profileImgEsc', '$license', '$vehicleType', '$vehicleNum', '$status')";
+                    if ($conn->query($sql)) {
+                        $message = "Driver added successfully.";
+                    } else {
+                        $error = "Error adding driver: " . $conn->error;
+                    }
                 } else {
-                    $error = "Error updating driver: " . $conn->error;
+                    $id = (int)$_POST['id'];
+                    $sql = "UPDATE drivers SET 
+                            full_name='$fullName', phone_number='$phone', email='$email', profile_image='$profileImgEsc', 
+                            license_number='$license', vehicle_type='$vehicleType', 
+                            vehicle_number='$vehicleNum', status='$status' 
+                            WHERE id=$id";
+                    if ($conn->query($sql)) {
+                        $message = "Driver updated successfully.";
+                    } else {
+                        $error = "Error updating driver: " . $conn->error;
+                    }
                 }
             }
         } elseif ($_POST['action'] === 'delete') {
@@ -294,9 +325,13 @@ require_once 'views/partials/header.php';
                             <tr>
                                 <td class="ps-4">
                                     <div class="d-flex align-items-center">
-                                        <div class="bg-light p-2 rounded-circle me-3 border d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                                            <i class="fas fa-user-tie text-secondary"></i>
-                                        </div>
+                                        <?php if (!empty($d['profile_image'])): ?>
+                                            <img src="<?php echo htmlspecialchars($d['profile_image']); ?>" class="rounded-circle me-3 border shadow-sm" style="width: 42px; height: 42px; object-fit: cover;" onerror="this.outerHTML='<div class=\'bg-light p-2 rounded-circle me-3 border d-flex align-items-center justify-content-center\' style=\'width: 42px; height: 42px;\'><i class=\'fas fa-user-tie text-secondary\'></i></div>'">
+                                        <?php else: ?>
+                                            <div class="bg-light p-2 rounded-circle me-3 border d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                                                <i class="fas fa-user-tie text-secondary"></i>
+                                            </div>
+                                        <?php endif; ?>
                                         <div>
                                             <span class="fw-bold text-dark d-block"><?php echo htmlspecialchars($d['full_name']); ?></span>
                                             <span class="text-muted small">Driver ID: #<?php echo $d['id']; ?></span>
@@ -355,6 +390,7 @@ require_once 'views/partials/header.php';
                                                  data-fullname="<?php echo htmlspecialchars($d['full_name']); ?>"
                                                  data-phone="<?php echo htmlspecialchars($d['phone_number']); ?>"
                                                  data-email="<?php echo htmlspecialchars($d['email']); ?>"
+                                                 data-image="<?php echo htmlspecialchars($d['profile_image'] ?? ''); ?>"
                                                  data-license="<?php echo htmlspecialchars($d['license_number']); ?>"
                                                  data-vehicletype="<?php echo htmlspecialchars($d['vehicle_type']); ?>"
                                                  data-vehiclenumber="<?php echo htmlspecialchars($d['vehicle_number']); ?>"
@@ -378,10 +414,9 @@ require_once 'views/partials/header.php';
     </div>
 </div>
 
-<!-- Add/Edit Modal (Modern Glassmorphism Modal Style) -->
 <div class="modal fade" id="driverModal" tabindex="-1">
     <div class="modal-dialog">
-        <form method="POST" class="modal-content border-0 rounded-4 shadow-lg">
+        <form method="POST" enctype="multipart/form-data" class="modal-content border-0 rounded-4 shadow-lg">
             <div class="modal-header bg-dark text-white rounded-top-4 py-3">
                 <h5 class="modal-title fw-bold" id="modalTitle">
                     <i class="fas fa-user-plus me-2"></i>Add Driver
@@ -391,7 +426,16 @@ require_once 'views/partials/header.php';
             <div class="modal-body p-4">
                 <input type="hidden" name="action" id="formAction" value="add">
                 <input type="hidden" name="id" id="driverId" value="">
+                <input type="hidden" name="existing_profile_image" id="existing_profile_image" value="">
                 
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-uppercase text-muted">Driver Profile Photo</label>
+                    <input type="file" name="profile_image" id="profile_image" class="form-control rounded-3" accept="image/*">
+                    <div id="driverImagePreviewContainer" class="mt-2 text-center" style="display:none;">
+                        <img id="driverImagePreview" src="" class="rounded-circle border shadow-sm" style="width: 70px; height: 70px; object-fit: cover;">
+                    </div>
+                </div>
+
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-uppercase text-muted">Full Name *</label>
                     <input type="text" name="full_name" id="full_name" class="form-control rounded-3" placeholder="e.g. Jean Damascene" required>
@@ -459,8 +503,10 @@ require_once 'views/partials/header.php';
                     <div class="col-md-6">
                         <div class="card border-0 shadow-sm p-3 rounded-3 h-100 bg-white">
                             <div class="d-flex align-items-center mb-3">
-                                <div class="bg-primary bg-opacity-10 text-primary p-3 rounded-circle me-3 fs-3 d-flex align-items-center justify-content-center" style="width: 54px; height: 54px;">
-                                    <i class="fas fa-user-tie"></i>
+                                <div id="viewDriverAvatarContainer" class="me-3">
+                                    <div class="bg-primary bg-opacity-10 text-primary p-3 rounded-circle fs-3 d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;">
+                                        <i class="fas fa-user-tie"></i>
+                                    </div>
                                 </div>
                                 <div>
                                     <h5 class="fw-bold mb-0 text-dark" id="viewDriverTitle">--</h5>
@@ -560,8 +606,24 @@ require_once 'views/partials/header.php';
                 document.getElementById('vehicle_type').value = '';
                 document.getElementById('vehicle_number').value = '';
                 document.getElementById('status').value = 'available';
+                document.getElementById('existing_profile_image').value = '';
+                document.getElementById('profile_image').value = '';
+                document.getElementById('driverImagePreviewContainer').style.display = 'none';
             });
         }
+
+        // Live image preview on file input change
+        $('#profile_image').on('change', function() {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    $('#driverImagePreview').attr('src', e.target.result);
+                    $('#driverImagePreviewContainer').show();
+                };
+                reader.readAsDataURL(file);
+            }
+        });
 
         // Populate Form for Edit
         document.querySelectorAll('.edit-driver-btn').forEach(button => {
@@ -576,6 +638,17 @@ require_once 'views/partials/header.php';
                 document.getElementById('vehicle_type').value = this.dataset.vehicletype;
                 document.getElementById('vehicle_number').value = this.dataset.vehiclenumber;
                 document.getElementById('status').value = this.dataset.status;
+                
+                const existingImg = this.dataset.image || '';
+                document.getElementById('existing_profile_image').value = existingImg;
+                document.getElementById('profile_image').value = '';
+                
+                if (existingImg) {
+                    $('#driverImagePreview').attr('src', existingImg);
+                    $('#driverImagePreviewContainer').show();
+                } else {
+                    $('#driverImagePreviewContainer').hide();
+                }
                 
                 const driverModal = new bootstrap.Modal(document.getElementById('driverModal'));
                 driverModal.show();
@@ -595,6 +668,7 @@ require_once 'views/partials/header.php';
             $('#viewDriverVehicleType').text('Loading...');
             $('#viewDriverVehicleNumber').text('Loading...');
             $('#viewTripCount').text('Loading...');
+            $('#viewDriverAvatarContainer').html('<div class="bg-primary bg-opacity-10 text-primary p-3 rounded-circle fs-3 d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;"><i class="fas fa-user-tie"></i></div>');
             $('#driverTripsBody').html('<tr><td colspan="5" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i> Loading transport history...</td></tr>');
             
             const modal = new bootstrap.Modal(document.getElementById('viewDriverModal'));
@@ -616,6 +690,12 @@ require_once 'views/partials/header.php';
                         $('#viewDriverLicense').text(d.license_number || 'N/A');
                         $('#viewDriverVehicleType').text(d.vehicle_type || 'N/A');
                         $('#viewDriverVehicleNumber').text(d.vehicle_number || 'N/A');
+
+                        if (d.profile_image) {
+                            $('#viewDriverAvatarContainer').html(`<img src="${d.profile_image}" class="rounded-circle border shadow-sm" style="width: 56px; height: 56px; object-fit: cover;">`);
+                        } else {
+                            $('#viewDriverAvatarContainer').html('<div class="bg-primary bg-opacity-10 text-primary p-3 rounded-circle fs-3 d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;"><i class="fas fa-user-tie"></i></div>');
+                        }
 
                         // Status Badge
                         let statusBadge = '<span class="badge bg-secondary">Inactive</span>';
