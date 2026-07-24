@@ -980,6 +980,7 @@ try {
                     }
                 }
             }
+            $('#formDuration').val(ev.duration || 1);
             $('#formLocation').val(ev.location && ev.location !== '0' ? ev.location : '');
             $('#formManager').val(ev.project_manager || '');
             $('#formTechnician').val(ev.assigned_technician || ev.technician || '');

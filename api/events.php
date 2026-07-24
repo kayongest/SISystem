@@ -227,7 +227,7 @@ try {
                 error_log("Binding values - title: $title, date: $date, duration: $duration, location: $location, manager: $manager, technician: $technician, id: $id");
 
                 $stmt->bind_param(
-                    "sssisssss",
+                    "ssissssss",
                     $title,
                     $date,
                     $duration,
