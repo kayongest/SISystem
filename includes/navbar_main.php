@@ -313,18 +313,13 @@ try {
 
                 <!-- Setup Dropdown (Multi-role Config) -->
                 <div class="dropdown dropdown-compact">
-                    <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['stock_locations.php', 'categories.php', 'departments.php', 'locations.php', 'events.php', 'items.php', 'mobile_app.php', 'reports.php', 'hr_center.php', 'drivers.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
+                    <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['stock_locations.php', 'categories.php', 'departments.php', 'locations.php', 'events.php', 'mobile_app.php', 'reports.php', 'hr_center.php', 'drivers.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
                         <i class="fas fa-cog"></i> Setup
                     </a>
                     <ul class="dropdown-menu shadow">
                         <!-- Events -->
                         <?php if ($user_role !== 'driver'): ?>
                             <li><a class="dropdown-item <?php echo ($current_page == 'events.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>events.php"><i class="fas fa-calendar-alt me-2 text-info"></i> Events</a></li>
-                        <?php endif; ?>
-
-                        <!-- Equipment -->
-                        <?php if (isAdmin()): ?>
-                            <li><a class="dropdown-item <?php echo (strpos($current_page, 'items') !== false) ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>items.php"><i class="fas fa-boxes me-2 text-warning"></i> Equipment</a></li>
                         <?php endif; ?>
 
                         <!-- Mobile App -->
