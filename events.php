@@ -617,9 +617,11 @@ try {
                             <input type="text" class="form-control bg-light text-dark border-secondary" id="formManager" name="manager">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label text-muted">Assigned Technician</label>
-                            <select class="form-select bg-light text-dark border-secondary" id="formTechnician" name="technician">
-                                <option value="">Select Technician...</option>
+                            <label class="form-label text-muted d-flex justify-content-between align-items-center">
+                                <span>Assigned Technicians</span>
+                                <small class="text-primary"><i class="fas fa-info-circle me-1"></i>Hold Ctrl/Cmd to select multiple</small>
+                            </label>
+                            <select multiple class="form-select bg-light text-dark border-secondary" id="formTechnician" name="technicians[]" style="min-height: 110px;">
                                 <?php foreach ($technicians_list as $tech): ?>
                                     <option value="<?php echo htmlspecialchars($tech['full_name']); ?>">
                                         <?php echo htmlspecialchars($tech['full_name'] . ' (@' . $tech['username'] . ')'); ?>
@@ -837,9 +839,11 @@ try {
                                 <i class="fas fa-user-tie"></i>
                                 <span>${escapeHtml(ev.project_manager || 'Not Assigned')}</span>
                             </div>
-                            <div class="event-meta">
-                                <i class="fas fa-tools"></i>
-                                <span>${escapeHtml(ev.assigned_technician || ev.technician || 'Tech Not Specified')}</span>
+                            <div class="event-meta align-items-start">
+                                <i class="fas fa-tools mt-1"></i>
+                                <div class="d-flex flex-wrap gap-1">
+                                    ${renderTechnicianBadges(ev.assigned_technician || ev.technician)}
+                                </div>
                             </div>
                             ${(ev.movement_type && ev.movement_type.toLowerCase() === 'stock to stock' && ev.driver) ? `
                             <div class="event-meta">
@@ -860,6 +864,17 @@ try {
             });
 
             renderPagination(totalPages);
+        }
+
+        function renderTechnicianBadges(rawTech) {
+            if (!rawTech || rawTech.toString().trim() === '') {
+                return '<span class="text-muted small">Tech Not Specified</span>';
+            }
+            const techList = rawTech.toString().split(',').map(t => t.trim()).filter(t => t.length > 0);
+            if (techList.length === 0) {
+                return '<span class="text-muted small">Tech Not Specified</span>';
+            }
+            return techList.map(t => `<span class="badge bg-secondary bg-opacity-10 text-dark border px-2 py-1 small rounded-pill"><i class="fas fa-user-gear text-primary me-1"></i>${escapeHtml(t)}</span>`).join('');
         }
 
         function renderPagination(totalPages) {
@@ -891,7 +906,7 @@ try {
             $('#modalEventDate').text(eventObj.date ? new Date(eventObj.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'TBD');
             $('#modalEventLocation').text(eventObj.location || 'Location TBA');
             $('#modalEventManager').text(eventObj.project_manager || 'Not Assigned');
-            $('#modalEventTechnician').text(eventObj.assigned_technician || eventObj.technician || 'Not Specified');
+            $('#modalEventTechnician').html(renderTechnicianBadges(eventObj.assigned_technician || eventObj.technician));
             
             if (eventObj.movement_type && eventObj.movement_type.toLowerCase() === 'stock to stock' && eventObj.driver) {
                 $('#modalEventDriver').text(eventObj.driver);
@@ -951,7 +966,7 @@ try {
             $('#formMethod').val('POST');
             $('#eventFormModalLabel').text('Create Event');
             $('#saveEventBtn').text('Save Event');
-            $('#formTechnician').val('');
+            $('#formTechnician').val([]);
             $('#currentImagePreview').hide();
             $('#existingImage').val('');
             $('#eventFormModal').modal('show');
@@ -983,7 +998,15 @@ try {
             $('#formDuration').val(ev.duration || 1);
             $('#formLocation').val(ev.location && ev.location !== '0' ? ev.location : '');
             $('#formManager').val(ev.project_manager || '');
-            $('#formTechnician').val(ev.assigned_technician || ev.technician || '');
+            
+            const rawTech = ev.assigned_technician || ev.technician || '';
+            if (rawTech) {
+                const selectedTechs = rawTech.split(',').map(t => t.trim()).filter(t => t.length > 0);
+                $('#formTechnician').val(selectedTechs);
+            } else {
+                $('#formTechnician').val([]);
+            }
+
             $('#formDescription').val(ev.description || '');
 
             if(ev.event_image) {

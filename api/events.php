@@ -133,7 +133,18 @@ try {
                 $location = (isset($_POST['location']) && trim((string)$_POST['location']) !== '' && trim((string)$_POST['location']) !== '0') ? trim((string)$_POST['location']) : null;
                 // Map 'manager' from form to 'project_manager' in database
                 $manager = !empty($_POST['manager']) ? trim($_POST['manager']) : null;
-                $technician = !empty($_POST['technician']) ? trim($_POST['technician']) : (!empty($_POST['assigned_technician']) ? trim($_POST['assigned_technician']) : null);
+                
+                // Handle multiple technicians selection
+                $technician = null;
+                if (isset($_POST['technicians']) && is_array($_POST['technicians'])) {
+                    $techArr = array_filter(array_map('trim', $_POST['technicians']));
+                    $technician = !empty($techArr) ? implode(', ', $techArr) : null;
+                } elseif (!empty($_POST['technician'])) {
+                    $technician = trim($_POST['technician']);
+                } elseif (!empty($_POST['assigned_technician'])) {
+                    $technician = trim($_POST['assigned_technician']);
+                }
+
                 $description = !empty($_POST['description']) ? trim($_POST['description']) : null;
                 $source = !empty($_POST['source']) ? $_POST['source'] : 'manual';
 
@@ -221,7 +232,20 @@ try {
                 $location = (isset($putData['location']) && trim((string)$putData['location']) !== '' && trim((string)$putData['location']) !== '0') ? trim((string)$putData['location']) : null;
                 // Map 'manager' from form to 'project_manager' in database
                 $manager = !empty($putData['manager']) ? trim($putData['manager']) : null;
-                $technician = !empty($putData['technician']) ? trim($putData['technician']) : (!empty($putData['assigned_technician']) ? trim($putData['assigned_technician']) : null);
+                
+                // Handle multiple technicians selection in PUT
+                $technician = null;
+                if (isset($putData['technicians']) && is_array($putData['technicians'])) {
+                    $techArr = array_filter(array_map('trim', $putData['technicians']));
+                    $technician = !empty($techArr) ? implode(', ', $techArr) : null;
+                } elseif (isset($_POST['technicians']) && is_array($_POST['technicians'])) {
+                    $techArr = array_filter(array_map('trim', $_POST['technicians']));
+                    $technician = !empty($techArr) ? implode(', ', $techArr) : null;
+                } elseif (!empty($putData['technician'])) {
+                    $technician = trim($putData['technician']);
+                } elseif (!empty($putData['assigned_technician'])) {
+                    $technician = trim($putData['assigned_technician']);
+                }
                 $description = !empty($putData['description']) ? trim($putData['description']) : null;
 
                 error_log("Binding values - title: $title, date: $date, duration: $duration, location: $location, manager: $manager, technician: $technician, id: $id");
