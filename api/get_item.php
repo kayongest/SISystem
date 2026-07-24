@@ -139,21 +139,10 @@ try {
                 $qrCode = $qrRaw;
             }
         } else {
-            // No valid QR code, generate a default one based on item ID
-            error_log("No valid QR code found for item ID: $id, generating default");
-            $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
-            $host = $_SERVER['HTTP_HOST'];
-            $baseUrl = $protocol . $host;
-            // Generate a QR code URL that will create a QR on the fly
-            $qrCode = $baseUrl . '/ability_app_main/generate_qr.php?id=' . $id . '&type=item';
+            $qrCode = null;
         }
     } else {
-        // No qr_code field at all, generate one
-        error_log("No qr_code field for item ID: $id, generating default");
-        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
-        $host = $_SERVER['HTTP_HOST'];
-        $baseUrl = $protocol . $host;
-        $qrCode = $baseUrl . '/ability_app_main/generate_qr.php?id=' . $id . '&type=item';
+        $qrCode = null;
     }
     
     // Final safety check - ensure qrCode is a string

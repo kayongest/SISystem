@@ -42,7 +42,7 @@ $params = [$date_from, $date_to];
 $types = "ss";
 
 if ($userRole === 'stock_controller') {
-    $sql .= " AND b.stock_controller_id = ?";
+    $sql .= " AND (b.stock_controller_id = ? OR b.movement_type IN ('transport', 'stock_to_venue_transport', 'stock_to_stock'))";
     $params[] = $userId;
     $types .= "i";
 }

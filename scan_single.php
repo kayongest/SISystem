@@ -543,7 +543,7 @@ $pageTitle = "Scan QR Code - aBility";
         <p class="text-muted mb-3">Are you sure you want to logout?</p>
         <div class="d-flex gap-2 justify-content-center">
             <button class="btn btn-secondary" onclick="hideLogoutToast()">Cancel</button>
-            <a href="logout.php" class="btn btn-primary">Yes, Logout</a>
+            <a href="<?php echo BASE_URL; ?>logout.php" class="btn btn-primary">Yes, Logout</a>
         </div>
     </div>
 

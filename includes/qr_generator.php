@@ -65,38 +65,61 @@ if (!function_exists('generateQRCodeForItem')) {
         
         $qrDataString = json_encode($qrData);
         
-        // Try multiple QR generation methods
+        // Try local generation first using chillerlan/php-qrcode if available
         $qrImage = null;
-        
-        // Method 1: Google Charts API
-        $googleUrl = "https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=" . urlencode($qrDataString) . "&choe=UTF-8";
-        
-        $context = stream_context_create([
-            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
-            'http' => ['timeout' => 15, 'header' => "User-Agent: Mozilla/5.0\r\n"]
-        ]);
-        
-        $qrImage = @file_get_contents($googleUrl, false, $context);
-        
-        // Method 2: cURL fallback
-        if ($qrImage === false || strlen($qrImage) < 100) {
-            if (function_exists('curl_init')) {
-                $ch = curl_init();
-                curl_setopt($ch, CURLOPT_URL, $googleUrl);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-                curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
-                $qrImage = curl_exec($ch);
-                curl_close($ch);
+        if (class_exists('chillerlan\QRCode\QRCode')) {
+            try {
+                $options = new \chillerlan\QRCode\QROptions([
+                    'version'      => \chillerlan\QRCode\QRCode::VERSION_AUTO,
+                    'outputType'   => \chillerlan\QRCode\QRCode::OUTPUT_IMAGE_PNG,
+                    'eccLevel'     => \chillerlan\QRCode\QRCode::ECC_L,
+                    'scale'        => 10,
+                    'imageBase64'  => false,
+                ]);
+                $qrcode = new \chillerlan\QRCode\QRCode($options);
+                $qrImage = $qrcode->render($qrDataString);
+            } catch (Exception $e) {
+                error_log("chillerlan QRCode generation failed: " . $e->getMessage());
             }
         }
         
-        // Method 3: QR code generation using GD if available
-        if (($qrImage === false || strlen($qrImage) < 100) && extension_loaded('gd')) {
-            $qrImage = generateQRCodeWithGD($qrDataString, 300);
+        // Fallback to endroid/qr-code if chillerlan failed or isn't available
+        if (!$qrImage && class_exists('Endroid\QrCode\QrCode')) {
+            try {
+                $qr = \Endroid\QrCode\QrCode::create($qrDataString)
+                    ->setSize(300)
+                    ->setMargin(10);
+                $writer = new \Endroid\QrCode\Writer\PngWriter();
+                $qrImage = $writer->write($qr)->getString();
+            } catch (Exception $e) {
+                error_log("endroid QRCode generation failed: " . $e->getMessage());
+            }
+        }
+        
+        // Final fallback: Google Charts API
+        if (!$qrImage) {
+            $googleUrl = "https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=" . urlencode($qrDataString) . "&choe=UTF-8";
+            $context = stream_context_create([
+                'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+                'http' => ['timeout' => 15, 'header' => "User-Agent: Mozilla/5.0\r\n"]
+            ]);
+            $qrImage = @file_get_contents($googleUrl, false, $context);
+            
+            // Method 2: cURL fallback
+            if ($qrImage === false || strlen($qrImage) < 100) {
+                if (function_exists('curl_init')) {
+                    $ch = curl_init();
+                    curl_setopt($ch, CURLOPT_URL, $googleUrl);
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+                    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
+                    $qrImage = curl_exec($ch);
+                    curl_close($ch);
+                }
+            }
         }
         
         // Method 4: Create a simple placeholder with text

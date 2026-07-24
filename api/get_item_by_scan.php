@@ -15,7 +15,7 @@ if ($conn->connect_error) {
     exit();
 }
 
-$scanData = $_POST['scan_data'] ?? $_GET['scan_data'] ?? null;
+$scanData = $_POST['scan_data'] ?? $_GET['scan_data'] ?? $_POST['id'] ?? $_GET['id'] ?? null;
 
 error_log("Scan data received: " . $scanData);
 
@@ -73,7 +73,7 @@ $item = null;
 
 // Try to find by ID first
 if ($itemId) {
-    $stmt = $conn->prepare("SELECT id, item_name, serial_number, status, stock_location, image FROM items WHERE id = ?");
+    $stmt = $conn->prepare("SELECT id, item_name, serial_number, status, stock_location, image, category, (SELECT COUNT(*) FROM items WHERE item_name = i.item_name) as total_group_count FROM items i WHERE i.id = ?");
     if ($stmt) {
         $stmt->bind_param("i", $itemId);
         $stmt->execute();
@@ -86,7 +86,7 @@ if ($itemId) {
 
 // If not found by ID, try by serial number
 if (!$item && $serialNumber) {
-    $stmt = $conn->prepare("SELECT id, item_name, serial_number, status, stock_location, image FROM items WHERE serial_number = ?");
+    $stmt = $conn->prepare("SELECT id, item_name, serial_number, status, stock_location, image, category, (SELECT COUNT(*) FROM items WHERE item_name = i.item_name) as total_group_count FROM items i WHERE i.serial_number = ?");
     if ($stmt) {
         $stmt->bind_param("s", $serialNumber);
         $stmt->execute();
@@ -99,7 +99,7 @@ if (!$item && $serialNumber) {
 
 // If still not found, try by QR code exact match
 if (!$item) {
-    $stmt = $conn->prepare("SELECT id, item_name, serial_number, status, stock_location, image FROM items WHERE qr_code = ?");
+    $stmt = $conn->prepare("SELECT id, item_name, serial_number, status, stock_location, image, category, (SELECT COUNT(*) FROM items WHERE item_name = i.item_name) as total_group_count FROM items i WHERE i.qr_code = ?");
     if ($stmt) {
         $stmt->bind_param("s", $scanData);
         $stmt->execute();
@@ -111,16 +111,49 @@ if (!$item) {
 }
 
 if ($item) {
+    $isCase = (strtolower($item['category'] ?? '') === 'cases' || stripos($item['item_name'] ?? '', 'case') !== false);
+    $nestedItems = [];
+
+    if ($isCase) {
+        // Fetch nested items
+        $nestedStmt = $conn->prepare("
+            SELECT id, item_name, serial_number, status, stock_location, image 
+            FROM items 
+            WHERE storage_location = ? OR storage_location = ?
+        ");
+        if ($nestedStmt) {
+            $nestedStmt->bind_param("ss", $item['item_name'], $item['serial_number']);
+            $nestedStmt->execute();
+            $nestedResult = $nestedStmt->get_result();
+            while ($nestedRow = $nestedResult->fetch_assoc()) {
+                $nestedItems[] = [
+                    'id' => $nestedRow['id'],
+                    'item_name' => $nestedRow['item_name'],
+                    'serial_number' => $nestedRow['serial_number'],
+                    'status' => $nestedRow['status'],
+                    'stock_location' => $nestedRow['stock_location'] ?? 'N/A',
+                    'image' => $nestedRow['image'] ?? null
+                ];
+            }
+            $nestedStmt->close();
+        }
+    }
+
+    $itemData = [
+        'id' => $item['id'],
+        'item_name' => $item['item_name'],
+        'serial_number' => $item['serial_number'],
+        'status' => $item['status'],
+        'stock_location' => $item['stock_location'],
+        'image' => $item['image'],
+        'total_group_count' => $item['total_group_count'],
+        'is_case' => $isCase,
+        'nested_items' => $nestedItems
+    ];
     echo json_encode([
         'success' => true,
-        'item' => [
-            'id' => $item['id'],
-            'item_name' => $item['item_name'],
-            'serial_number' => $item['serial_number'],
-            'status' => $item['status'],
-            'stock_location' => $item['stock_location'],
-            'image' => $item['image']
-        ]
+        'item' => $itemData,
+        'data' => $itemData
     ]);
 } else {
     // Return the parsed data to help debug

@@ -230,6 +230,11 @@ require_once '../views/partials/header.php';
     </div>
 </div>
 
+<?php
+$db->close();
+require_once '../views/partials/footer.php';
+?>
+
 <script>
     $(document).ready(function() {
         // Select all items
@@ -275,8 +280,3 @@ require_once '../views/partials/header.php';
         });
     });
 </script>
-
-<?php
-$db->close();
-require_once '../views/partials/footer.php';
-?>

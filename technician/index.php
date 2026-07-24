@@ -24,7 +24,7 @@ try {
 
 // Redirect if already logged in
 if (isset($_SESSION['technician_id'])) {
-    header('Location: dashboard_full.php');
+    header('Location: ../dashboard_full.php');
     exit();
 }
 
@@ -57,11 +57,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['technician_username'] = $technician['username'];
                     $_SESSION['technician_department'] = $technician['department'] ?? '';
 
+                    // Also set standard root login variables so they can access root dashboard_full.php
+                    $_SESSION['logged_in'] = true;
+                    $_SESSION['user_id'] = $technician['id'];
+                    $_SESSION['username'] = $technician['username'];
+                    $_SESSION['full_name'] = $technician['full_name'];
+                    $_SESSION['email'] = $technician['email'] ?? '';
+                    $_SESSION['role'] = $technician['role'] ?? 'technician';
+                    $_SESSION['user_role'] = $technician['role'] ?? 'technician';
+                    $_SESSION['department'] = $technician['department'] ?? '';
+                    $_SESSION['user_roles'] = [$technician['role'] ?? 'technician'];
+
                     // Update last login
                     $updateStmt = $pdo->prepare("UPDATE users SET last_login = NOW() WHERE id = ?");
                     $updateStmt->execute([$technician['id']]);
 
-                    header('Location: dashboard_full.php');
+                    header('Location: ../dashboard_full.php');
                     exit();
                 } else {
                     $error = 'Invalid password';
@@ -78,7 +89,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['technician_username'] = 'admin';
                 $_SESSION['technician_department'] = 'Administration';
 
-                header('Location: dashboard_full.php');
+                // Also set standard root login variables so they can access root dashboard_full.php
+                $_SESSION['logged_in'] = true;
+                $_SESSION['user_id'] = 1;
+                $_SESSION['username'] = 'admin';
+                $_SESSION['full_name'] = 'Demo Admin';
+                $_SESSION['email'] = 'admin@example.com';
+                $_SESSION['role'] = 'technician';
+                $_SESSION['user_role'] = 'technician';
+                $_SESSION['department'] = 'Administration';
+                $_SESSION['user_roles'] = ['technician'];
+
+                header('Location: ../dashboard_full.php');
                 exit();
             } else {
                 $error = 'Invalid credentials (demo: admin/admin123)';

@@ -75,6 +75,18 @@ if (!isset($_SESSION['user_id'])) {
     <title><?php echo htmlspecialchars($pageTitle ?? SITE_NAME); ?></title>
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="<?php echo BASE_URL; ?>assets/images/warehouse_.png">
+    
+    <!-- PWA Support -->
+    <link rel="manifest" href="<?php echo BASE_URL; ?>manifest.json">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('<?php echo BASE_URL; ?>sw.js')
+                    .then(reg => console.log('Service Worker registered. Scope:', reg.scope))
+                    .catch(err => console.error('Service Worker registration failed:', err));
+            });
+        }
+    </script>
 
     <!-- ========== CSS FILES (LOAD FIRST) ========== -->
     <!-- Font Awesome -->
@@ -95,7 +107,7 @@ if (!isset($_SESSION['user_id'])) {
     <style>
         /* assets/css/styles.css */
 
-        @import url('https://fonts.googleapis.com/css2?family=Marvel:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700&family=Marvel:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 
         /* CSS Variables for theming */
         :root {
@@ -144,6 +156,7 @@ if (!isset($_SESSION['user_id'])) {
         textarea {
             font-family: "Marvel", sans-serif;
         }
+
 
         .marvel-regular {
             font-family: "Marvel", sans-serif;
@@ -245,6 +258,110 @@ if (!isset($_SESSION['user_id'])) {
         .dataTables_wrapper .dataTables_processing {
             transition: opacity 0.3s;
         }
+
+        /* Custom DataTable pagination styling to match proposed premium style */
+        .dataTables_wrapper .dataTables_paginate {
+            margin: 15px 0 !important;
+            float: right !important;
+            text-align: right !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: flex-end !important;
+        }
+
+        /* 1. Native DataTables styling fallback */
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            border: 1px solid #dee2e6 !important;
+            background: #fff !important;
+            color: #324e8e !important;
+            padding: 0.375rem 0.75rem !important;
+            border-radius: 4px !important;
+            font-size: 0.875rem !important;
+            font-family: "Marvel", sans-serif !important;
+            font-weight: 500 !important;
+            cursor: pointer !important;
+            transition: all 0.2s ease !important;
+            margin: 0 3px !important;
+            display: inline-block !important;
+            text-decoration: none !important;
+            box-shadow: none !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+            background: #2b4c7e !important;
+            border-color: #2b4c7e !important;
+            color: #fff !important;
+            font-weight: 600 !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+        .dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover,
+        .dataTables_wrapper .dataTables_paginate .paginate_button.disabled:active {
+            color: #98a6ad !important;
+            background: #f1f3fa !important;
+            border-color: #eef2f7 !important;
+            cursor: not-allowed !important;
+            opacity: 0.7 !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button:hover:not(.current):not(.disabled) {
+            background: #f1f3fa !important;
+            border-color: #dee2e6 !important;
+            color: #1c355e !important;
+        }
+
+        /* 2. Bootstrap 5 Pagination Customization */
+        .dataTables_wrapper .pagination,
+        .pagination {
+            display: flex !important;
+            gap: 6px !important;
+            margin: 10px 0 !important;
+            padding-left: 0 !important;
+            list-style: none !important;
+            justify-content: flex-end !important;
+        }
+
+        .dataTables_wrapper .pagination .page-item .page-link,
+        .pagination .page-item .page-link {
+            border: 1px solid #dee2e6 !important;
+            background: #fff !important;
+            color: #324e8e !important;
+            padding: 0.375rem 0.75rem !important;
+            border-radius: 4px !important;
+            font-size: 0.875rem !important;
+            font-family: "Marvel", sans-serif !important;
+            font-weight: 500 !important;
+            transition: all 0.2s ease !important;
+            box-shadow: none !important;
+            text-decoration: none !important;
+            margin-left: 0 !important;
+            display: block !important;
+        }
+
+        .dataTables_wrapper .pagination .page-item.active .page-link,
+        .pagination .page-item.active .page-link {
+            background: #2b4c7e !important;
+            border-color: #2b4c7e !important;
+            color: #fff !important;
+            font-weight: 600 !important;
+        }
+
+        .dataTables_wrapper .pagination .page-item.disabled .page-link,
+        .pagination .page-item.disabled .page-link {
+            color: #98a6ad !important;
+            background: #f1f3fa !important;
+            border-color: #eef2f7 !important;
+            cursor: not-allowed !important;
+        }
+
+        .dataTables_wrapper .pagination .page-item:not(.active):not(.disabled) .page-link:hover,
+        .pagination .page-item:not(.active):not(.disabled) .page-link:hover {
+            background: #f1f3fa !important;
+            border-color: #dee2e6 !important;
+            color: #1c355e !important;
+        }
+
 
         /* Disable animations for users who prefer reduced motion */
         @media (prefers-reduced-motion: reduce) {
@@ -705,7 +822,7 @@ if (!isset($_SESSION['user_id'])) {
 <body>
     <!-- Navigation -->
     <?php if (!isset($skip_navbar) || !$skip_navbar): ?>
-        <?php include 'includes/navbar_main.php'; ?>
+        <?php include dirname(__DIR__, 2) . '/includes/navbar_main.php'; ?>
     <?php endif; ?>
 
     <!-- Main Content Container -->

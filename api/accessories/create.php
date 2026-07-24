@@ -26,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Sanitize inputs
         $name = sanitizeInput($_POST['name'] ?? '');
+        $category = sanitizeInput($_POST['category'] ?? '');
         $description = sanitizeInput($_POST['description'] ?? '');
         $total_quantity = intval($_POST['total_quantity'] ?? 1);
         $available_quantity = intval($_POST['available_quantity'] ?? 1);
@@ -57,14 +58,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Insert accessory
         $sql = "INSERT INTO accessories (
-            name, description, total_quantity, available_quantity, 
+            name, category, description, total_quantity, available_quantity, 
             minimum_stock, is_active, created_at
-        ) VALUES (?, ?, ?, ?, ?, 1, NOW())";
+        ) VALUES (?, ?, ?, ?, ?, ?, 1, NOW())";
         
         $stmt = $conn->prepare($sql);
         $stmt->bind_param(
-            "ssiii",
-            $name, $description, $total_quantity, $available_quantity, $minimum_stock
+            "sssiii",
+            $name, $category, $description, $total_quantity, $available_quantity, $minimum_stock
         );
         
         if (!$stmt->execute()) {

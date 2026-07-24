@@ -134,6 +134,11 @@ $pageTitle = "Batch History - aBility";
             color: #dc3545;
         }
 
+        .stat-icon.purple {
+            background: rgba(111, 66, 193, 0.1);
+            color: #6f42c1;
+        }
+
         .stat-value {
             font-size: 2rem;
             font-weight: 700;
@@ -478,6 +483,113 @@ $pageTitle = "Batch History - aBility";
                 flex-wrap: wrap;
             }
         }
+        /* Milestone Tracker styling */
+        .milestone-tracker {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            margin: 1.5rem 0 2.5rem 0;
+            padding: 0 10px;
+        }
+
+        .milestone-tracker::before {
+            content: '';
+            position: absolute;
+            top: 22px;
+            left: 10%;
+            right: 10%;
+            height: 4px;
+            background: #044A42; /* Dark Emerald Teal path line */
+            z-index: 1;
+        }
+
+        .milestone-tracker-fill {
+            position: absolute;
+            top: 22px;
+            left: 10%;
+            height: 4px;
+            background: linear-gradient(90deg, #3A9188, #B8E1DD);
+            z-index: 1;
+            transition: width 0.4s ease;
+            width: 0%;
+        }
+
+        .milestone-step {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 25%;
+        }
+
+        .milestone-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #062925;
+            border: 3px solid #044A42;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            color: #3A9188;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .milestone-step.active .milestone-icon {
+            border-color: #3A9188;
+            color: white;
+            background: #3A9188;
+            box-shadow: 0 0 15px rgba(58, 145, 136, 0.5);
+        }
+
+        .milestone-step.completed .milestone-icon {
+            border-color: #B8E1DD;
+            color: #062925;
+            background: #B8E1DD;
+            box-shadow: 0 0 12px rgba(184, 225, 221, 0.4);
+        }
+
+        .milestone-step.rejected .milestone-icon {
+            border-color: #dc3545;
+            color: white;
+            background: #dc3545;
+        }
+
+        .milestone-label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin-top: 10px;
+            color: #3A9188;
+            text-align: center;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .milestone-step.active .milestone-label {
+            color: white;
+        }
+
+        .milestone-step.completed .milestone-label {
+            color: #B8E1DD;
+        }
+
+        .milestone-step.rejected .milestone-label {
+            color: #dc3545;
+        }
+
+        .milestone-sublabel {
+            font-size: 0.7rem;
+            color: rgba(184, 225, 221, 0.6);
+            text-align: center;
+            margin-top: 3px;
+            max-width: 130px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
     </style>
 </head>
 
@@ -627,9 +739,11 @@ $pageTitle = "Batch History - aBility";
                             <th>Date</th>
                             <th>Technician</th>
                             <th>Submitted By</th>
+                            <th>Controller</th>
                             <th>Items</th>
                             <th>Total Qty</th>
                             <th>Location</th>
+                            <th>Progress</th>
                             <th>Event/Job</th>
                             <th>Status</th>
                             <th>Actions</th>
@@ -893,20 +1007,25 @@ function displayStatistics(stats) {
             <div class="stat-value">${stats.pending_batches || 0}</div>
             <div class="stat-label">Pending Approval</div>
         </div>
+        <div class="stat-card">
+            <div class="stat-icon purple"><i class="fas fa-ticket-alt"></i></div>
+            <div class="stat-value">${stats.gate_passes || 0}</div>
+            <div class="stat-label">Gate Passes</div>
+        </div>
     `;
     $('#statsContainer').html(html);
 }
 
 // ==================== LOAD BATCHES ====================
-function loadBatches() {
-    console.log('Loading batches...');
+function loadBatches(isSilent = false) {
+    if (!isSilent) console.log('Loading batches...');
     const date_from = $('#date_from').val();
     const date_to = $('#date_to').val();
     const status = $('#status').val();
     const technician_id = $('#technician_id').val();
     const search = $('#search').val();
 
-    showLoading();
+    if (!isSilent) showLoading();
 
     $.ajax({
         url: 'api/batches/list.php',
@@ -960,15 +1079,55 @@ function updateBatchesTable(batches) {
             'completed': 'badge-completed'
         }[batch.status] || 'badge-secondary';
 
+        let isApproved = false;
+        let isTechOnboard = false;
+        let isLoaded = false;
+        let isCompleted = false;
+        let isRejected = false;
+
+        const appStatus = (batch.approval_status || '').toLowerCase();
+        const bStatus = (batch.status || '').toLowerCase();
+
+        if (appStatus === 'approved' || appStatus === 'completed' || bStatus === 'approved' || bStatus === 'completed') isApproved = true;
+        if (appStatus === 'rejected' || bStatus === 'rejected') { isRejected = true; isApproved = false; }
+        if (parseInt(batch.tech_onboard) === 1) isTechOnboard = true;
+        if (parseInt(batch.driver_verified) === 1) isLoaded = true;
+        if (bStatus === 'completed') isCompleted = true;
+
+        let fillPercent = 10;
+        let bgClass = 'bg-secondary';
+        let label = 'Submitted';
+
+        if (isRejected) { fillPercent = 100; bgClass = 'bg-danger'; label = 'Rejected'; }
+        else if (isCompleted) { fillPercent = 100; bgClass = 'bg-success'; label = 'Delivered'; }
+        else if (isLoaded) { fillPercent = 75; bgClass = 'bg-info'; label = 'Loaded'; }
+        else if (isTechOnboard) { fillPercent = 50; bgClass = 'bg-primary'; label = 'Tech Onboard'; }
+        else if (isApproved) { fillPercent = 35; bgClass = 'bg-primary'; label = 'Approved'; }
+        else { fillPercent = 25; bgClass = 'bg-warning'; label = 'Pending'; }
+
+        const progressHtml = `
+        <div style="min-width: 100px;">
+            <div class="d-flex justify-content-between mb-1" style="font-size: 0.65rem; font-weight: 600;">
+                <span class="text-secondary text-uppercase">${label}</span>
+                <span class="text-secondary">${fillPercent}%</span>
+            </div>
+            <div class="progress" style="height: 5px; border-radius: 3px; background-color: #e2e8f0; box-shadow: inset 0 1px 2px rgba(0,0,0,.1);">
+                <div class="progress-bar ${bgClass}" role="progressbar" style="width: ${fillPercent}%; border-radius: 3px;" aria-valuenow="${fillPercent}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+        </div>
+        `;
+
         const row = `
             <tr>
                 <td><code>${escapeHtml(batch.batch_id)}</code></td>
                 <td>${batch.date ? moment(batch.date).format('MMM D, YYYY HH:mm') : '—'}</td>
                 <td>${escapeHtml(batch.technician || '—')}</td>
                 <td>${escapeHtml(batch.submitted_by || '—')}</td>
+                <td>${escapeHtml(batch.stock_controller_name || '—')}</td>
                 <td class="text-center">${batch.item_count || 0}</td>
                 <td class="text-center">${batch.total_quantity || 0}</td>
                 <td>${escapeHtml(batch.location || '—')}</td>
+                <td>${progressHtml}</td>
                 <td><small>${escapeHtml(batch.job_sheet || '-')}</small></td>
                 <td><span class="batch-badge ${statusClass}">${batch.status}</span></td>
                 <td>
@@ -980,6 +1139,11 @@ function updateBatchesTable(batches) {
                             <a href="batch_report.php?batch_id=${encodeURIComponent(batch.batch_id)}&download=1" class="btn btn-sm btn-success btn-icon" title="Download Report" target="_blank">
                                 <i class="fas fa-file-pdf"></i>
                             </a>
+                            ${['stock_to_stock', 'stock_to_venue_transport'].includes(batch.movement_type) ? `
+                            <a href="gate_pass.php?batch_id=${encodeURIComponent(batch.batch_id)}&download=1" class="btn btn-sm btn-warning btn-icon" title="Download Gate Pass" target="_blank">
+                                <i class="fas fa-ticket-alt"></i>
+                            </a>
+                            ` : ''}
                         ` : ''}
                     </div>
                 </td>
@@ -1013,8 +1177,8 @@ function updateBatchesTable(batches) {
 }
 
 // ==================== VIEW BATCH DETAILS ====================
-function viewBatchDetails(batchId) {
-    console.log('Viewing batch details for:', batchId);
+function viewBatchDetails(batchId, isSilent = false) {
+    if (!isSilent) console.log('Viewing batch details for:', batchId);
 
     if (!batchId) {
         showNotification('error', 'No batch ID provided');
@@ -1022,16 +1186,17 @@ function viewBatchDetails(batchId) {
     }
 
     currentBatchId = batchId;
-    showLoading();
-
-    $('#batchDetailContent').html(`
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
+    if (!isSilent) {
+        showLoading();
+        $('#batchDetailContent').html(`
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3">Loading batch details for ${escapeHtml(batchId)}...</p>
             </div>
-            <p class="mt-3">Loading batch details for ${escapeHtml(batchId)}...</p>
-        </div>
-    `);
+        `);
+    }
 
     $.ajax({
         url: `api/batches/details.php?batch_id=${encodeURIComponent(batchId)}`,
@@ -1079,11 +1244,91 @@ function displayBatchDetails(batch) {
             `;
         });
     } else {
-
         itemsHtml = '<tr><td colspan="5" class="text-center py-4 text-muted">No items found</td></tr>';
     }
 
+    // Milestone Tracker logic
+    let isApproved = false;
+    let isTechOnboard = false;
+    let isLoaded = false;
+    let isCompleted = false;
+    let isRejected = false;
+
+    const appStatus = (batch.approval_status || '').toLowerCase();
+    const bStatus = (batch.status || '').toLowerCase();
+
+    if (appStatus === 'approved' || appStatus === 'completed' || bStatus === 'approved' || bStatus === 'completed') {
+        isApproved = true;
+    }
+    if (appStatus === 'rejected' || bStatus === 'rejected') {
+        isRejected = true;
+        isApproved = false;
+    }
+    if (parseInt(batch.tech_onboard) === 1) {
+        isTechOnboard = true;
+    }
+    if (parseInt(batch.driver_verified) === 1) {
+        isLoaded = true;
+    }
+    if (bStatus === 'completed') {
+        isCompleted = true;
+    }
+
+    let fillPercent = 10;
+    let stepSubmittedClass = 'completed';
+    let stepApprovedClass = isApproved ? (isLoaded ? 'completed' : 'active') : (isRejected ? 'rejected' : 'active');
+    let stepLoadedClass = isLoaded ? (isCompleted ? 'completed' : 'active') : (isTechOnboard ? 'active' : (isApproved && !isRejected ? 'active' : ''));
+    let stepCompletedClass = isCompleted ? 'completed' : (isLoaded ? 'active' : '');
+
+    if (isRejected) fillPercent = 40;
+    else if (isCompleted) fillPercent = 100;
+    else if (isLoaded) fillPercent = 75;
+    else if (isTechOnboard) fillPercent = 65;
+    else if (isApproved) fillPercent = 40;
+    else fillPercent = 25; // Awaiting approval
+
+    let dName = batch.transport_driver || '';
+    if (dName === 'Valetine' || dName === 'valentinb') dName = 'Bembeleza Valentin';
+    
+    let driverSublabel = isLoaded ? dName + ' (Loaded)' : (isTechOnboard ? 'Tech Onboard' : (isApproved && !isRejected ? 'Awaiting Dispatch' : '-'));
+
+    const milestoneHtml = `
+    <div class="row">
+        <div class="col-12">
+            <div class="milestone-tracker">
+                <div class="milestone-tracker-fill" style="width: ${fillPercent}%;"></div>
+                
+                <div class="milestone-step ${stepSubmittedClass}">
+                    <div class="milestone-icon"><i class="fas fa-file-import"></i></div>
+                    <div class="milestone-label">Submitted</div>
+                    <div class="milestone-sublabel">${escapeHtml(batch.submitted_by || '-')}</div>
+                </div>
+                
+                <div class="milestone-step ${stepApprovedClass}">
+                    <div class="milestone-icon"><i class="fas fa-clipboard-check"></i></div>
+                    <div class="milestone-label">Approved</div>
+                    <div class="milestone-sublabel">${isRejected ? 'Rejected' : (isApproved ? 'Approved' : 'Awaiting Approval')}</div>
+                </div>
+                
+                <div class="milestone-step ${stepLoadedClass}">
+                    <div class="milestone-icon"><i class="fas fa-truck-loading"></i></div>
+                    <div class="milestone-label">Driver Loaded</div>
+                    <div class="milestone-sublabel">${escapeHtml(driverSublabel)}</div>
+                </div>
+                
+                <div class="milestone-step ${stepCompletedClass}">
+                    <div class="milestone-icon"><i class="fas fa-flag-checkered"></i></div>
+                    <div class="milestone-label">Completed</div>
+                    <div class="milestone-sublabel">${isCompleted ? 'Delivered' : '-'}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <hr style="opacity: 0.1; margin-top: 0; margin-bottom: 1.5rem;">
+    `;
+
     const html = `
+        ${milestoneHtml}
         <div class="row">
             <div class="col-md-6">
                 <div class="detail-section">
@@ -1108,6 +1353,10 @@ function displayBatchDetails(batch) {
                         <div class="detail-item">
                             <div class="detail-label">Total Items</div>
                             <div class="detail-value">${batch.item_count || 0} items (${batch.total_quantity || 0} units)</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Driver</div>
+                            <div class="detail-value">${escapeHtml(batch.transport_driver || 'N/A')}</div>
                         </div>
                     </div>
                 </div>
@@ -1154,7 +1403,16 @@ function displayBatchDetails(batch) {
                     <div class="detail-grid">
                         <div class="detail-item">
                             <div class="detail-label">Job Sheet</div>
-                            <div class="detail-value">${escapeHtml(batch.job_sheet || 'N/A')}</div>
+                            <div class="detail-value">
+                                ${escapeHtml(batch.job_sheet || 'N/A')}
+                                ${batch.jobsheet_file ? `
+                                    <div class="mt-2">
+                                        <a href="${escapeHtml(batch.jobsheet_file)}" target="_blank" class="btn btn-xs btn-outline-primary py-1 px-2 fw-bold" style="font-size: 0.75rem; border-radius: 6px;">
+                                            <i class="fas fa-file-download me-1"></i> View Uploaded Jobsheet
+                                        </a>
+                                    </div>
+                                ` : ''}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1217,6 +1475,15 @@ function displayBatchDetails(batch) {
             </a>
         `);
         footer.prepend(downloadBtn);
+        
+        if (['stock_to_stock', 'stock_to_venue_transport'].includes(batch.movement_type)) {
+            const gatePassBtn = $(`
+                <a href="gate_pass.php?batch_id=${encodeURIComponent(batch.batch_id)}" class="btn btn-warning action-btn" target="_blank">
+                    <i class="fas fa-ticket-alt me-1"></i>Gate Pass
+                </a>
+            `);
+            footer.prepend(gatePassBtn);
+        }
     }
 }
 
@@ -1276,6 +1543,11 @@ function updateTimelineView(timelineData) {
                                     <a href="batch_report.php?batch_id=${encodeURIComponent(item.batch_id)}&download=1" class="btn btn-xs btn-outline-success py-0 px-2" title="Download Report" target="_blank" style="font-size: 0.7rem;">
                                         <i class="fas fa-file-pdf"></i> Report
                                     </a>
+                                    ${['stock_to_stock', 'stock_to_venue_transport'].includes(item.movement_type) ? `
+                                    <a href="gate_pass.php?batch_id=${encodeURIComponent(item.batch_id)}&download=1" class="btn btn-xs btn-outline-warning py-0 px-2" title="Download Gate Pass" target="_blank" style="font-size: 0.7rem;">
+                                        <i class="fas fa-ticket-alt"></i> Gate Pass
+                                    </a>
+                                    ` : ''}
                                 ` : ''}
                             </div>
                         </div>
@@ -1344,6 +1616,11 @@ function updateCardsView(batches) {
                                 <a href="batch_report.php?batch_id=${encodeURIComponent(batch.batch_id)}&download=1" class="btn btn-sm btn-success" target="_blank">
                                     <i class="fas fa-file-pdf me-1"></i>Report
                                 </a>
+                                ${['stock_to_stock', 'stock_to_venue_transport'].includes(batch.movement_type) ? `
+                                <a href="gate_pass.php?batch_id=${encodeURIComponent(batch.batch_id)}&download=1" class="btn btn-sm btn-warning" target="_blank">
+                                    <i class="fas fa-ticket-alt me-1"></i>Gate Pass
+                                </a>
+                                ` : ''}
                             ` : ''}
                         </div>
                     </div>
@@ -1457,7 +1734,19 @@ function processBatchAction(batchId, action, notes) {
                     text: response.message,
                     timer: 2000
                 });
-                bootstrap.Modal.getInstance(document.getElementById('batchDetailModal')).hide();
+                
+                // Properly hide modal and clean up backdrops
+                const modalEl = document.getElementById('batchDetailModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+                
+                setTimeout(() => {
+                    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+                    document.body.classList.remove('modal-open');
+                    document.body.style.paddingRight = '';
+                    document.body.style.overflow = '';
+                }, 300);
+                
                 refreshData();
             } else {
                 Swal.fire('Error', response.message || 'Action failed', 'error');
@@ -1492,6 +1781,16 @@ document.addEventListener('keydown', function(event) {
         hideLogoutToast();
     }
 });
+
+// Real-time Auto-Refresh
+setInterval(() => {
+    if (!$('#batchDetailModal').hasClass('show')) {
+        loadBatches(true); // Silently refresh the list
+    } else if (currentBatchId) {
+        // If viewing a batch, silently refresh its status
+        viewBatchDetails(currentBatchId, true);
+    }
+}, 10000);
 
     </script>
 </body>

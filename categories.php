@@ -439,6 +439,8 @@ require_once 'views/partials/header.php';
     </div>
 </div>
 
+<?php require_once 'views/partials/footer.php'; ?>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Edit Category
@@ -515,5 +517,3 @@ require_once 'views/partials/header.php';
         padding: 0.25rem 0.5rem;
     }
 </style>
-
-<?php require_once 'views/partials/footer.php'; ?>

@@ -7,7 +7,7 @@
 
 // Define BASE_URL if not defined
 if (!defined('BASE_URL')) {
-    define('BASE_URL', '/');
+    define('BASE_URL', '/ability_app_main/');
 }
 
 
@@ -19,11 +19,20 @@ if (!defined('BASE_URL')) {
 
 // Define BASE_URL if not defined
 if (!defined('BASE_URL')) {
-    define('BASE_URL', '/');
+    define('BASE_URL', '/ability_app_main/');
 }
 
 // Check if user is logged in - FIXED VERSION
 // Check if user is logged in - FIXED VERSION
+if (!function_exists('sanitizeInput')) {
+    function sanitizeInput($data) {
+        if (is_array($data)) {
+            return array_map('sanitizeInput', $data);
+        }
+        return htmlspecialchars(strip_tags(trim($data)), ENT_QUOTES, 'UTF-8');
+    }
+}
+
 function isLoggedIn()
 {
     // Session should already be started in bootstrap.php

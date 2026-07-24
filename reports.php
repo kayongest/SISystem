@@ -115,7 +115,7 @@ try {
                          SUM(CASE WHEN i.status = 'available' THEN 1 ELSE 0 END) as available_count,
                          SUM(CASE WHEN i.status = 'in_use' THEN 1 ELSE 0 END) as in_use_count
                          FROM items i 
-                         LEFT JOIN categories c ON i.category = c.code OR i.category = c.name
+                         LEFT JOIN categories c ON i.category = CAST(c.id AS CHAR) OR i.category = c.name
                          GROUP BY category_name
                          ORDER BY count DESC LIMIT 10");
     $statistics['items_by_category'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -123,9 +123,9 @@ try {
     // Items by department
     $stmt = $pdo->query("SELECT d.name as department_name, COUNT(*) as count 
                          FROM items i 
-                         LEFT JOIN departments d ON i.department = d.code 
+                         LEFT JOIN departments d ON COALESCE(NULLIF(i.department, ''), i.category) = CAST(d.id AS CHAR) OR COALESCE(NULLIF(i.department, ''), i.category) = d.code OR COALESCE(NULLIF(i.department, ''), i.category) = d.name 
                          WHERE d.name IS NOT NULL
-                         GROUP BY i.department 
+                         GROUP BY d.name 
                          ORDER BY count DESC LIMIT 10");
     $statistics['items_by_department'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -194,6 +194,118 @@ try {
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM scan_logs WHERE scan_timestamp >= :start_date");
     $stmt->execute([':start_date' => $start_date]);
     $statistics['recent_scans_count'] = $stmt->fetchColumn();
+
+    // 6. EQUIPMENT UTILIZATION & ROI
+    if ($report_type === 'utilization') {
+        // Most Used Items
+        $stmt = $pdo->prepare("SELECT i.item_name, i.serial_number, i.status, COUNT(bi.id) as utilization_count 
+                               FROM items i
+                               LEFT JOIN batch_items bi ON i.id = bi.item_id AND bi.created_at BETWEEN :start_date AND :end_date
+                               WHERE i.status NOT IN ('retired', 'damaged', 'lost')
+                               GROUP BY i.id
+                               ORDER BY utilization_count DESC LIMIT 10");
+        $stmt->execute([':start_date' => $start_date . ' 00:00:00', ':end_date' => $end_date . ' 23:59:59']);
+        $statistics['most_used_items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Least Used Items (Idle)
+        $stmt = $pdo->prepare("SELECT i.item_name, i.serial_number, i.status, COUNT(bi.id) as utilization_count 
+                               FROM items i
+                               LEFT JOIN batch_items bi ON i.id = bi.item_id AND bi.created_at BETWEEN :start_date AND :end_date
+                               WHERE i.status NOT IN ('retired', 'damaged', 'lost')
+                               GROUP BY i.id
+                               ORDER BY utilization_count ASC, i.item_name ASC LIMIT 15");
+        $stmt->execute([':start_date' => $start_date . ' 00:00:00', ':end_date' => $end_date . ' 23:59:59']);
+        $statistics['least_used_items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Overall Deployment Rate
+        $stmt = $pdo->query("SELECT status, COUNT(*) as count FROM items WHERE status NOT IN ('retired', 'damaged', 'lost') GROUP BY status");
+        $statistics['deployment_status'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // 7. LOCATION & VENUE HEATMAPS
+    if ($report_type === 'locations') {
+        // Top Destinations (Venue Heatmap)
+        $stmt = $pdo->prepare("SELECT destination_name, COUNT(*) as movement_count 
+                               FROM stock_movements 
+                               WHERE destination_name IS NOT NULL AND destination_name != '' AND created_at BETWEEN :start_date AND :end_date
+                               GROUP BY destination_name
+                               ORDER BY movement_count DESC LIMIT 15");
+        $stmt->execute([':start_date' => $start_date . ' 00:00:00', ':end_date' => $end_date . ' 23:59:59']);
+        $statistics['top_destinations'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Current Stock Distribution
+        $stmt = $pdo->query("SELECT COALESCE(NULLIF(stock_location, ''), 'Unassigned') as stock_location, COUNT(*) as count 
+                             FROM items 
+                             WHERE status NOT IN ('retired', 'damaged', 'lost') 
+                             GROUP BY stock_location
+                             ORDER BY count DESC");
+        $statistics['stock_distribution'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // 8. LOGISTICS & TRANSPORT ANALYTICS
+    if ($report_type === 'logistics') {
+        // Top Drivers
+        $stmt = $pdo->prepare("SELECT transport_driver, COUNT(*) as delivery_count 
+                               FROM stock_movements 
+                               WHERE transport_driver IS NOT NULL AND transport_driver != '' AND created_at BETWEEN :start_date AND :end_date
+                               GROUP BY transport_driver
+                               ORDER BY delivery_count DESC LIMIT 10");
+        $stmt->execute([':start_date' => $start_date . ' 00:00:00', ':end_date' => $end_date . ' 23:59:59']);
+        $statistics['top_drivers'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Top Vehicles
+        $stmt = $pdo->prepare("SELECT transport_vehicle_number, transport_vehicle_type, COUNT(*) as run_count 
+                               FROM stock_movements 
+                               WHERE transport_vehicle_number IS NOT NULL AND transport_vehicle_number != '' AND created_at BETWEEN :start_date AND :end_date
+                               GROUP BY transport_vehicle_number, transport_vehicle_type
+                               ORDER BY run_count DESC LIMIT 10");
+        $stmt->execute([':start_date' => $start_date . ' 00:00:00', ':end_date' => $end_date . ' 23:59:59']);
+        $statistics['top_vehicles'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // 9. OVERDUE & MISSING EQUIPMENT ALERTS
+    if ($report_type === 'alerts') {
+        // Overdue Equipment
+        $stmt = $pdo->prepare("SELECT i.id, i.item_name, i.serial_number, s.expected_return, s.to_location, s.transport_user 
+                               FROM items i 
+                               JOIN scan_logs s ON i.id = s.item_id 
+                               WHERE i.status = 'in_use' AND s.scan_type = 'check_out' 
+                               AND s.expected_return IS NOT NULL AND s.expected_return < NOW() 
+                               AND s.id = (SELECT MAX(id) FROM scan_logs WHERE item_id = i.id)
+                               ORDER BY s.expected_return ASC");
+        $stmt->execute();
+        $statistics['overdue_items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Unaudited/Missing Equipment
+        $stmt = $pdo->prepare("SELECT id, item_name, serial_number, last_scanned, status 
+                               FROM items 
+                               WHERE (last_scanned < DATE_SUB(NOW(), INTERVAL 6 MONTH) OR last_scanned IS NULL) 
+                               AND status != 'retired'
+                               ORDER BY last_scanned ASC LIMIT 50");
+        $stmt->execute();
+        $statistics['unaudited_items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // 10. MAINTENANCE & RELIABILITY TRACKING
+    if ($report_type === 'maintenance_report') {
+        // Most Frequently Repaired Items
+        $stmt = $pdo->prepare("SELECT i.id, i.item_name, i.serial_number, i.category, i.condition, COUNT(s.id) as repair_count 
+                               FROM items i 
+                               JOIN scan_logs s ON i.id = s.item_id 
+                               WHERE s.scan_type = 'maintenance' AND s.scan_date BETWEEN :start_date AND :end_date
+                               GROUP BY i.id, i.item_name, i.serial_number, i.category, i.condition
+                               ORDER BY repair_count DESC LIMIT 50");
+        $stmt->execute([':start_date' => $start_date . ' 00:00:00', ':end_date' => $end_date . ' 23:59:59']);
+        $statistics['frequent_repairs'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Currently in Maintenance
+        $stmt = $pdo->prepare("SELECT id, item_name, serial_number, category, condition 
+                               FROM items 
+                               WHERE status = 'maintenance'
+                               ORDER BY item_name ASC");
+        $stmt->execute();
+        $statistics['current_maintenance'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 } catch (Exception $e) {
     $error = "Error loading statistics: " . $e->getMessage();
     error_log($error);
@@ -212,9 +324,9 @@ require_once 'views/partials/header.php';
             <p class="text-muted small mb-0">Comprehensive overview of inventory, movements, and system activity</p>
         </div>
         <div class="d-flex gap-2">
-            <button class="btn btn-outline-primary" onclick="exportToExcel()">
-                <i class="fas fa-file-excel me-2"></i>Excel
-            </button>
+            <a href="export_reports.php?report_type=<?php echo htmlspecialchars($report_type); ?>&start_date=<?php echo htmlspecialchars($start_date); ?>&end_date=<?php echo htmlspecialchars($end_date); ?>" class="btn btn-outline-primary">
+                <i class="fas fa-file-excel me-2"></i>CSV/Excel
+            </a>
             <button class="btn btn-primary shadow-sm" onclick="exportToPDF()">
                 <i class="fas fa-file-pdf me-2"></i>Export PDF
             </button>
@@ -329,6 +441,11 @@ require_once 'views/partials/header.php';
                         <option value="inventory" <?php echo $report_type === 'inventory' ? 'selected' : ''; ?>>Inventory & Categories</option>
                         <option value="movements" <?php echo $report_type === 'movements' ? 'selected' : ''; ?>>Movements & Batches</option>
                         <option value="performance" <?php echo $report_type === 'performance' ? 'selected' : ''; ?>>User Performance</option>
+                        <option value="utilization" <?php echo $report_type === 'utilization' ? 'selected' : ''; ?>>Equipment Utilization & ROI</option>
+                        <option value="locations" <?php echo $report_type === 'locations' ? 'selected' : ''; ?>>Location & Venue Heatmaps</option>
+                        <option value="logistics" <?php echo $report_type === 'logistics' ? 'selected' : ''; ?>>Logistics & Transport Analytics</option>
+                        <option value="alerts" <?php echo $report_type === 'alerts' ? 'selected' : ''; ?>>Overdue & Missing Alerts</option>
+                        <option value="maintenance_report" <?php echo $report_type === 'maintenance_report' ? 'selected' : ''; ?>>Maintenance & Reliability</option>
                     </select>
                 </div>
                 <div class="col-md-2">
@@ -753,6 +870,530 @@ require_once 'views/partials/header.php';
                     </div>
                 </div>
             </div>
+        <?php elseif ($report_type === 'utilization'): ?>
+            <!-- EQUIPMENT UTILIZATION & ROI VIEW -->
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Top 10 Most Utilized Equipment</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="bg-light">
+                                    <tr class="small text-muted text-uppercase">
+                                        <th class="ps-4">Item Name</th>
+                                        <th>Serial Number</th>
+                                        <th class="text-center">Total Movements</th>
+                                        <th class="pe-4 text-end">Current Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($statistics['most_used_items'])): ?>
+                                        <tr><td colspan="4" class="text-center py-4 text-muted">No utilization data available</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach ($statistics['most_used_items'] as $item): ?>
+                                            <tr>
+                                                <td class="ps-4 fw-bold"><?php echo htmlspecialchars($item['item_name']); ?></td>
+                                                <td><code class="text-primary"><?php echo htmlspecialchars($item['serial_number']); ?></code></td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-success rounded-pill px-3"><?php echo $item['utilization_count']; ?></span>
+                                                </td>
+                                                <td class="pe-4 text-end">
+                                                    <?php 
+                                                        $badgeClass = 'bg-secondary';
+                                                        if ($item['status'] === 'available') $badgeClass = 'bg-success';
+                                                        else if ($item['status'] === 'in_use') $badgeClass = 'bg-primary';
+                                                        else if ($item['status'] === 'maintenance') $badgeClass = 'bg-warning text-dark';
+                                                    ?>
+                                                    <span class="badge <?php echo $badgeClass; ?>"><?php echo ucfirst(str_replace('_', ' ', $item['status'])); ?></span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-danger">Least Used / Idle Equipment</h6>
+                        <span class="badge bg-danger-soft text-danger small">Action Recommended</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="bg-light">
+                                    <tr class="small text-muted text-uppercase">
+                                        <th class="ps-4">Item Name</th>
+                                        <th>Serial Number</th>
+                                        <th class="text-center">Movements</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($statistics['least_used_items'])): ?>
+                                        <tr><td colspan="3" class="text-center py-4 text-muted">All equipment is actively utilized.</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach ($statistics['least_used_items'] as $item): ?>
+                                            <tr>
+                                                <td class="ps-4 text-danger fw-bold"><?php echo htmlspecialchars($item['item_name']); ?></td>
+                                                <td><code class="text-secondary"><?php echo htmlspecialchars($item['serial_number']); ?></code></td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-light text-danger border px-3"><?php echo $item['utilization_count']; ?></span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Current Deployment Rate</h6>
+                    </div>
+                    <div class="card-body">
+                        <?php 
+                            $total_active = 0;
+                            $in_use = 0;
+                            foreach ($statistics['deployment_status'] as $stat) {
+                                $total_active += $stat['count'];
+                                if ($stat['status'] === 'in_use') {
+                                    $in_use = $stat['count'];
+                                }
+                            }
+                            $deploy_rate = $total_active > 0 ? round(($in_use / $total_active) * 100) : 0;
+                            $color = $deploy_rate > 75 ? 'danger' : ($deploy_rate > 50 ? 'warning' : 'success');
+                        ?>
+                        <div class="text-center py-4 mb-4">
+                            <h1 class="display-3 fw-bold text-<?php echo $color; ?>"><?php echo $deploy_rate; ?>%</h1>
+                            <p class="text-muted text-uppercase small font-weight-bold tracking-wide">of total inventory deployed</p>
+                        </div>
+                        
+                        <h6 class="small font-weight-bold mb-3">Inventory Breakdown</h6>
+                        <?php foreach ($statistics['deployment_status'] as $stat): 
+                            $percent = $total_active > 0 ? ($stat['count'] / $total_active * 100) : 0;
+                            $statColor = 'bg-secondary';
+                            if ($stat['status'] === 'available') $statColor = 'bg-success';
+                            if ($stat['status'] === 'in_use') $statColor = 'bg-primary';
+                            if ($stat['status'] === 'maintenance') $statColor = 'bg-warning';
+                        ?>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1 small">
+                                    <span class="fw-bold text-capitalize"><?php echo str_replace('_', ' ', $stat['status']); ?></span>
+                                    <span><?php echo $stat['count']; ?> items</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar <?php echo $statColor; ?>" role="progressbar" style="width: <?php echo $percent; ?>%"></div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        <?php elseif ($report_type === 'locations'): ?>
+            <!-- LOCATION & VENUE HEATMAPS VIEW -->
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Top Venues & Destinations</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="bg-light">
+                                    <tr class="small text-muted text-uppercase">
+                                        <th class="ps-4">Destination Name</th>
+                                        <th class="text-center pe-4">Total Deliveries/Movements</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($statistics['top_destinations'])): ?>
+                                        <tr><td colspan="2" class="text-center py-4 text-muted">No venue movement data available for this period.</td></tr>
+                                    <?php else: ?>
+                                        <?php 
+                                            // Find max for progress bars
+                                            $max_movements = 0;
+                                            foreach ($statistics['top_destinations'] as $dest) {
+                                                if ($dest['movement_count'] > $max_movements) $max_movements = $dest['movement_count'];
+                                            }
+                                        ?>
+                                        <?php foreach ($statistics['top_destinations'] as $dest): 
+                                            $percent = $max_movements > 0 ? ($dest['movement_count'] / $max_movements * 100) : 0;
+                                        ?>
+                                            <tr>
+                                                <td class="ps-4 w-50">
+                                                    <span class="fw-bold"><?php echo htmlspecialchars($dest['destination_name']); ?></span>
+                                                </td>
+                                                <td class="pe-4">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="badge bg-primary rounded-pill me-3" style="min-width: 40px;"><?php echo $dest['movement_count']; ?></span>
+                                                        <div class="progress flex-grow-1" style="height: 8px;">
+                                                            <div class="progress-bar bg-info" role="progressbar" style="width: <?php echo $percent; ?>%"></div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Current Stock Distribution</h6>
+                    </div>
+                    <div class="card-body">
+                        <?php if (empty($statistics['stock_distribution'])): ?>
+                            <p class="text-muted text-center">No active stock locations.</p>
+                        <?php else: ?>
+                            <?php 
+                                $total_stock = 0;
+                                foreach ($statistics['stock_distribution'] as $loc) {
+                                    $total_stock += $loc['count'];
+                                }
+                            ?>
+                            <div class="text-center py-2 mb-4">
+                                <h2 class="display-5 fw-bold text-dark"><?php echo $total_stock; ?></h2>
+                                <p class="text-muted text-uppercase small font-weight-bold tracking-wide">Total Active Items</p>
+                            </div>
+                            
+                            <h6 class="small font-weight-bold mb-3 text-muted">Location Breakdown</h6>
+                            <ul class="list-group list-group-flush">
+                            <?php foreach ($statistics['stock_distribution'] as $loc): 
+                                $percent = $total_stock > 0 ? ($loc['count'] / $total_stock * 100) : 0;
+                            ?>
+                                <li class="list-group-item px-0 py-3 border-bottom border-light">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="fw-bold <?php echo $loc['stock_location'] === 'Unassigned' ? 'text-danger' : 'text-dark'; ?>">
+                                            <?php echo htmlspecialchars($loc['stock_location']); ?>
+                                        </span>
+                                        <span class="badge bg-light text-dark border"><?php echo $loc['count']; ?> items</span>
+                                    </div>
+                                    <div class="progress" style="height: 5px;">
+                                        <div class="progress-bar <?php echo $loc['stock_location'] === 'Unassigned' ? 'bg-danger' : 'bg-success'; ?>" role="progressbar" style="width: <?php echo $percent; ?>%"></div>
+                                    </div>
+                                </li>
+                            <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        <?php elseif ($report_type === 'logistics'): ?>
+            <!-- LOGISTICS & TRANSPORT ANALYTICS VIEW -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Top Drivers</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="bg-light">
+                                    <tr class="small text-muted text-uppercase">
+                                        <th class="ps-4">Driver Name</th>
+                                        <th class="text-center pe-4">Total Deliveries/Runs</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($statistics['top_drivers'])): ?>
+                                        <tr><td colspan="2" class="text-center py-4 text-muted">No driver data available for this period.</td></tr>
+                                    <?php else: ?>
+                                        <?php 
+                                            // Find max for progress bars
+                                            $max_deliveries = 0;
+                                            foreach ($statistics['top_drivers'] as $driver) {
+                                                if ($driver['delivery_count'] > $max_deliveries) $max_deliveries = $driver['delivery_count'];
+                                            }
+                                        ?>
+                                        <?php foreach ($statistics['top_drivers'] as $driver): 
+                                            $percent = $max_deliveries > 0 ? ($driver['delivery_count'] / $max_deliveries * 100) : 0;
+                                        ?>
+                                            <tr>
+                                                <td class="ps-4 w-50">
+                                                    <span class="fw-bold"><i class="bi bi-person-badge text-secondary me-2"></i> <?php echo htmlspecialchars($driver['transport_driver']); ?></span>
+                                                </td>
+                                                <td class="pe-4">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="badge bg-success rounded-pill me-3" style="min-width: 40px;"><?php echo $driver['delivery_count']; ?></span>
+                                                        <div class="progress flex-grow-1" style="height: 8px;">
+                                                            <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo $percent; ?>%"></div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Top Vehicles Used</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="bg-light">
+                                    <tr class="small text-muted text-uppercase">
+                                        <th class="ps-4">Vehicle Plate</th>
+                                        <th>Type</th>
+                                        <th class="text-center pe-4">Total Runs</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($statistics['top_vehicles'])): ?>
+                                        <tr><td colspan="3" class="text-center py-4 text-muted">No vehicle data available for this period.</td></tr>
+                                    <?php else: ?>
+                                        <?php 
+                                            // Find max for progress bars
+                                            $max_runs = 0;
+                                            foreach ($statistics['top_vehicles'] as $vehicle) {
+                                                if ($vehicle['run_count'] > $max_runs) $max_runs = $vehicle['run_count'];
+                                            }
+                                        ?>
+                                        <?php foreach ($statistics['top_vehicles'] as $vehicle): 
+                                            $percent = $max_runs > 0 ? ($vehicle['run_count'] / $max_runs * 100) : 0;
+                                        ?>
+                                            <tr>
+                                                <td class="ps-4">
+                                                    <code class="text-dark border bg-light px-2 py-1 rounded"><i class="bi bi-truck text-secondary me-1"></i> <?php echo htmlspecialchars($vehicle['transport_vehicle_number']); ?></code>
+                                                </td>
+                                                <td><span class="text-muted small text-capitalize"><?php echo htmlspecialchars($vehicle['transport_vehicle_type'] ?: 'Unknown'); ?></span></td>
+                                                <td class="pe-4">
+                                                    <div class="d-flex align-items-center justify-content-end">
+                                                        <div class="progress flex-grow-1 me-3" style="height: 6px; max-width: 100px;">
+                                                            <div class="progress-bar bg-warning" role="progressbar" style="width: <?php echo $percent; ?>%"></div>
+                                                        </div>
+                                                        <span class="badge bg-dark rounded-pill" style="min-width: 30px;"><?php echo $vehicle['run_count']; ?></span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php elseif ($report_type === 'alerts'): ?>
+            <!-- ALERTS VIEW -->
+            <div class="col-lg-12">
+                <div class="card border-0 shadow-sm mb-4 border-danger border-start border-5">
+                    <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="m-0 font-weight-bold text-danger d-inline"><i class="bi bi-exclamation-triangle-fill me-2"></i> Overdue Equipment</h6>
+                            <span class="badge bg-danger ms-3 rounded-pill"><?php echo count($statistics['overdue_items'] ?? []); ?></span>
+                        </div>
+                        <div style="max-width: 250px;">
+                            <input type="text" id="search-overdue" class="form-control form-control-sm" placeholder="Search overdue...">
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="table-overdue">
+                                <thead class="bg-light">
+                                    <tr class="small text-muted text-uppercase">
+                                        <th class="ps-4">Item Name</th>
+                                        <th>Serial Number</th>
+                                        <th>Location</th>
+                                        <th>With User</th>
+                                        <th class="pe-4 text-end">Expected Return</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($statistics['overdue_items'])): ?>
+                                        <tr><td colspan="5" class="text-center py-4 text-success"><i class="bi bi-check-circle-fill me-2"></i> No overdue equipment found!</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach ($statistics['overdue_items'] as $item): ?>
+                                            <tr class="table-danger">
+                                                <td class="ps-4 fw-bold text-dark"><?php echo htmlspecialchars($item['item_name']); ?></td>
+                                                <td><code><?php echo htmlspecialchars($item['serial_number']); ?></code></td>
+                                                <td><?php echo htmlspecialchars($item['to_location'] ?: 'Unknown'); ?></td>
+                                                <td><i class="bi bi-person text-secondary me-1"></i><?php echo htmlspecialchars($item['transport_user'] ?: 'Unknown'); ?></td>
+                                                <td class="pe-4 text-end text-danger fw-bold">
+                                                    <?php 
+                                                        $expected = new DateTime($item['expected_return']);
+                                                        $now = new DateTime();
+                                                        $diff = $now->diff($expected);
+                                                        echo $expected->format('M j, Y') . " <br><small class='text-muted'>(" . $diff->days . " days late)</small>"; 
+                                                    ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                            <div id="pagination-overdue" class="pb-3"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-12">
+                <div class="card border-0 shadow-sm mb-4 border-warning border-start border-5">
+                    <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="m-0 font-weight-bold text-warning d-inline"><i class="bi bi-search me-2"></i> Unaudited & Missing Equipment (6+ Months)</h6>
+                            <span class="badge bg-warning text-dark ms-3 rounded-pill"><?php echo count($statistics['unaudited_items'] ?? []); ?></span>
+                        </div>
+                        <div style="max-width: 250px;">
+                            <input type="text" id="search-missing" class="form-control form-control-sm" placeholder="Search missing...">
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="table-missing">
+                                <thead class="bg-light">
+                                    <tr class="small text-muted text-uppercase">
+                                        <th class="ps-4">Item Name</th>
+                                        <th>Serial Number</th>
+                                        <th>Current Status</th>
+                                        <th class="pe-4 text-end">Last Scanned Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($statistics['unaudited_items'])): ?>
+                                        <tr><td colspan="4" class="text-center py-4 text-success"><i class="bi bi-check-circle-fill me-2"></i> All active equipment has been audited recently!</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach ($statistics['unaudited_items'] as $item): ?>
+                                            <tr>
+                                                <td class="ps-4 fw-bold text-dark"><?php echo htmlspecialchars($item['item_name']); ?></td>
+                                                <td><code><?php echo htmlspecialchars($item['serial_number']); ?></code></td>
+                                                <td>
+                                                    <span class="badge bg-<?php echo $item['status'] === 'available' ? 'success' : ($item['status'] === 'in_use' ? 'primary' : 'warning'); ?>">
+                                                        <?php echo htmlspecialchars($item['status']); ?>
+                                                    </span>
+                                                </td>
+                                                <td class="pe-4 text-end">
+                                                    <?php if (empty($item['last_scanned'])): ?>
+                                                        <span class="text-danger fw-bold"><i class="bi bi-x-circle me-1"></i> Never Scanned</span>
+                                                    <?php else: ?>
+                                                        <span class="text-muted"><i class="bi bi-clock me-1"></i> <?php echo date('M j, Y', strtotime($item['last_scanned'])); ?></span>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                            <div id="pagination-missing" class="pb-3"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php elseif ($report_type === 'maintenance_report'): ?>
+            <!-- MAINTENANCE VIEW -->
+            <div class="col-lg-12">
+                <div class="card border-0 shadow-sm mb-4 border-info border-start border-5">
+                    <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="m-0 font-weight-bold text-info d-inline"><i class="bi bi-tools me-2"></i> Most Frequently Repaired Items</h6>
+                        </div>
+                        <div style="max-width: 250px;">
+                            <input type="text" id="search-repairs" class="form-control form-control-sm" placeholder="Search items...">
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="table-repairs">
+                                <thead class="bg-light">
+                                    <tr class="small text-muted text-uppercase">
+                                        <th class="ps-4">Item Name</th>
+                                        <th>Serial Number</th>
+                                        <th>Category</th>
+                                        <th>Condition</th>
+                                        <th class="pe-4 text-end">Total Maintenance Scans</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($statistics['frequent_repairs'])): ?>
+                                        <tr><td colspan="5" class="text-center py-4 text-success"><i class="bi bi-check-circle-fill me-2"></i> No maintenance records found for this period!</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach ($statistics['frequent_repairs'] as $item): ?>
+                                            <tr>
+                                                <td class="ps-4 fw-bold text-dark"><?php echo htmlspecialchars($item['item_name']); ?></td>
+                                                <td><code><?php echo htmlspecialchars($item['serial_number']); ?></code></td>
+                                                <td><?php echo htmlspecialchars($item['category'] ?: 'Uncategorized'); ?></td>
+                                                <td><?php echo htmlspecialchars($item['condition'] ?: 'Unknown'); ?></td>
+                                                <td class="pe-4 text-end">
+                                                    <span class="badge bg-danger rounded-pill px-3 py-2"><?php echo htmlspecialchars($item['repair_count']); ?> Repairs</span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                            <div id="pagination-repairs" class="pb-3"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-12">
+                <div class="card border-0 shadow-sm mb-4 border-secondary border-start border-5">
+                    <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="m-0 font-weight-bold text-secondary d-inline"><i class="bi bi-wrench-adjustable-circle-fill me-2"></i> Currently in Maintenance</h6>
+                            <span class="badge bg-secondary ms-3 rounded-pill"><?php echo count($statistics['current_maintenance'] ?? []); ?></span>
+                        </div>
+                        <div style="max-width: 250px;">
+                            <input type="text" id="search-current-maint" class="form-control form-control-sm" placeholder="Search items...">
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="table-current-maint">
+                                <thead class="bg-light">
+                                    <tr class="small text-muted text-uppercase">
+                                        <th class="ps-4">Item Name</th>
+                                        <th>Serial Number</th>
+                                        <th>Category</th>
+                                        <th>Condition</th>
+                                        <th class="pe-4 text-end">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($statistics['current_maintenance'])): ?>
+                                        <tr><td colspan="5" class="text-center py-4 text-success"><i class="bi bi-check-circle-fill me-2"></i> All equipment is currently operational!</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach ($statistics['current_maintenance'] as $item): ?>
+                                            <tr>
+                                                <td class="ps-4 fw-bold text-dark"><?php echo htmlspecialchars($item['item_name']); ?></td>
+                                                <td><code><?php echo htmlspecialchars($item['serial_number']); ?></code></td>
+                                                <td><?php echo htmlspecialchars($item['category'] ?: 'Uncategorized'); ?></td>
+                                                <td><?php echo htmlspecialchars($item['condition'] ?: 'Unknown'); ?></td>
+                                                <td class="pe-4 text-end">
+                                                    <span class="badge bg-secondary">In Maintenance</span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                            <div id="pagination-current-maint" class="pb-3"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         <?php endif; ?>
     </div>
 </div>
@@ -1098,5 +1739,89 @@ require_once 'views/partials/header.php';
         }
     }
 </style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const reportType = '<?php echo $report_type; ?>';
+        
+        if (reportType === 'alerts' || reportType === 'maintenance_report') {
+            function initTable(tableId, searchInputId, paginationContainerId) {
+                const table = document.getElementById(tableId);
+                if (!table) return;
+                
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                if (rows.length === 0 || (rows.length === 1 && rows[0].querySelector('.text-success'))) return;
+                
+                const searchInput = document.getElementById(searchInputId);
+                const pagination = document.getElementById(paginationContainerId);
+                const itemsPerPage = 5;
+                let currentPage = 1;
+                let filteredRows = [...rows];
+                
+                function displayTable() {
+                    tbody.innerHTML = '';
+                    const start = (currentPage - 1) * itemsPerPage;
+                    const end = start + itemsPerPage;
+                    const paginatedRows = filteredRows.slice(start, end);
+                    
+                    if (filteredRows.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">No matching items found.</td></tr>';
+                    } else {
+                        paginatedRows.forEach(row => tbody.appendChild(row));
+                    }
+                    updatePagination();
+                }
+                
+                function updatePagination() {
+                    pagination.innerHTML = '';
+                    const pageCount = Math.ceil(filteredRows.length / itemsPerPage);
+                    
+                    const nav = document.createElement('nav');
+                    const ul = document.createElement('ul');
+                    ul.className = 'pagination pagination-sm justify-content-center mb-0 mt-3';
+                    
+                    // Show at least page 1 even if empty
+                    const displayCount = Math.max(1, pageCount);
+                    
+                    for (let i = 1; i <= displayCount; i++) {
+                        const li = document.createElement('li');
+                        li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+                        const a = document.createElement('a');
+                        a.className = 'page-link';
+                        a.href = '#';
+                        a.textContent = i;
+                        a.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            currentPage = i;
+                            displayTable();
+                        });
+                        li.appendChild(a);
+                        ul.appendChild(li);
+                    }
+                    nav.appendChild(ul);
+                    pagination.appendChild(nav);
+                }
+                
+                if (searchInput) {
+                    searchInput.addEventListener('input', function() {
+                        const term = this.value.toLowerCase();
+                        filteredRows = rows.filter(row => row.textContent.toLowerCase().includes(term));
+                        currentPage = 1;
+                        displayTable();
+                    });
+                }
+                
+                displayTable();
+            }
+            
+            initTable('table-overdue', 'search-overdue', 'pagination-overdue');
+            initTable('table-missing', 'search-missing', 'pagination-missing');
+        } else if (reportType === 'maintenance_report') {
+            initTable('table-repairs', 'search-repairs', 'pagination-repairs');
+            initTable('table-current-maint', 'search-current-maint', 'pagination-current-maint');
+        }
+    });
+</script>
 
 <?php require_once 'views/partials/footer.php'; ?>

@@ -193,6 +193,11 @@ function processImportBatch($sessionId, $batchSize) {
                     
                     $updateSql = "UPDATE items SET " . implode(', ', $updateFields) . " WHERE serial_number = ?";
                     $updateStmt = $conn->prepare($updateSql);
+                    
+                    if (!$updateStmt) {
+                        throw new Exception("Update prepare failed: " . $conn->error);
+                    }
+
                     $updateStmt->bind_param($types, ...$updateValues);
                     
                     if ($updateStmt->execute()) {
@@ -204,6 +209,8 @@ function processImportBatch($sessionId, $batchSize) {
                         }
                         
                         $session['log'][] = ['type' => 'success', 'message' => "Row $row: Updated existing item"];
+                    } else {
+                        throw new Exception("Update failed: " . $updateStmt->error);
                     }
                     
                     $updateStmt->close();
@@ -220,6 +227,11 @@ function processImportBatch($sessionId, $batchSize) {
                     
                     $insertSql = "INSERT INTO items (`" . implode('`,`', $fields) . "`, created_at) VALUES ($placeholders, NOW())";
                     $insertStmt = $conn->prepare($insertSql);
+                    
+                    if (!$insertStmt) {
+                        throw new Exception("Insert prepare failed: " . $conn->error . " SQL: " . $insertSql);
+                    }
+
                     $insertStmt->bind_param($types, ...$values);
                     
                     if ($insertStmt->execute()) {
@@ -230,6 +242,8 @@ function processImportBatch($sessionId, $batchSize) {
                         $session['qr_generated'] += generateQRCodeForItem($item_id, $itemData['item_name'], $itemData['serial_number'], $conn, $qrDir);
                         
                         $session['log'][] = ['type' => 'success', 'message' => "Row $row: Added new item"];
+                    } else {
+                        throw new Exception("Insert failed: " . $insertStmt->error);
                     }
                     
                     $insertStmt->close();
@@ -237,7 +251,7 @@ function processImportBatch($sessionId, $batchSize) {
                 
                 $checkStmt->close();
                 
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 $session['errors']++;
                 $session['log'][] = ['type' => 'error', 'message' => "Row $row: " . $e->getMessage()];
             }

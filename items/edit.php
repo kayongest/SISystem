@@ -366,6 +366,11 @@ require_once '../views/partials/header.php';
     </div>
 </div>
 
+<?php
+$db->close();
+require_once '../views/partials/footer.php';
+?>
+
 <script>
     $(document).ready(function() {
         let currentAccessories = <?php echo json_encode(array_column($current_accessories, 'id')); ?>;
@@ -539,8 +544,3 @@ require_once '../views/partials/header.php';
         });
     });
 </script>
-
-<?php
-$db->close();
-require_once '../views/partials/footer.php';
-?>

@@ -113,6 +113,7 @@ $roles = [
     'stock_controller' => 'Stock Controller',
     'tech_lead' => 'Tech Lead',
     'technician' => 'Technician',
+    'driver' => 'Driver',
     'user' => 'General User'
 ];
 
@@ -122,6 +123,7 @@ $role_badges = [
     'stock_controller' => 'bg-info',
     'tech_lead' => 'bg-primary',
     'technician' => 'bg-dark',
+    'driver' => 'bg-warning text-dark',
     'user' => 'bg-secondary'
 ];
 ?>
@@ -293,7 +295,7 @@ $role_badges = [
                     <button class="btn btn-light rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#userModal" onclick="resetForm()">
                         <i class="fas fa-plus-circle me-2 text-primary"></i>Create New User
                     </button>
-                    <a href="logout.php" class="btn btn-outline-light rounded-pill px-4 shadow-sm" onclick="showLogoutToast(event)">
+                    <a href="<?php echo BASE_URL; ?>logout.php" class="btn btn-outline-light rounded-pill px-4 shadow-sm" onclick="return confirm('Are you sure you want to logout?')">
                         <i class="fas fa-sign-out-alt me-2"></i>Logout
                     </a>
                 </div>
@@ -425,7 +427,16 @@ $role_badges = [
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Department</label>
-                                <input type="text" name="department" id="department" class="form-control" placeholder="e.g. Video, IT, Warehouse">
+                                <input class="form-control" list="departmentOptions" id="department" name="department" placeholder="Select or type department...">
+                                <datalist id="departmentOptions">
+                                    <option value="Warehouse">
+                                    <option value="Transport">
+                                    <option value="Video">
+                                    <option value="Audio">
+                                    <option value="Lighting">
+                                    <option value="IT">
+                                    <option value="Management">
+                                </datalist>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">System Role</label>
@@ -436,8 +447,8 @@ $role_badges = [
                                 </select>
                             </div>
                             <div class="col-md-6" id="techIdContainer">
-                                <label class="form-label">Technician ID (Staff ID)</label>
-                                <input type="text" name="technician_id" id="technician_id_field" class="form-control" placeholder="e.g. TECH001">
+                                <label class="form-label">Staff ID (System ID)</label>
+                                <input type="text" name="technician_id" id="technician_id_field" class="form-control" placeholder="e.g. TECH001" readonly>
                             </div>
                             <div class="col-md-12">
                                 <label class="form-label">Password <small id="passHelp" class="text-muted">(Leave empty to keep current during edit)</small></label>
@@ -489,7 +500,29 @@ $role_badges = [
             $('#userTypeContainer').show();
             $('#username').prop('readonly', false);
             $('#passHelp').hide();
+            generateStaffId($('#role').val());
         }
+
+        function generateStaffId(role) {
+            let prefix = 'STF';
+            switch(role) {
+                case 'technician': prefix = 'TECH'; break;
+                case 'driver': prefix = 'DRV'; break;
+                case 'stock_manager': prefix = 'SM'; break;
+                case 'stock_controller': prefix = 'SC'; break;
+                case 'tech_lead': prefix = 'TL'; break;
+                case 'admin': prefix = 'ADM'; break;
+                case 'user': prefix = 'USR'; break;
+            }
+            let rand = Math.floor(1000 + Math.random() * 9000);
+            $('#technician_id_field').val(prefix + rand);
+        }
+
+        $('#role').on('change', function() {
+            if (!$('#user_id').val()) {
+                generateStaffId($(this).val());
+            }
+        });
 
         function editUser(user) {
             resetForm();

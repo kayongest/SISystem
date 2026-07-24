@@ -7,6 +7,59 @@ if (session_status() === PHP_SESSION_NONE) {
 $current_page = basename($_SERVER['PHP_SELF']);
 $user_role = getUserRole();
 $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
+
+// Dynamic notification counts for different roles
+$tech_batch_count = 0;
+$driver_batch_count = 0;
+$pending_approval_count = 0;
+
+try {
+    require_once __DIR__ . '/database_fix.php';
+    $nav_db = new DatabaseFix();
+    $nav_conn = $nav_db->getConnection();
+
+    if ($nav_conn) {
+        if ($user_role === 'technician' && isset($_SESSION['user_id'])) {
+            $stmt = $nav_conn->prepare("SELECT COUNT(*) as count FROM batches WHERE submitted_by = ?");
+            if ($stmt) {
+                $stmt->bind_param("i", $_SESSION['user_id']);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($row = $res->fetch_assoc()) {
+                    $tech_batch_count = $row['count'] ?? 0;
+                }
+                $stmt->close();
+            }
+        }
+
+        if ($user_role === 'driver' && isset($_SESSION['user_id'])) {
+            $stmt = $nav_conn->prepare("SELECT COUNT(*) as count FROM batches WHERE transport_driver_id = ?");
+            if ($stmt) {
+                $stmt->bind_param("i", $_SESSION['user_id']);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($row = $res->fetch_assoc()) {
+                    $driver_batch_count = $row['count'] ?? 0;
+                }
+                $stmt->close();
+            }
+        }
+
+        if (isAdmin() || $user_role === 'stock_controller') {
+            $stmt = $nav_conn->prepare("SELECT COUNT(*) as count FROM batches WHERE status = 'pending_verification'");
+            if ($stmt) {
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($row = $res->fetch_assoc()) {
+                    $pending_approval_count = $row['count'] ?? 0;
+                }
+                $stmt->close();
+            }
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error in navbar dynamic counts: " . $e->getMessage());
+}
 ?>
 
 <style>
@@ -18,6 +71,7 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
         color: white;
         position: sticky;
         top: 0;
+        z-index: 1030;
     }
 
     .user-info-compact {
@@ -128,6 +182,7 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
         .page-header-unified {
             padding: 0.75rem 1rem;
         }
+
         .nav-links-unified {
             flex-direction: column;
             width: 100%;
@@ -137,10 +192,12 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             margin-top: 1rem;
         }
+
         .nav-link-compact {
             justify-content: flex-start;
             padding: 10px 15px;
         }
+
         .dropdown-compact .dropdown-menu {
             position: static !important;
             transform: none !important;
@@ -183,23 +240,9 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
         <div class="collapse navbar-collapse" id="unifiedNavbar">
             <div class="nav-links-unified ms-auto mt-3 mt-lg-0">
                 <!-- Dashboard -->
-                <?php if (isAdmin() || in_array($user_role, ['stock_manager', 'tech_lead'])): ?>
-                    <a href="<?php echo BASE_URL; ?>dashboard_full.php" class="nav-link-compact <?php echo ($current_page == 'dashboard_full.php' || $current_page == 'dashboard_full.php') ? 'active' : ''; ?>">
+                <?php if (isAdmin() || in_array($user_role, ['stock_manager', 'tech_lead', 'technician'])): ?>
+                    <a href="<?php echo BASE_URL; ?>dashboard_full.php" class="nav-link-compact <?php echo ($current_page == 'dashboard_full.php') ? 'active' : ''; ?>">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
-                    </a>
-                <?php endif; ?>
-
-                <!-- Events -->
-                <?php if (isAdmin()): ?>
-                    <a href="<?php echo BASE_URL; ?>events.php" class="nav-link-compact <?php echo ($current_page == 'events.php') ? 'active' : ''; ?>">
-                        <i class="fas fa-list"></i> Events
-                    </a>
-                <?php endif; ?>
-
-                <!-- Equipment -->
-                <?php if (isAdmin()): ?>
-                    <a href="<?php echo BASE_URL; ?>items.php" class="nav-link-compact <?php echo (strpos($current_page, 'items') !== false) ? 'active' : ''; ?>">
-                        <i class="fas fa-boxes"></i> Equipment
                     </a>
                 <?php endif; ?>
 
@@ -209,6 +252,21 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
                         <i class="fas fa-plug"></i> Accessories
                     </a>
                 <?php endif; ?>
+
+                <!-- Fly Cases -->
+                <?php if ($user_role !== 'driver'): ?>
+                    <a href="<?php echo BASE_URL; ?>cases.php" class="nav-link-compact <?php echo (strpos($current_page, 'cases') !== false) ? 'active' : ''; ?>">
+                        <i class="fas fa-box"></i> Fly Cases
+                    </a>
+                <?php endif; ?>
+
+                <!-- RFID Simulator -->
+                <?php if ($user_role !== 'driver'): ?>
+                    <a href="<?php echo BASE_URL; ?>rfid_simulator.php" class="nav-link-compact <?php echo ($current_page == 'rfid_simulator.php') ? 'active' : ''; ?>">
+                        <i class="fas fa-broadcast-tower"></i> RFID Simulator
+                    </a>
+                <?php endif; ?>
+
 
                 <!-- Import -->
                 <?php if (isAdmin()): ?>
@@ -229,42 +287,71 @@ $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
                 <?php if ($user_role === 'technician'): ?>
                     <a href="<?php echo BASE_URL; ?>technician_batch_history.php" class="nav-link-compact <?php echo ($current_page == 'technician_batch_history.php') ? 'active' : ''; ?>">
                         <i class="fas fa-history"></i> My Batches
+                        <?php if ($tech_batch_count > 0): ?>
+                            <span class="badge bg-danger rounded-pill ms-2" style="font-size: 0.75rem; padding: 0.25em 0.6em;"><?php echo $tech_batch_count; ?></span>
+                        <?php endif; ?>
+                    </a>
+                <?php endif; ?>
+
+                <?php if ($user_role === 'driver'): ?>
+                    <a href="<?php echo BASE_URL; ?>driver_batches.php" class="nav-link-compact <?php echo ($current_page == 'driver_batches.php') ? 'active' : ''; ?>">
+                        <i class="fas fa-truck"></i> My Transport Batches
+                        <?php if ($driver_batch_count > 0): ?>
+                            <span class="badge bg-danger rounded-pill ms-2" style="font-size: 0.75rem; padding: 0.25em 0.6em;"><?php echo $driver_batch_count; ?></span>
+                        <?php endif; ?>
                     </a>
                 <?php endif; ?>
 
                 <?php if (isAdmin() || $user_role === 'stock_controller'): ?>
                     <a href="<?php echo BASE_URL; ?>batch_history.php" class="nav-link-compact <?php echo ($current_page == 'batch_history.php') ? 'active' : ''; ?>">
                         <i class="fas fa-check-double"></i> Batch Approvals
+                        <?php if ($pending_approval_count > 0): ?>
+                            <span class="badge bg-danger rounded-pill ms-2" style="font-size: 0.75rem; padding: 0.25em 0.6em;"><?php echo $pending_approval_count; ?></span>
+                        <?php endif; ?>
                     </a>
                 <?php endif; ?>
 
-                <!-- Reports (Admin Only) -->
-                <?php if (isAdmin() || $user_role === 'manager'): ?>
-                    <a href="<?php echo BASE_URL; ?>reports.php" class="nav-link-compact <?php echo ($current_page == 'reports.php') ? 'active' : ''; ?>">
-                        <i class="fas fa-chart-bar"></i> Reports
+                <!-- Setup Dropdown (Multi-role Config) -->
+                <div class="dropdown dropdown-compact">
+                    <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['stock_locations.php', 'categories.php', 'departments.php', 'locations.php', 'events.php', 'items.php', 'mobile_app.php', 'reports.php', 'hr_center.php', 'drivers.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
+                        <i class="fas fa-cog"></i> Setup
                     </a>
-                    <a href="<?php echo BASE_URL; ?>hr_center.php" class="nav-link-compact <?php echo ($current_page == 'hr_center.php') ? 'active' : ''; ?>" style="background: rgba(0, 229, 255, 0.1); border-color: rgba(0, 229, 255, 0.3);">
-                        <i class="fas fa-users-cog" style="color: #00e5ff;"></i> HR Center
-                    </a>
-                <?php endif; ?>
+                    <ul class="dropdown-menu shadow">
+                        <!-- Events -->
+                        <?php if ($user_role !== 'driver'): ?>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'events.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>events.php"><i class="fas fa-calendar-alt me-2 text-info"></i> Events</a></li>
+                        <?php endif; ?>
 
-                <!-- Setup Dropdown (Admin Only) -->
-                <?php if (isAdmin()): ?>
-                    <div class="dropdown dropdown-compact">
-                        <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['stock_locations.php', 'categories.php', 'departments.php', 'locations.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
-                            <i class="fas fa-cog"></i> Setup
-                        </a>
-                        <ul class="dropdown-menu shadow">
-                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>stock_locations.php"><i class="fas fa-warehouse me-2"></i> Stock Locations</a></li>
+                        <!-- Equipment -->
+                        <?php if (isAdmin()): ?>
+                            <li><a class="dropdown-item <?php echo (strpos($current_page, 'items') !== false) ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>items.php"><i class="fas fa-boxes me-2 text-warning"></i> Equipment</a></li>
+                        <?php endif; ?>
+
+                        <!-- Mobile App -->
+                        <?php if (isAdmin() || in_array($user_role, ['technician', 'driver', 'stock_controller', 'manager', 'stock_manager', 'tech_lead'])): ?>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'mobile_app.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>mobile_app.php"><i class="fas fa-mobile-alt me-2 text-primary"></i> Mobile App</a></li>
+                        <?php endif; ?>
+
+                        <!-- Reports & HR Center -->
+                        <?php if (isAdmin() || $user_role === 'manager'): ?>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'reports.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>reports.php"><i class="fas fa-chart-bar me-2 text-success"></i> Reports</a></li>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'hr_center.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>hr_center.php"><i class="fas fa-users-cog me-2 text-danger"></i> HR Center</a></li>
+                        <?php endif; ?>
+
+                        <!-- Admin Setup Configs -->
+                        <?php if (isAdmin()): ?>
                             <li>
                                 <hr class="dropdown-divider">
                             </li>
-                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>categories.php"><i class="fas fa-list me-2"></i> Categories</a></li>
-                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>departments.php"><i class="fas fa-building me-2"></i> Departments</a></li>
-                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>locations.php"><i class="fas fa-map-marker-alt me-2"></i> Locations</a></li>
-                        </ul>
-                    </div>
-                <?php endif; ?>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'stock_locations.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>stock_locations.php"><i class="fas fa-warehouse me-2"></i> Stock Locations</a></li>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'categories.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>categories.php"><i class="fas fa-list me-2"></i> Categories</a></li>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'departments.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>departments.php"><i class="fas fa-building me-2"></i> Departments</a></li>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'locations.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>locations.php"><i class="fas fa-map-marker-alt me-2"></i> Locations</a></li>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'drivers.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>drivers.php"><i class="fas fa-truck me-2"></i> Drivers</a></li>
+                        <?php endif; ?>
+                    </ul>
+                </div>
+
 
                 <!-- User Profile Dropdown -->
                 <div class="dropdown dropdown-compact">

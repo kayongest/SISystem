@@ -46,6 +46,45 @@ try {
 
             $events = [];
             while ($row = $result->fetch_assoc()) {
+                // Fetch associated batches for this event matching the event title or job sheet
+                $title = $row['title'] ?? '';
+                $batches = [];
+                
+                // Prepare a query against stock_movements
+                $smStmt = $db->prepare("SELECT 
+                                            sm.id,
+                                            sm.batch_number as batch_id,
+                                            sm.created_at as date,
+                                            sm.status,
+                                            sm.approval_status,
+                                            sm.job_sheet,
+                                            sm.jobsheet_file,
+                                            sm.event_name,
+                                            sm.source_name,
+                                            sm.destination_name,
+                                            sm.destination_room,
+                                            sm.submitted_by,
+                                            sm.movement_type,
+                                            sm.transport_vehicle_type,
+                                            sm.transport_vehicle_number,
+                                            sm.transport_driver,
+                                            sm.transport_date,
+                                            sm.driver_verified,
+                                            (SELECT COUNT(*) FROM batch_items bi WHERE bi.batch_id = sm.id) as item_count,
+                                            (SELECT COALESCE(SUM(quantity), 0) FROM batch_items bi WHERE bi.batch_id = sm.id) as total_quantity
+                                        FROM stock_movements sm 
+                                        WHERE LOWER(sm.event_name) = LOWER(?) OR LOWER(sm.job_sheet) = LOWER(?)
+                                        ORDER BY sm.created_at DESC");
+                if ($smStmt) {
+                    $smStmt->bind_param("ss", $title, $title);
+                    $smStmt->execute();
+                    $smResult = $smStmt->get_result();
+                    while ($smRow = $smResult->fetch_assoc()) {
+                        $batches[] = $smRow;
+                    }
+                    $smStmt->close();
+                }
+                $row['batches'] = $batches;
                 $events[] = $row;
             }
             echo json_encode($events);
@@ -59,7 +98,14 @@ try {
 
                 // Validate required fields
                 if (empty($_POST['id'])) {
-                    throw new Exception('Event ID is required');
+                    // Generate a UUID if not provided
+                    $_POST['id'] = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                        mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                        mt_rand(0, 0xffff),
+                        mt_rand(0, 0x0fff) | 0x4000,
+                        mt_rand(0, 0x3fff) | 0x8000,
+                        mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+                    );
                 }
                 if (empty($_POST['title'])) {
                     throw new Exception('Event title is required');

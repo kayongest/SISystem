@@ -22,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Sanitize inputs
         $id = intval($_POST['id'] ?? 0);
         $name = sanitizeInput($_POST['name'] ?? '');
+        $category = sanitizeInput($_POST['category'] ?? '');
         $description = sanitizeInput($_POST['description'] ?? '');
         $total_quantity = intval($_POST['total_quantity'] ?? 1);
         $available_quantity = intval($_POST['available_quantity'] ?? 1);
@@ -60,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Update accessory
         $sql = "UPDATE accessories SET 
             name = ?, 
+            category = ?,
             description = ?, 
             total_quantity = ?, 
             available_quantity = ?, 
@@ -69,8 +71,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         $stmt = $conn->prepare($sql);
         $stmt->bind_param(
-            "ssiiii",
-            $name, $description, $total_quantity, $available_quantity, $minimum_stock, $id
+            "sssiiii",
+            $name, $category, $description, $total_quantity, $available_quantity, $minimum_stock, $id
         );
         
         if (!$stmt->execute()) {
