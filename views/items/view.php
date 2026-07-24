@@ -42,18 +42,19 @@ if ($item_id > 0) {
     }
 
     // Fetch recent movements if item serial exists
-    if ($item && !empty($item['serial_number'])) {
+    if ($item) {
+        $serialNum = $item['serial_number'] ?? '';
         $movStmt = $conn->prepare("
             SELECT DISTINCT sm.id, sm.batch_number, sm.event_name, sm.source_name, sm.destination_name, 
                    sm.movement_type, sm.status, sm.created_at, sm.transport_driver
             FROM stock_movements sm
-            LEFT JOIN batch_items bi ON sm.id = bi.movement_id
-            WHERE bi.serial_number = ? OR bi.item_id = ?
+            LEFT JOIN batch_items bi ON sm.id = bi.batch_id
+            WHERE (bi.serial_number IS NOT NULL AND bi.serial_number != '' AND bi.serial_number = ?) OR bi.item_id = ?
             ORDER BY sm.created_at DESC
             LIMIT 10
         ");
         if ($movStmt) {
-            $movStmt->bind_param("si", $item['serial_number'], $item_id);
+            $movStmt->bind_param("si", $serialNum, $item_id);
             $movStmt->execute();
             $movements = $movStmt->get_result()->fetch_all(MYSQLI_ASSOC);
             $movStmt->close();
