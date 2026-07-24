@@ -127,12 +127,12 @@ if (!isset($_SESSION['user_id'])) {
 
         /* Global Styles */
         * {
-            font-family: 'Titillium Web', sans-serif;
+            font-family: "Marvel", sans-serif;
         }
 
         body {
             background-color: #f5f7fb;
-            font-family: 'Titillium Web', sans-serif;
+            font-family: "Marvel", sans-serif;
         }
 
         .btn-group-sm {

@@ -86,10 +86,10 @@ if ($action === 'create') {
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Marvel:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 
         * {
-            font-family: 'Titillium Web', sans-serif;
+            font-family: "Marvel", sans-serif !important;
         }
 
         .titillium-web-extralight {

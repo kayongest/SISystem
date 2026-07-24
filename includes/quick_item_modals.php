@@ -1,4 +1,9 @@
 <!-- includes/quick_item_modals.php - Reusable Quick Action Modals for Equipment View & Edit -->
+<style>
+    #quickViewItemModal *, #quickEditItemModal * {
+        font-family: "Marvel", sans-serif !important;
+    }
+</style>
 
 <!-- Quick View Equipment Modal -->
 <div class="modal fade" id="quickViewItemModal" tabindex="-1" aria-hidden="true" style="z-index: 1055;">
