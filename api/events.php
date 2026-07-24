@@ -127,14 +127,14 @@ try {
                     throw new Exception('Prepare failed: ' . $db->error);
                 }
 
-                // Convert empty strings to null
-                $date = !empty($_POST['date']) ? $_POST['date'] : null;
+                // Convert empty strings and '0' to null
+                $date = (!empty($_POST['date']) && $_POST['date'] !== '0000-00-00') ? trim($_POST['date']) : null;
                 $duration = !empty($_POST['duration']) ? (int)$_POST['duration'] : null;
-                $location = !empty($_POST['location']) ? $_POST['location'] : null;
+                $location = (isset($_POST['location']) && trim((string)$_POST['location']) !== '' && trim((string)$_POST['location']) !== '0') ? trim((string)$_POST['location']) : null;
                 // Map 'manager' from form to 'project_manager' in database
-                $manager = !empty($_POST['manager']) ? $_POST['manager'] : null;
-                $technician = !empty($_POST['technician']) ? $_POST['technician'] : (!empty($_POST['assigned_technician']) ? $_POST['assigned_technician'] : null);
-                $description = !empty($_POST['description']) ? $_POST['description'] : null;
+                $manager = !empty($_POST['manager']) ? trim($_POST['manager']) : null;
+                $technician = !empty($_POST['technician']) ? trim($_POST['technician']) : (!empty($_POST['assigned_technician']) ? trim($_POST['assigned_technician']) : null);
+                $description = !empty($_POST['description']) ? trim($_POST['description']) : null;
                 $source = !empty($_POST['source']) ? $_POST['source'] : 'manual';
 
                 error_log("Binding: id={$_POST['id']}, title={$_POST['title']}, date=$date, duration=$duration, location=$location, manager=$manager, technician=$technician, source=$source");
@@ -216,13 +216,13 @@ try {
 
                 // Get values from PUT data
                 $title = $putData['title'] ?? '';
-                $date = !empty($putData['date']) ? $putData['date'] : null;
+                $date = (!empty($putData['date']) && $putData['date'] !== '0000-00-00') ? trim($putData['date']) : null;
                 $duration = !empty($putData['duration']) ? (int)$putData['duration'] : null;
-                $location = !empty($putData['location']) ? $putData['location'] : null;
+                $location = (isset($putData['location']) && trim((string)$putData['location']) !== '' && trim((string)$putData['location']) !== '0') ? trim((string)$putData['location']) : null;
                 // Map 'manager' from form to 'project_manager' in database
-                $manager = !empty($putData['manager']) ? $putData['manager'] : null;
-                $technician = !empty($putData['technician']) ? $putData['technician'] : (!empty($putData['assigned_technician']) ? $putData['assigned_technician'] : null);
-                $description = !empty($putData['description']) ? $putData['description'] : null;
+                $manager = !empty($putData['manager']) ? trim($putData['manager']) : null;
+                $technician = !empty($putData['technician']) ? trim($putData['technician']) : (!empty($putData['assigned_technician']) ? trim($putData['assigned_technician']) : null);
+                $description = !empty($putData['description']) ? trim($putData['description']) : null;
 
                 error_log("Binding values - title: $title, date: $date, duration: $duration, location: $location, manager: $manager, technician: $technician, id: $id");
 

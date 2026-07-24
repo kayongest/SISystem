@@ -965,12 +965,22 @@ try {
             $('#saveEventBtn').text('Update Event');
             
             $('#formTitle').val(ev.title || '');
-            if(ev.date) {
-                // convert to YYYY-MM-DD
-                const d = new Date(ev.date);
-                if(!isNaN(d)) $('#formDate').val(d.toISOString().split('T')[0]);
+            if (ev.date) {
+                const rawDate = String(ev.date).trim();
+                const match = rawDate.match(/^(\d{4}-\d{2}-\d{2})/);
+                if (match) {
+                    $('#formDate').val(match[1]);
+                } else {
+                    const d = new Date(rawDate);
+                    if (!isNaN(d.getTime())) {
+                        const yr = d.getFullYear();
+                        const mo = String(d.getMonth() + 1).padStart(2, '0');
+                        const da = String(d.getDate()).padStart(2, '0');
+                        $('#formDate').val(`${yr}-${mo}-${da}`);
+                    }
+                }
             }
-            $('#formLocation').val(ev.location || '');
+            $('#formLocation').val(ev.location && ev.location !== '0' ? ev.location : '');
             $('#formManager').val(ev.project_manager || '');
             $('#formTechnician').val(ev.assigned_technician || ev.technician || '');
             $('#formDescription').val(ev.description || '');
