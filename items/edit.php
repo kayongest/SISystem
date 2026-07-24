@@ -58,7 +58,7 @@ try {
 
     // Get current accessories
     $accStmt = $conn->prepare("
-        SELECT a.id, a.name, a.description, ia.quantity
+        SELECT a.id, a.name, a.description, COALESCE(ia.quantity, 1) AS quantity
         FROM accessories a
         INNER JOIN item_accessories ia ON a.id = ia.accessory_id
         WHERE ia.item_id = ?
