@@ -447,8 +447,8 @@ if ($action === 'create') {
                 require_once 'views/items/create.php';
                 break;
             case 'edit':
-                require_once 'views/items/edit.php';
-                break;
+                header("Location: items/edit.php?id=" . $id);
+                exit();
             case 'view':
                 require_once 'views/items/view.php';
                 break;
@@ -459,21 +459,6 @@ if ($action === 'create') {
         }
         ?>
     </div>
-
-    <!-- // Add this to your items table to show QR codes -->
-    <td>
-        <?php if (!empty($item['qr_code'])): ?>
-            <img src="<?php echo htmlspecialchars($item['qr_code']); ?>"
-                alt="QR Code" style="width: 50px; height: 50px;">
-            <br>
-            <small>ID: <?php echo $item['id']; ?></small>
-        <?php else: ?>
-            <button class="btn btn-sm btn-outline-primary"
-                onclick="generateQRCode(<?php echo $item['id']; ?>)">
-                Generate QR
-            </button>
-        <?php endif; ?>
-    </td>
 
     <!-- jQuery MUST be loaded first -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
