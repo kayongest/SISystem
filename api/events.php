@@ -117,10 +117,10 @@ try {
                     $imagePath = handleImageUpload($_FILES['image']);
                 }
 
-                // Prepare statement - using project_manager column
+                // Prepare statement - using project_manager and assigned_technician columns
                 $stmt = $db->prepare("
-                    INSERT INTO events (id, title, date, duration, location, event_image, project_manager, description, source) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO events (id, title, date, duration, location, event_image, project_manager, assigned_technician, description, source) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
 
                 if (!$stmt) {
@@ -133,13 +133,14 @@ try {
                 $location = !empty($_POST['location']) ? $_POST['location'] : null;
                 // Map 'manager' from form to 'project_manager' in database
                 $manager = !empty($_POST['manager']) ? $_POST['manager'] : null;
+                $technician = !empty($_POST['technician']) ? $_POST['technician'] : (!empty($_POST['assigned_technician']) ? $_POST['assigned_technician'] : null);
                 $description = !empty($_POST['description']) ? $_POST['description'] : null;
                 $source = !empty($_POST['source']) ? $_POST['source'] : 'manual';
 
-                error_log("Binding: id={$_POST['id']}, title={$_POST['title']}, date=$date, duration=$duration, location=$location, manager=$manager, source=$source");
+                error_log("Binding: id={$_POST['id']}, title={$_POST['title']}, date=$date, duration=$duration, location=$location, manager=$manager, technician=$technician, source=$source");
 
                 $stmt->bind_param(
-                    "sssisssss",
+                    "sssissssss",
                     $_POST['id'],
                     $_POST['title'],
                     $date,
@@ -147,6 +148,7 @@ try {
                     $location,
                     $imagePath,
                     $manager,  // This goes to project_manager column
+                    $technician, // This goes to assigned_technician column
                     $description,
                     $source
                 );
@@ -203,6 +205,7 @@ try {
                         location = ?, 
                         event_image = ?, 
                         project_manager = ?, 
+                        assigned_technician = ?, 
                         description = ? 
                     WHERE id = ?
                 ");
@@ -218,18 +221,20 @@ try {
                 $location = !empty($putData['location']) ? $putData['location'] : null;
                 // Map 'manager' from form to 'project_manager' in database
                 $manager = !empty($putData['manager']) ? $putData['manager'] : null;
+                $technician = !empty($putData['technician']) ? $putData['technician'] : (!empty($putData['assigned_technician']) ? $putData['assigned_technician'] : null);
                 $description = !empty($putData['description']) ? $putData['description'] : null;
 
-                error_log("Binding values - title: $title, date: $date, duration: $duration, location: $location, manager: $manager, id: $id");
+                error_log("Binding values - title: $title, date: $date, duration: $duration, location: $location, manager: $manager, technician: $technician, id: $id");
 
                 $stmt->bind_param(
-                    "ssisssss",
+                    "sssisssss",
                     $title,
                     $date,
                     $duration,
                     $location,
                     $imagePath,
                     $manager,  // This goes to project_manager column
+                    $technician, // This goes to assigned_technician column
                     $description,
                     $id
                 );

@@ -16,6 +16,19 @@ if ($user_role === 'driver') {
     header("Location: dashboard_full.php");
     exit();
 }
+
+$conn = getConnection();
+$technicians_list = [];
+try {
+    $tResult = $conn->query("SELECT id, full_name, username FROM users WHERE role IN ('technician', 'admin', 'stock_controller') ORDER BY full_name ASC");
+    if ($tResult) {
+        while ($row = $tResult->fetch_assoc()) {
+            $technicians_list[] = $row;
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error fetching technicians: " . $e->getMessage());
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -604,6 +617,17 @@ if ($user_role === 'driver') {
                             <input type="text" class="form-control bg-light text-dark border-secondary" id="formManager" name="manager">
                         </div>
                         <div class="mb-3">
+                            <label class="form-label text-muted">Assigned Technician</label>
+                            <select class="form-select bg-light text-dark border-secondary" id="formTechnician" name="technician">
+                                <option value="">Select Technician...</option>
+                                <?php foreach ($technicians_list as $tech): ?>
+                                    <option value="<?php echo htmlspecialchars($tech['full_name']); ?>">
+                                        <?php echo htmlspecialchars($tech['full_name'] . ' (@' . $tech['username'] . ')'); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label text-muted">Description</label>
                             <textarea class="form-control bg-light text-dark border-secondary" id="formDescription" name="description" rows="3"></textarea>
                         </div>
@@ -815,7 +839,7 @@ if ($user_role === 'driver') {
                             </div>
                             <div class="event-meta">
                                 <i class="fas fa-tools"></i>
-                                <span>${escapeHtml(ev.technician || 'Tech Not Specified')}</span>
+                                <span>${escapeHtml(ev.assigned_technician || ev.technician || 'Tech Not Specified')}</span>
                             </div>
                             ${(ev.movement_type && ev.movement_type.toLowerCase() === 'stock to stock' && ev.driver) ? `
                             <div class="event-meta">
@@ -867,7 +891,7 @@ if ($user_role === 'driver') {
             $('#modalEventDate').text(eventObj.date ? new Date(eventObj.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'TBD');
             $('#modalEventLocation').text(eventObj.location || 'Location TBA');
             $('#modalEventManager').text(eventObj.project_manager || 'Not Assigned');
-            $('#modalEventTechnician').text(eventObj.technician || 'Not Specified');
+            $('#modalEventTechnician').text(eventObj.assigned_technician || eventObj.technician || 'Not Specified');
             
             if (eventObj.movement_type && eventObj.movement_type.toLowerCase() === 'stock to stock' && eventObj.driver) {
                 $('#modalEventDriver').text(eventObj.driver);
@@ -927,6 +951,7 @@ if ($user_role === 'driver') {
             $('#formMethod').val('POST');
             $('#eventFormModalLabel').text('Create Event');
             $('#saveEventBtn').text('Save Event');
+            $('#formTechnician').val('');
             $('#currentImagePreview').hide();
             $('#existingImage').val('');
             $('#eventFormModal').modal('show');
@@ -934,7 +959,7 @@ if ($user_role === 'driver') {
 
         function openEditModal(ev) {
             $('#eventForm')[0].reset();
-            $('#formEventId').val(ev.event_id || '');
+            $('#formEventId').val(ev.event_id || ev.id || '');
             $('#formMethod').val('PUT'); // Use PUT for edits
             $('#eventFormModalLabel').text('Edit Event');
             $('#saveEventBtn').text('Update Event');
@@ -947,6 +972,7 @@ if ($user_role === 'driver') {
             }
             $('#formLocation').val(ev.location || '');
             $('#formManager').val(ev.project_manager || '');
+            $('#formTechnician').val(ev.assigned_technician || ev.technician || '');
             $('#formDescription').val(ev.description || '');
 
             if(ev.event_image) {

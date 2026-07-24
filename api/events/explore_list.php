@@ -23,7 +23,8 @@ try {
             COALESCE(e.date, MIN(sm.created_at)) as date,
             COALESCE(e.location, MAX(sm.destination_name)) as location,
             COALESCE(e.project_manager, MAX(sm.project_manager)) as project_manager,
-            MAX(sm.submitted_by) as technician,
+            COALESCE(NULLIF(e.assigned_technician, ''), MAX(sm.submitted_by)) as technician,
+            e.assigned_technician,
             MAX(sm.movement_type) as movement_type,
             MAX(sm.transport_driver) as driver,
             COUNT(sm.id) as batch_count,
@@ -31,7 +32,7 @@ try {
             e.description
         FROM events e
         LEFT JOIN stock_movements sm ON LOWER(e.title) = LOWER(sm.event_name)
-        GROUP BY e.id, e.title, e.source, e.date, e.location, e.project_manager, e.event_image, e.description
+        GROUP BY e.id, e.title, e.source, e.date, e.location, e.project_manager, e.assigned_technician, e.event_image, e.description
         ORDER BY date DESC
     ";
 
