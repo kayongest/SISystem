@@ -344,26 +344,31 @@ require_once 'views/partials/header.php';
                                     </span>
                                 </td>
                                 <td class="text-end pe-4">
-                                    <div class="btn-group btn-group-sm pill overflow-hidden border">
-                                        <button class="btn btn-light edit-driver-btn" 
-                                                data-id="<?php echo $d['id']; ?>"
-                                                data-fullname="<?php echo htmlspecialchars($d['full_name']); ?>"
-                                                data-phone="<?php echo htmlspecialchars($d['phone_number']); ?>"
-                                                data-email="<?php echo htmlspecialchars($d['email']); ?>"
-                                                data-license="<?php echo htmlspecialchars($d['license_number']); ?>"
-                                                data-vehicletype="<?php echo htmlspecialchars($d['vehicle_type']); ?>"
-                                                data-vehiclenumber="<?php echo htmlspecialchars($d['vehicle_number']); ?>"
-                                                data-status="<?php echo htmlspecialchars($d['status']); ?>"
-                                                title="Edit Profile">
-                                            <i class="fas fa-edit text-primary"></i>
-                                        </button>
-                                        <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this driver?');">
-                                            <input type="hidden" name="action" value="delete">
-                                            <input type="hidden" name="id" value="<?php echo $d['id']; ?>">
-                                            <button class="btn btn-light" title="Delete Driver"><i class="fas fa-trash text-danger"></i></button>
-                                        </form>
-                                    </div>
-                                </td>
+                                     <div class="btn-group btn-group-sm pill overflow-hidden border">
+                                         <button class="btn btn-light view-driver-btn" 
+                                                 data-id="<?php echo $d['id']; ?>"
+                                                 title="View Driver Details">
+                                             <i class="fas fa-eye text-info"></i>
+                                         </button>
+                                         <button class="btn btn-light edit-driver-btn" 
+                                                 data-id="<?php echo $d['id']; ?>"
+                                                 data-fullname="<?php echo htmlspecialchars($d['full_name']); ?>"
+                                                 data-phone="<?php echo htmlspecialchars($d['phone_number']); ?>"
+                                                 data-email="<?php echo htmlspecialchars($d['email']); ?>"
+                                                 data-license="<?php echo htmlspecialchars($d['license_number']); ?>"
+                                                 data-vehicletype="<?php echo htmlspecialchars($d['vehicle_type']); ?>"
+                                                 data-vehiclenumber="<?php echo htmlspecialchars($d['vehicle_number']); ?>"
+                                                 data-status="<?php echo htmlspecialchars($d['status']); ?>"
+                                                 title="Edit Profile">
+                                             <i class="fas fa-edit text-primary"></i>
+                                         </button>
+                                         <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this driver?');">
+                                             <input type="hidden" name="action" value="delete">
+                                             <input type="hidden" name="id" value="<?php echo $d['id']; ?>">
+                                             <button class="btn btn-light" title="Delete Driver"><i class="fas fa-trash text-danger"></i></button>
+                                         </form>
+                                     </div>
+                                 </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -438,6 +443,107 @@ require_once 'views/partials/header.php';
     </div>
 </div>
 
+<!-- View Driver Modal -->
+<div class="modal fade" id="viewDriverModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
+            <div class="modal-header bg-primary text-white py-3">
+                <h5 class="modal-title fw-bold d-flex align-items-center">
+                    <i class="fas fa-id-card me-2"></i><span id="viewDriverName">Driver Profile</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <div class="row g-3 mb-4">
+                    <!-- Driver Header Card -->
+                    <div class="col-md-6">
+                        <div class="card border-0 shadow-sm p-3 rounded-3 h-100 bg-white">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="bg-primary bg-opacity-10 text-primary p-3 rounded-circle me-3 fs-3 d-flex align-items-center justify-content-center" style="width: 54px; height: 54px;">
+                                    <i class="fas fa-user-tie"></i>
+                                </div>
+                                <div>
+                                    <h5 class="fw-bold mb-0 text-dark" id="viewDriverTitle">--</h5>
+                                    <small class="text-muted" id="viewDriverIdText">Driver ID: --</small>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-muted small">Status:</span>
+                                <span id="viewDriverStatusBadge" class="badge bg-secondary">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contact & License Card -->
+                    <div class="col-md-6">
+                        <div class="card border-0 shadow-sm p-3 rounded-3 h-100 bg-white">
+                            <h6 class="fw-bold text-muted small text-uppercase mb-3"><i class="fas fa-address-book me-1 text-primary"></i> Contact & License</h6>
+                            <div class="mb-2">
+                                <span class="text-muted small d-block">Phone Number:</span>
+                                <strong class="text-dark" id="viewDriverPhone">--</strong>
+                            </div>
+                            <div class="mb-2">
+                                <span class="text-muted small d-block">Email Address:</span>
+                                <span class="text-dark fw-semibold" id="viewDriverEmail">--</span>
+                            </div>
+                            <div>
+                                <span class="text-muted small d-block">License Number:</span>
+                                <code class="text-primary bg-light px-2 py-1 rounded" id="viewDriverLicense">--</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vehicle Card -->
+                    <div class="col-md-12">
+                        <div class="card border-0 shadow-sm p-3 rounded-3 bg-white">
+                            <h6 class="fw-bold text-muted small text-uppercase mb-2"><i class="fas fa-truck me-1 text-success"></i> Assigned Vehicle</h6>
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <span class="text-muted small d-block">Vehicle Type:</span>
+                                    <strong class="text-dark" id="viewDriverVehicleType">--</strong>
+                                </div>
+                                <div>
+                                    <span class="text-muted small d-block">Plate Number:</span>
+                                    <code class="fs-6 text-dark bg-light px-3 py-1 rounded border" id="viewDriverVehicleNumber">--</code>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Assigned Trips / Movements -->
+                <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white">
+                    <div class="card-header bg-white border-0 py-3 d-flex align-items-center justify-content-between">
+                        <h6 class="fw-bold text-dark m-0"><i class="fas fa-route text-primary me-2"></i> Recent Transport Activity / Movements</h6>
+                        <span class="badge bg-primary bg-opacity-10 text-primary" id="viewTripCount">0 Trips</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="driverTripsTable">
+                            <thead class="bg-light text-muted small text-uppercase">
+                                <tr>
+                                    <th class="ps-3">Batch / Event</th>
+                                    <th>Route</th>
+                                    <th>Movement</th>
+                                    <th>Status</th>
+                                    <th class="pe-3 text-end">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="driverTripsBody">
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">Click View Driver to load activity</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-white border-top py-2">
+                <button type="button" class="btn btn-secondary rounded-3" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Reset Form for Add
@@ -475,6 +581,109 @@ require_once 'views/partials/header.php';
                 driverModal.show();
             });
         });
+
+        // View Driver Handler
+        $(document).on('click', '.view-driver-btn', function() {
+            const driverId = $(this).data('id');
+            
+            $('#viewDriverName').text('Loading Driver...');
+            $('#viewDriverTitle').text('Loading...');
+            $('#viewDriverIdText').text('Driver ID: #' + driverId);
+            $('#viewDriverPhone').text('Loading...');
+            $('#viewDriverEmail').text('Loading...');
+            $('#viewDriverLicense').text('Loading...');
+            $('#viewDriverVehicleType').text('Loading...');
+            $('#viewDriverVehicleNumber').text('Loading...');
+            $('#viewTripCount').text('Loading...');
+            $('#driverTripsBody').html('<tr><td colspan="5" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i> Loading transport history...</td></tr>');
+            
+            const modal = new bootstrap.Modal(document.getElementById('viewDriverModal'));
+            modal.show();
+
+            $.ajax({
+                url: 'api/drivers/get_details.php',
+                method: 'GET',
+                data: { id: driverId },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.success && res.driver) {
+                        const d = res.driver;
+                        $('#viewDriverName').text(d.full_name);
+                        $('#viewDriverTitle').text(d.full_name);
+                        $('#viewDriverIdText').text('Driver ID: #' + d.id);
+                        $('#viewDriverPhone').text(d.phone_number || 'N/A');
+                        $('#viewDriverEmail').text(d.email || 'N/A');
+                        $('#viewDriverLicense').text(d.license_number || 'N/A');
+                        $('#viewDriverVehicleType').text(d.vehicle_type || 'N/A');
+                        $('#viewDriverVehicleNumber').text(d.vehicle_number || 'N/A');
+
+                        // Status Badge
+                        let statusBadge = '<span class="badge bg-secondary">Inactive</span>';
+                        if (d.status === 'available') statusBadge = '<span class="badge bg-success">Available</span>';
+                        else if (d.status === 'on_trip') statusBadge = '<span class="badge bg-primary">On Trip</span>';
+                        else if (d.status === 'maintenance') statusBadge = '<span class="badge bg-warning text-dark">Maintenance</span>';
+                        $('#viewDriverStatusBadge').html(statusBadge);
+
+                        // Render Trips Table
+                        if (res.trips && res.trips.length > 0) {
+                            $('#viewTripCount').text(res.trips.length + ' Trips');
+                            let rowsHtml = '';
+                            res.trips.forEach(t => {
+                                let statusClass = 'bg-secondary';
+                                const st = (t.status || '').toLowerCase();
+                                if (st === 'completed' || st === 'approved') statusClass = 'bg-success';
+                                else if (st === 'pending' || st === 'in_transit') statusClass = 'bg-warning text-dark';
+                                
+                                const eventOrBatch = t.event_name ? t.event_name : t.batch_number;
+                                const src = t.source_name ? t.source_name : 'Warehouse';
+                                const dest = t.destination_name ? t.destination_name : 'Venue';
+                                
+                                rowsHtml += `
+                                    <tr>
+                                        <td class="ps-3">
+                                            <div class="fw-bold text-dark">${escapeHtml(eventOrBatch)}</div>
+                                            <small class="text-muted">${escapeHtml(t.batch_number)}</small>
+                                        </td>
+                                        <td>
+                                            <small class="d-block text-dark"><i class="fas fa-map-marker-alt text-danger me-1"></i>${escapeHtml(src)} &rarr; ${escapeHtml(dest)}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark border">${escapeHtml(t.movement_type || 'Transport')}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge ${statusClass}">${escapeHtml(t.status || 'Active')}</span>
+                                        </td>
+                                        <td class="pe-3 text-end text-muted small">
+                                            ${t.created_at ? t.created_at.substring(0, 10) : 'N/A'}
+                                        </td>
+                                    </tr>
+                                `;
+                            });
+                            $('#driverTripsBody').html(rowsHtml);
+                        } else {
+                            $('#viewTripCount').text('0 Trips');
+                            $('#driverTripsBody').html('<tr><td colspan="5" class="text-center py-4 text-muted"><i class="fas fa-info-circle me-1 text-info"></i> No recent transport movements found for this driver.</td></tr>');
+                        }
+                    } else {
+                        alert(res.error || 'Failed to load driver details');
+                    }
+                },
+                error: function() {
+                    $('#driverTripsBody').html('<tr><td colspan="5" class="text-center text-danger py-4">Error loading transport history.</td></tr>');
+                }
+            });
+        });
+
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe
+                .toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
 
         // Initialize DataTable with 5 items per page
         if (typeof $.fn.DataTable !== 'undefined') {
