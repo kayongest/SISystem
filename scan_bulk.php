@@ -36,7 +36,7 @@ require_once 'includes/functions.php';
 $user_role = getUserRole();
 
 // RESTRICT ACCESS - Technicians and admins only
-$allowed_roles = ['technician', 'admin'];
+$allowed_roles = ['technician', 'admin', 'user'];
 if (!in_array($user_role, $allowed_roles)) {
     if ($user_role === 'stock_controller') {
         header('Location: batch_history.php');
@@ -115,7 +115,7 @@ $stock_controller_display = !empty($stock_controller_fullname) ? $stock_controll
 // Load technicians from database
 $technicians = [];
 if ($db_connected) {
-    $techQuery = "SELECT id, username, full_name, department FROM users WHERE role = 'technician' AND is_active = 1 ORDER BY full_name";
+    $techQuery = "SELECT id, username, COALESCE(NULLIF(full_name, ''), username) as full_name, department FROM users WHERE role IN ('technician', 'tech_lead', 'senior_tech', 'user', 'admin') AND is_active = 1 ORDER BY full_name";
     $techResult = $conn->query($techQuery);
     if ($techResult) {
         $technicians = $techResult->fetch_all(MYSQLI_ASSOC);
@@ -554,13 +554,13 @@ $pageTitle = "Scan & Batch Items - aBility";
                     $technicians = [];
                     $drivers = [];
                     if ($db_connected) {
-                        $techQuery = "SELECT id, username, full_name, department FROM users WHERE role = 'technician' AND is_active = 1 ORDER BY full_name";
+                        $techQuery = "SELECT id, username, COALESCE(NULLIF(full_name, ''), username) as full_name, department FROM users WHERE role IN ('technician', 'tech_lead', 'senior_tech', 'user', 'admin') AND is_active = 1 ORDER BY full_name";
                         $techResult = $conn->query($techQuery);
                         if ($techResult) {
                             $technicians = $techResult->fetch_all(MYSQLI_ASSOC);
                         }
 
-                        $driverQuery = "SELECT id, full_name, phone_number, vehicle_type, vehicle_number FROM drivers WHERE is_active = 1 ORDER BY full_name";
+                        $driverQuery = "SELECT id, full_name, COALESCE(phone_number, phone, '') as phone_number, vehicle_type, vehicle_number FROM drivers WHERE is_active = 1 ORDER BY full_name";
                         $driverResult = $conn->query($driverQuery);
                         if ($driverResult) {
                             $drivers = $driverResult->fetch_all(MYSQLI_ASSOC);
@@ -798,7 +798,7 @@ $pageTitle = "Scan & Batch Items - aBility";
                                                         // Fetch stock controllers from database
                                                         $stockControllers = [];
                                                         if ($db_connected) {
-                                                            $scQuery = "SELECT id, username, full_name, department FROM users WHERE role = 'stock_controller' AND is_active = 1 ORDER BY full_name";
+                                                            $scQuery = "SELECT id, username, COALESCE(NULLIF(full_name, ''), username) as full_name, department, role FROM users WHERE role IN ('stock_controller', 'admin') OR username IN ('Prince_Lorenzo', 'mirene', 'kayonga', 'admin') ORDER BY full_name";
                                                             $scResult = $conn->query($scQuery);
                                                             if ($scResult) {
                                                                 $stockControllers = $scResult->fetch_all(MYSQLI_ASSOC);
@@ -847,12 +847,47 @@ $pageTitle = "Scan & Batch Items - aBility";
                                                 </div>
                                                 <div class="col-md-6">
                                                     <label class="form-label">Stock Location *</label>
-                                                    <select class="form-select" id="stockLocationSelect" required>
+                                                    <select class="form-select" id="stockLocationSelect" required onchange="handleStockLocationChange()">
                                                         <option value="">-- Select Stock Location --</option>
-                                                        <option value="Ndera Warehouse">Ndera Warehouse</option>
-                                                        <option value="KCC Stock">KCC Stock</option>
-                                                        <option value="BK Arena Stock">BK Arena Stock</option>
+                                                        <?php
+                                                        $stockLocations = [];
+                                                        if ($db_connected) {
+                                                            $locQuery = "SELECT id, name, location, controller_name, controller_phone, controller_email FROM stock_locations WHERE is_active = 1 ORDER BY name";
+                                                            $locResult = $conn->query($locQuery);
+                                                            if ($locResult && $locResult->num_rows > 0) {
+                                                                $stockLocations = $locResult->fetch_all(MYSQLI_ASSOC);
+                                                            }
+                                                        }
+                                                        if (empty($stockLocations)) {
+                                                            $stockLocations = [
+                                                                ['name' => 'Ndera Warehouse', 'controller_name' => 'Kayonga', 'controller_phone' => '+250788700001', 'controller_email' => 'kayonga70@gmail.com'],
+                                                                ['name' => 'KCC Stock', 'controller_name' => 'Prince_Lorenzo', 'controller_phone' => '+250788700002', 'controller_email' => 'princen@gmail.com'],
+                                                                ['name' => 'BK Arena Stock', 'controller_name' => 'Mirene', 'controller_phone' => '+250788700003', 'controller_email' => 'mudacumurai@gmail.com']
+                                                            ];
+                                                        }
+                                                        foreach ($stockLocations as $loc): ?>
+                                                            <option value="<?php echo htmlspecialchars($loc['name']); ?>"
+                                                                data-controller="<?php echo htmlspecialchars($loc['controller_name'] ?? ''); ?>"
+                                                                data-phone="<?php echo htmlspecialchars($loc['controller_phone'] ?? ''); ?>"
+                                                                data-email="<?php echo htmlspecialchars($loc['controller_email'] ?? ''); ?>">
+                                                                <?php echo htmlspecialchars($loc['name']); ?> (Controller: <?php echo htmlspecialchars($loc['controller_name'] ?? 'Assigned'); ?>)
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                        
+                                                        
                                                     </select>
+                                                </div>
+                                            </div>
+                                            <div id="locationControllerInfoCard" class="mt-3 p-3 border rounded bg-white shadow-sm" style="display: none;">
+                                                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                                    <div>
+                                                        <i class="fas fa-map-marker-alt text-danger me-1"></i>
+                                                        <span class="fw-bold text-dark" id="infoLocationName">-</span>
+                                                        <span class="mx-2 text-muted">|</span>
+                                                        <i class="fas fa-user-shield text-success me-1"></i>
+                                                        <span>Controller: <strong id="infoControllerName" class="text-primary">-</strong></span>
+                                                    </div>
+                                                    <div id="infoControllerContact" class="small text-muted"></div>
                                                 </div>
                                             </div>
                                             <div class="row mt-3">
@@ -986,7 +1021,15 @@ $pageTitle = "Scan & Batch Items - aBility";
                             </div>
                         </div>
                         <h4 class="fw-bold mb-2">Submission Successful!</h4>
-                        <p class="mb-0 opacity-75">Item(s) have been submitted - contact stock controller (<span id="successStockControllerName" class="fw-bold text-white"></span>) for approval</p>
+                                                <p class="mb-2 opacity-90 small">Batch has been registered and routed for stock controller review.</p>
+                        <div class="d-flex justify-content-center gap-2 flex-wrap mt-2">
+                            <span class="badge bg-white text-dark py-2 px-3 shadow-sm">
+                                <i class="fas fa-warehouse text-primary me-1"></i> Location: <strong id="successStockLocationDisplay">-</strong>
+                            </span>
+                            <span class="badge bg-white text-dark py-2 px-3 shadow-sm">
+                                <i class="fas fa-user-shield text-success me-1"></i> Controller: <strong id="successStockControllerName">-</strong>
+                            </span>
+                        </div>
                         <div class="mt-3 small opacity-75">Batch ID: <span id="successBatchIdDisplay" class="fw-bold text-white"></span></div>
                     </div>
                     <div class="p-4 bg-light">
@@ -1019,7 +1062,10 @@ $pageTitle = "Scan & Batch Items - aBility";
                             <button type="button" class="btn btn-success py-3 fw-bold shadow-sm" onclick="window.location.href = 'technician_batch_history.php'">
                                 <i class="fas fa-history me-2"></i> View Batch History
                             </button>
-                            <button type="button" class="btn btn-danger py-2 border-0" data-bs-dismiss="modal">
+                            <button type="button" class="btn btn-outline-primary py-2 fw-bold shadow-sm" id="btnSuccessPrintReport" onclick="openBatchReport()">
+                                <i class="fas fa-file-alt me-2"></i> View Batch Report & Gate Pass
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary py-2 border-0" data-bs-dismiss="modal">
                                 Close
                             </button>
                         </div>
@@ -2838,6 +2884,10 @@ $pageTitle = "Scan & Batch Items - aBility";
                                     const successModalElement = document.getElementById('submissionSuccessModal');
                                     if (successModalElement) {
                                         document.getElementById('successStockControllerName').textContent = controllerName;
+                                        if (document.getElementById('successStockLocationDisplay')) {
+                                            document.getElementById('successStockLocationDisplay').textContent = batchData.stock_location || 'Assigned Location';
+                                        }
+                                        window.lastSubmittedBatchNumber = response.batch_number;
                                         document.getElementById('successItemCountBadge').textContent = `${submittedItems.length} Item(s)`;
 
                                         // Display Batch ID
@@ -3137,7 +3187,90 @@ $pageTitle = "Scan & Batch Items - aBility";
                 }
             };
 
-             window.autoSelectLocation = function() {
+                         window.updateLocationControllerInfo = function() {
+                const scSelect = document.getElementById('stockControllerSelect');
+                const locSelect = document.getElementById('stockLocationSelect');
+                const card = document.getElementById('locationControllerInfoCard');
+                if (!card) return;
+
+                const locVal = locSelect ? locSelect.value : '';
+                let scName = '';
+                let contactInfo = '';
+
+                if (locSelect && locSelect.selectedIndex > 0) {
+                    const opt = locSelect.options[locSelect.selectedIndex];
+                    const phone = opt.getAttribute('data-phone') || '';
+                    const email = opt.getAttribute('data-email') || '';
+                    const parts = [];
+                    if (phone) parts.push(`<i class="fas fa-phone-alt me-1"></i>${phone}`);
+                    if (email) parts.push(`<i class="fas fa-envelope me-1"></i>${email}`);
+                    contactInfo = parts.join(' &nbsp;|&nbsp; ');
+                }
+
+                if (scSelect && scSelect.selectedIndex > 0) {
+                    const opt = scSelect.options[scSelect.selectedIndex];
+                    scName = opt.getAttribute('data-fullname') || opt.text.split('(')[0].trim();
+                }
+
+                if (locVal || scName) {
+                    card.style.display = 'block';
+                    const locEl = document.getElementById('infoLocationName');
+                    const scEl = document.getElementById('infoControllerName');
+                    const contactEl = document.getElementById('infoControllerContact');
+                    if (locEl) locEl.textContent = locVal || 'Location not chosen';
+                    if (scEl) scEl.textContent = scName || 'Controller not assigned';
+                    if (contactEl) contactEl.innerHTML = contactInfo;
+                } else {
+                    card.style.display = 'none';
+                }
+            };
+
+            window.handleStockLocationChange = function() {
+                const locSelect = document.getElementById('stockLocationSelect');
+                const scSelect = document.getElementById('stockControllerSelect');
+                if (!locSelect || !scSelect) return;
+
+                const selectedOpt = locSelect.options[locSelect.selectedIndex];
+                const locName = locSelect.value;
+                const controllerTarget = (selectedOpt.getAttribute('data-controller') || '').toLowerCase().trim();
+
+                if (locName) {
+                    for (let i = 0; i < scSelect.options.length; i++) {
+                        const opt = scSelect.options[i];
+                        const optName = (opt.getAttribute('data-fullname') || opt.text || '').toLowerCase();
+                        const optUser = (opt.getAttribute('data-username') || '').toLowerCase();
+                        const optDept = (opt.getAttribute('data-department') || '').toLowerCase();
+
+                        if (controllerTarget && (optName.includes(controllerTarget) || controllerTarget.includes(optName) || optUser.includes(controllerTarget))) {
+                            scSelect.selectedIndex = i;
+                            break;
+                        } else if (locName.includes('KCC') && (optName.includes('prince') || optUser.includes('prince') || optDept.includes('kcc'))) {
+                            scSelect.selectedIndex = i;
+                            break;
+                        } else if (locName.includes('BK Arena') && (optName.includes('irene') || optName.includes('mirene') || optUser.includes('irene') || optDept.includes('bk'))) {
+                            scSelect.selectedIndex = i;
+                            break;
+                        } else if (locName.includes('Ndera') && (optName.includes('kayonga') || optUser.includes('kayonga') || optName.includes('schadrack') || optUser.includes('admin') || optDept.includes('warehouse'))) {
+                            scSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+
+                if (typeof syncPersonnelSummary === 'function') syncPersonnelSummary();
+                window.updateLocationControllerInfo();
+            };
+
+            window.openBatchReport = function() {
+                const batchNum = window.lastSubmittedBatchNumber || document.getElementById('successBatchIdDisplay')?.textContent;
+                if (batchNum && batchNum !== 'N/A') {
+                    window.open(`batch_report.php?batch_id=${encodeURIComponent(batchNum)}`, '_blank');
+                } else {
+                    window.location.href = 'technician_batch_history.php';
+                }
+            };
+
+            window.autoSelectLocation = function() {
                 const scSelect = document.getElementById('stockControllerSelect');
                 const locSelect = document.getElementById('stockLocationSelect');
 
@@ -3393,12 +3526,24 @@ $pageTitle = "Scan & Batch Items - aBility";
                     if (e.target && e.target.id === 'stockControllerSelect') {
                         window.syncPersonnelSummary();
                         window.autoSelectLocation();
+                if (typeof window.updateLocationControllerInfo === 'function') {
+                    window.updateLocationControllerInfo();
+                }
+                    }
+                });
+
+                document.addEventListener('change', function(e) {
+                    if (e.target && e.target.id === 'stockLocationSelect') {
+                        window.handleStockLocationChange();
                     }
                 });
 
                 // Initialize on load
                 window.syncPersonnelSummary();
                 window.autoSelectLocation();
+                if (typeof window.updateLocationControllerInfo === 'function') {
+                    window.updateLocationControllerInfo();
+                }
             });
         </script>
 </body>

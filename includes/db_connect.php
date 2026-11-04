@@ -1,18 +1,31 @@
 <?php
+if (!defined('DB_HOST')) {
+    $configPath = __DIR__ . '/../config.php';
+    if (file_exists($configPath)) {
+        require_once $configPath;
+    }
+}
+
 class Database
 {
-    private $host = "localhost";
-    private $username = "root";
-    private $password = "";
-    private $database = "ability_db";
+    private $host;
+    private $username;
+    private $password;
+    private $database;
     private $conn;
 
     public function __construct()
     {
+        $this->host = defined('DB_HOST') ? DB_HOST : 'localhost';
+        $this->username = defined('DB_USER') ? DB_USER : 'root';
+        $this->password = defined('DB_PASS') ? DB_PASS : '';
+        $this->database = defined('DB_NAME') ? DB_NAME : 'ability_db';
+
         $this->conn = new mysqli($this->host, $this->username, $this->password, $this->database);
 
         if ($this->conn->connect_error) {
-            die("Connection failed: " . $this->conn->connect_error);
+            error_log("Database connection failure: " . $this->conn->connect_error);
+            die("Database Connection Error. Please contact administrator.");
         }
 
         $this->conn->set_charset("utf8mb4");

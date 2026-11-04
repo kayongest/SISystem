@@ -16,8 +16,9 @@ if (!$technicianId || !$password) {
     exit();
 }
 
-$conn = new mysqli('localhost', 'root', '', 'ability_db');
-if ($conn->connect_error) {
+require_once __DIR__ . '/../../includes/db_connect.php';
+$conn = getConnection();
+if (!$conn) {
     echo json_encode(['success' => false, 'message' => 'Database connection failed']);
     exit();
 }
@@ -50,7 +51,10 @@ if ($row = $result->fetch_assoc()) {
         echo json_encode(['success' => true, 'message' => 'Authentication successful']);
     } else {
         // Increment login attempts
-        $conn->query("UPDATE users SET login_attempts = login_attempts + 1 WHERE id = $technicianId");
+        $attemptStmt = $conn->prepare("UPDATE users SET login_attempts = login_attempts + 1 WHERE id = ?");
+        $attemptStmt->bind_param("i", $technicianId);
+        $attemptStmt->execute();
+        $attemptStmt->close();
         echo json_encode(['success' => false, 'message' => 'Invalid password']);
     }
 } else {

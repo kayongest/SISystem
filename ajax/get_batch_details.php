@@ -16,9 +16,10 @@ $debug_info = [
 
 try {
     // Database connection
-    $conn = new mysqli('localhost', 'root', '', 'ability_db');
-    if ($conn->connect_error) {
-        throw new Exception("Database connection failed: " . $conn->connect_error);
+    require_once __DIR__ . '/../includes/db_connect.php';
+    $conn = getConnection();
+    if (!$conn) {
+        throw new Exception("Database connection failed");
     }
 
     // Get batch ID - could be numeric ID or batch_id string

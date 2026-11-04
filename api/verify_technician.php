@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once '../includes/database_fix.php';
+require_once __DIR__ . '/../includes/database_fix.php';
 
 header('Content-Type: application/json');
 
@@ -18,7 +18,7 @@ if (!$technicianId || !$password) {
 $stmt = $conn->prepare("
     SELECT id, username, full_name, department, password, signature_image 
     FROM users 
-    WHERE id = ? AND role = 'technician' AND is_active = 1
+    WHERE id = ? AND role IN ('technician', 'tech_lead', 'senior_tech', 'user', 'admin') AND is_active = 1
 ");
 $stmt->bind_param("i", $technicianId);
 $stmt->execute();
@@ -30,7 +30,7 @@ if ($row = $result->fetch_assoc()) {
             'success' => true,
             'technician' => [
                 'id' => $row['id'],
-                'full_name' => $row['full_name'],
+                'full_name' => $row['full_name'] ?: $row['username'],
                 'username' => $row['username'],
                 'department' => $row['department'],
                 'signature_image' => $row['signature_image']

@@ -3,15 +3,11 @@ header('Content-Type: application/json');
 error_log("=== get_item_by_scan.php called ===");
 
 // Database connection
-$host = 'localhost';
-$username = 'root';
-$password = '';
-$database = 'ability_db';
+require_once __DIR__ . '/../includes/db_connect.php';
+$conn = getConnection();
 
-$conn = new mysqli($host, $username, $password, $database);
-
-if ($conn->connect_error) {
-    echo json_encode(['success' => false, 'message' => 'Database connection failed: ' . $conn->connect_error]);
+if (!$conn) {
+    echo json_encode(['success' => false, 'message' => 'Database connection failed']);
     exit();
 }
 

@@ -327,3 +327,33 @@ if (!function_exists('debug')) {
 }
 
 error_log("=== BOOTSTRAP COMPLETED ===");
+
+// Strict access control for 'user' role
+if (function_exists('isLoggedIn') && isLoggedIn()) {
+    $boot_role = function_exists('getUserRole') ? getUserRole() : ($_SESSION['user_role'] ?? $_SESSION['role'] ?? null);
+    if (in_array($boot_role, ['user', 'technician'])) {
+        $allowed_user_pages = [
+            'dashboard_full.php',
+            'scan_bulk.php',
+            'batch_history.php',
+            'technician_batch_history.php',
+            'batch_details_modal.php',
+            'batch_report.php',
+            'batch_view.php',
+            'gate_pass.php',
+            'profile.php',
+            'logout.php',
+            'login.php',
+            'index.php'
+        ];
+        $current_script = basename($_SERVER['PHP_SELF'] ?? $_SERVER['SCRIPT_NAME'] ?? '');
+        $req_uri = $_SERVER['REQUEST_URI'] ?? '';
+        $is_api = (strpos($req_uri, '/api/') !== false) || (strpos($current_script, '_ajax') !== false);
+
+        if (!empty($current_script) && !$is_api && !in_array($current_script, $allowed_user_pages)) {
+            $_SESSION['flash_messages']['error'] = 'Access restricted: Your account is only authorized to access Dashboard, Scanner, and Batch History.';
+            header('Location: ' . BASE_URL . 'dashboard_full.php');
+            exit();
+        }
+    }
+}

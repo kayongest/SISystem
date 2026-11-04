@@ -17,6 +17,7 @@ $sql1 = "
 CREATE TABLE IF NOT EXISTS `accessories` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
+  `category` varchar(100) DEFAULT NULL,
   `description` text DEFAULT NULL,
   `total_quantity` int(11) NOT NULL DEFAULT 1,
   `available_quantity` int(11) NOT NULL DEFAULT 1,
@@ -41,6 +42,15 @@ CREATE TABLE IF NOT EXISTS `item_accessories` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ";
 
+$sql3 = "
+CREATE TABLE IF NOT EXISTS `accessory_categories` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+";
+
 $success = true;
 
 if ($conn->query($sql1) === TRUE) {
@@ -54,6 +64,20 @@ if ($conn->query($sql2) === TRUE) {
     echo "Table item_accessories created successfully.<br>";
 } else {
     echo "Error creating table item_accessories: " . $conn->error . "<br>";
+    $success = false;
+}
+
+if ($conn->query($sql3) === TRUE) {
+    echo "Table accessory_categories created successfully.<br>";
+    // Insert defaults
+    $defaults = ['Video Cable', 'Audio Cable', 'Power Cable'];
+    foreach ($defaults as $cat) {
+        $stmt = $conn->prepare("INSERT IGNORE INTO accessory_categories (name) VALUES (?)");
+        $stmt->bind_param("s", $cat);
+        $stmt->execute();
+    }
+} else {
+    echo "Error creating table accessory_categories: " . $conn->error . "<br>";
     $success = false;
 }
 

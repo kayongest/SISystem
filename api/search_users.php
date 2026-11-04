@@ -1,8 +1,7 @@
 <?php
 // api/search_users.php
-session_start();
-require_once '../includes/db_connect.php';
-require_once '../includes/functions.php';
+require_once __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/../includes/db_connect.php';
 
 header('Content-Type: application/json');
 

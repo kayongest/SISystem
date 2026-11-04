@@ -30,7 +30,7 @@ $user_id = (int)$_GET['id'];
 $conn = getConnection();
 
 try {
-    $stmt = $conn->prepare("SELECT id, username, email, full_name, phone, department, role, is_active FROM users WHERE id = ?");
+    $stmt = $conn->prepare("SELECT id, username, email, full_name, phone, department, role, is_active, profile_image, signature_image FROM users WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $result = $stmt->get_result();

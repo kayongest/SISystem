@@ -1,5 +1,8 @@
 <?php
-session_start();
+require_once __DIR__ . '/../../config.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 header('Content-Type: application/json');
 
 if (!isset($_SESSION['user_id'])) {
@@ -13,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $batch_id = $_POST['batch_id'] ?? '';
-$driver_name = $_SESSION['full_name'] ?? $_SESSION['username'];
+$driver_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'Driver');
 
 if (empty($batch_id)) {
     echo json_encode(['success' => false, 'message' => 'Batch ID is required']);
@@ -21,8 +24,9 @@ if (empty($batch_id)) {
 }
 
 try {
-    $conn = new mysqli('localhost', 'root', '', 'ability_db');
-    if ($conn->connect_error) {
+    require_once __DIR__ . '/../../includes/db_connect.php';
+    $conn = getConnection();
+    if (!$conn) {
         throw new Exception("Database connection failed");
     }
 
@@ -38,24 +42,37 @@ try {
     }
     
     $batch = $result->fetch_assoc();
+    $stmt->close();
     
     if ($batch['tech_onboard'] == 1) {
         throw new Exception("Technician is already on board.");
     }
 
-    $updateQuery = "UPDATE stock_movements SET tech_onboard = 1, tech_onboard_at = NOW() WHERE batch_number = ?";
+    $batchDbId = $batch['id'];
+
+    $updateQuery = "UPDATE stock_movements SET tech_onboard = 1, tech_onboard_at = NOW(), updated_at = NOW() WHERE id = ?";
     $updateStmt = $conn->prepare($updateQuery);
-    $updateStmt->bind_param("s", $batch_id);
+    $updateStmt->bind_param("i", $batchDbId);
     
     if (!$updateStmt->execute()) {
         throw new Exception("Failed to update technician onboard status.");
     }
+    $updateStmt->close();
+
+    // Log to activity_log
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    $desc = "Batch {$batch_id} technician onboard confirmed by {$driver_name}";
+    $logStmt = $conn->prepare("INSERT INTO activity_log (user_id, action_type, action, description, ip_address) VALUES (?, 'transport', 'tech_onboard', ?, ?)");
+    if ($logStmt) {
+        $logStmt->bind_param("iss", $_SESSION['user_id'], $desc, $ip);
+        $logStmt->execute();
+        $logStmt->close();
+    }
     
-    echo json_encode(['success' => true, 'message' => 'Technician onboard status verified successfully']);
+    echo json_encode(['success' => true, 'message' => 'Technician onboard status verified successfully!']);
 
 } catch (Exception $e) {
     echo json_encode(['success' => false, 'message' => $e->getMessage()]);
 } finally {
     if (isset($conn)) $conn->close();
 }
-?>

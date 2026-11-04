@@ -3,22 +3,23 @@ error_reporting(0);
 ini_set('display_errors', 0);
 
 header('Content-Type: application/json');
-session_start();
+require_once __DIR__ . '/../../config.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-$host = 'localhost';
-$username = 'root';
-$password = '';
-$database = 'ability_db';
+require_once __DIR__ . '/../../includes/db_connect.php';
+$conn = getConnection();
 
-$conn = new mysqli($host, $username, $password, $database);
-
-if ($conn->connect_error) {
+if (!$conn) {
     echo json_encode(['success' => false, 'message' => 'Connection failed']);
     exit();
 }
 
-$date_from = $_GET['date_from'] ?? date('Y-m-d', strtotime('-30 days'));
-$date_to = $_GET['date_to'] ?? date('Y-m-d');
+$raw_from = $_GET['date_from'] ?? date('Y-m-d', strtotime('-30 days'));
+$raw_to = $_GET['date_to'] ?? date('Y-m-d');
+$date_from = $conn->real_escape_string($raw_from);
+$date_to = $conn->real_escape_string($raw_to);
 
 $stats = [];
 
@@ -27,7 +28,7 @@ $userRole = $_SESSION['role'] ?? '';
 $userId = $_SESSION['user_id'] ?? 0;
 $roleFilter = "";
 if ($userRole === 'stock_controller') {
-    $roleFilter = " AND (stock_controller_id = " . intval($userId) . " OR movement_type IN ('transport', 'stock_to_venue_transport', 'stock_to_stock'))";
+    $roleFilter = " AND (stock_controller_id = " . intval($userId) . " OR movement_type IN ('transport', 'stock_to_venue_transport', 'stock_to_stock', 'stock_to_venue_room', 'venue_room_to_stock'))";
 }
 
 // Total batches in date range

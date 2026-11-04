@@ -18,8 +18,9 @@ if (!isset($_SESSION['username'])) {
     exit();
 }
 
-$conn = new mysqli('localhost', 'root', '', 'ability_db');
-if ($conn->connect_error) {
+require_once __DIR__ . '/../../includes/db_connect.php';
+$conn = getConnection();
+if (!$conn) {
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'DB connection failed']);
     exit();

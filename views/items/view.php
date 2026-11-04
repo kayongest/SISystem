@@ -152,9 +152,14 @@ if (!$item): ?>
                 <?php endif; ?>
             </div>
             <?php if (!empty($item['qr_code'])): ?>
-                <a href="<?php echo htmlspecialchars($item['qr_code']); ?>" download="QR_<?php echo htmlspecialchars($item['serial_number']); ?>.png" class="btn btn-sm btn-outline-primary rounded-pill px-3">
-                    <i class="fas fa-download me-1"></i> Download QR
-                </a>
+                <div class="d-flex justify-content-center gap-2">
+                    <a href="<?php echo htmlspecialchars($item['qr_code']); ?>" download="QR_<?php echo htmlspecialchars($item['serial_number']); ?>.png" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                        <i class="fas fa-download me-1"></i> Download
+                    </a>
+                    <button class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="generateQRCode(<?php echo $item['id']; ?>)" title="Regenerate QR Code with current item data">
+                        <i class="fas fa-sync-alt me-1"></i> Regenerate
+                    </button>
+                </div>
             <?php else: ?>
                 <button class="btn btn-sm btn-primary rounded-pill px-3" onclick="generateQRCode(<?php echo $item['id']; ?>)">
                     <i class="fas fa-magic me-1"></i> Generate QR Code

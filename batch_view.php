@@ -29,25 +29,10 @@ if (!isset($_GET['id'])) {
 $batchId = $_GET['id'];
 
 // Database connection
-$conn = new mysqli('localhost', 'root', '', 'ability_db');
-
-// Check connection
-if ($conn->connect_error) {
-    // Try alternative database names
-    $databases = ['ability_db', 'inventory_db', 'ability_inventory', 'test_db'];
-    $connected = false;
-
-    foreach ($databases as $db) {
-        $conn = new mysqli('localhost', 'root', '', $db);
-        if (!$conn->connect_error) {
-            $connected = true;
-            break;
-        }
-    }
-
-    if (!$connected) {
-        die("<div class='alert alert-danger'>Database connection failed. Please check your database configuration.</div>");
-    }
+require_once __DIR__ . '/includes/db_connect.php';
+$conn = getConnection();
+if (!$conn) {
+    die("Database connection failed. Please contact administrator.");
 }
 
 echo "<!-- Debug: Connected to database successfully -->";

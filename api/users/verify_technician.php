@@ -33,8 +33,9 @@ if ($technician_id <= 0 || empty($password)) {
 }
 
 // Database connection
-$conn = new mysqli('localhost', 'root', '', 'ability_db');
-if ($conn->connect_error) {
+require_once __DIR__ . '/../../includes/db_connect.php';
+$conn = getConnection();
+if (!$conn) {
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Database connection failed']);
     exit();

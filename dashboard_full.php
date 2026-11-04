@@ -29,12 +29,13 @@ require_once 'includes/functions.php';
 $user_role = getUserRole();
 
 // RESTRICT ACCESS - Only admins, managers, stock controllers, and technicians can access the main dashboard
-$allowed_dashboard_roles = ['admin', 'manager', 'stock_controller', 'stock_manager', 'tech_lead', 'technician'];
+$allowed_dashboard_roles = ['admin', 'manager', 'stock_controller', 'stock_manager', 'tech_lead', 'technician', 'user'];
 if (!in_array($user_role, $allowed_dashboard_roles)) {
     if ($user_role === 'driver') {
         header('Location: driver_batches.php');
         exit();
     } else {
+        unset($_SESSION['logged_in']);
         header('Location: login.php');
         exit();
     }

@@ -1,13 +1,13 @@
 <?php
-session_start();
-header('Content-Type: application/json');
-require_once '../includes/database_fix.php';
+require_once __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/../includes/db_connect.php';
 
-$db = new DatabaseFix();
-$conn = $db->getConnection();
+header('Content-Type: application/json');
+
+$conn = getConnection();
 
 $query = "SELECT id, name, location FROM stock_locations WHERE is_active = 1 ORDER BY name";
-$result = $conn->query($query);
+$result = $conn ? $conn->query($query) : false;
 
 $locations = [];
 if ($result) {

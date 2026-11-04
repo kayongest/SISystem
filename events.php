@@ -12,7 +12,7 @@ require_once 'includes/functions.php';
 require_once 'includes/db_connect.php';
 
 $user_role = getUserRole();
-if ($user_role === 'driver') {
+if (in_array($user_role, ['driver', 'user', 'technician'])) {
     header("Location: dashboard_full.php");
     exit();
 }

@@ -7,6 +7,7 @@ if (session_status() === PHP_SESSION_NONE) {
 $current_page = basename($_SERVER['PHP_SELF']);
 $user_role = getUserRole();
 $user_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'User');
+$user_profile_image = $_SESSION['profile_image'] ?? null;
 
 // Dynamic notification counts for different roles
 $tech_batch_count = 0;
@@ -19,7 +20,7 @@ try {
     $nav_conn = $nav_db->getConnection();
 
     if ($nav_conn) {
-        if ($user_role === 'technician' && isset($_SESSION['user_id'])) {
+        if (in_array($user_role, ['technician', 'user']) && isset($_SESSION['user_id'])) {
             $stmt = $nav_conn->prepare("SELECT COUNT(*) as count FROM batches WHERE submitted_by = ?");
             if ($stmt) {
                 $stmt->bind_param("i", $_SESSION['user_id']);
@@ -54,6 +55,23 @@ try {
                     $pending_approval_count = $row['count'] ?? 0;
                 }
                 $stmt->close();
+            }
+        }
+
+        // Fetch profile image if not cached in session
+        if (empty($user_profile_image) && isset($_SESSION['user_id'])) {
+            $img_stmt = $nav_conn->prepare("SELECT profile_image FROM users WHERE id = ?");
+            if ($img_stmt) {
+                $img_stmt->bind_param("i", $_SESSION['user_id']);
+                $img_stmt->execute();
+                $img_res = $img_stmt->get_result();
+                if ($img_row = $img_res->fetch_assoc()) {
+                    if (!empty($img_row['profile_image'])) {
+                        $user_profile_image = $img_row['profile_image'];
+                        $_SESSION['profile_image'] = $user_profile_image;
+                    }
+                }
+                $img_stmt->close();
             }
         }
     }
@@ -91,6 +109,16 @@ try {
         color: white;
         font-size: 1.2rem;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        overflow: hidden;
+        border: 2px solid rgba(255, 255, 255, 0.25);
+        flex-shrink: 0;
+    }
+
+    .user-avatar-compact img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
     }
 
     .user-details-compact h5 {
@@ -213,13 +241,12 @@ try {
         <div class="d-flex align-items-center gap-4">
             <div class="user-info-compact">
                 <div class="user-avatar-compact">
-                    <?php
-                    $icon = 'fa-user';
-                    if (isAdmin()) $icon = 'fa-user-shield';
-                    elseif ($user_role === 'technician') $icon = 'fa-tools';
-                    elseif ($user_role === 'stock_controller') $icon = 'fa-check-circle';
-                    ?>
-                    <i class="fas <?php echo $icon; ?>"></i>
+                    <?php if (!empty($user_profile_image)): ?>
+                        <img src="<?php echo BASE_URL . ltrim($user_profile_image, '/'); ?>" alt="<?php echo htmlspecialchars($user_name); ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                        <i class="fas fa-user" style="display: none;"></i>
+                    <?php else: ?>
+                        <i class="fas fa-user"></i>
+                    <?php endif; ?>
                 </div>
                 <div class="user-details-compact">
                     <h5><?php echo htmlspecialchars($user_name); ?></h5>
@@ -240,7 +267,7 @@ try {
         <div class="collapse navbar-collapse" id="unifiedNavbar">
             <div class="nav-links-unified ms-auto mt-3 mt-lg-0">
                 <!-- Dashboard -->
-                <?php if (isAdmin() || in_array($user_role, ['stock_manager', 'tech_lead', 'technician'])): ?>
+                <?php if (isAdmin() || in_array($user_role, ['stock_manager', 'tech_lead', 'technician', 'user'])): ?>
                     <a href="<?php echo BASE_URL; ?>dashboard_full.php" class="nav-link-compact <?php echo ($current_page == 'dashboard_full.php') ? 'active' : ''; ?>">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a>
@@ -254,14 +281,14 @@ try {
                 <?php endif; ?>
 
                 <!-- Fly Cases -->
-                <?php if ($user_role !== 'driver'): ?>
+                <?php if (!in_array($user_role, ['driver', 'user', 'technician'])): ?>
                     <a href="<?php echo BASE_URL; ?>cases.php" class="nav-link-compact <?php echo (strpos($current_page, 'cases') !== false) ? 'active' : ''; ?>">
                         <i class="fas fa-box"></i> Fly Cases
                     </a>
                 <?php endif; ?>
 
                 <!-- RFID Simulator -->
-                <?php if ($user_role !== 'driver'): ?>
+                <?php if (!in_array($user_role, ['driver', 'user', 'technician'])): ?>
                     <a href="<?php echo BASE_URL; ?>rfid_simulator.php" class="nav-link-compact <?php echo ($current_page == 'rfid_simulator.php') ? 'active' : ''; ?>">
                         <i class="fas fa-broadcast-tower"></i> RFID Simulator
                     </a>
@@ -277,14 +304,14 @@ try {
 
 
 
-                <?php if (isAdmin()): ?>
+                <?php if (isAdmin() || in_array($user_role, ['technician', 'user', 'tech_lead'])): ?>
                     <a href="<?php echo BASE_URL; ?>scan_bulk.php" class="nav-link-compact <?php echo ($current_page == 'scan_bulk.php') ? 'active' : ''; ?>">
                         <i class="fas fa-qrcode"></i> Scanner
                     </a>
                 <?php endif; ?>
 
                 <!-- History Links based on role -->
-                <?php if ($user_role === 'technician'): ?>
+                <?php if ($user_role === 'technician' || $user_role === 'user'): ?>
                     <a href="<?php echo BASE_URL; ?>technician_batch_history.php" class="nav-link-compact <?php echo ($current_page == 'technician_batch_history.php') ? 'active' : ''; ?>">
                         <i class="fas fa-history"></i> My Batches
                         <?php if ($tech_batch_count > 0): ?>
@@ -312,13 +339,14 @@ try {
                 <?php endif; ?>
 
                 <!-- Setup Dropdown (Multi-role Config) -->
+                <?php if (!in_array($user_role, ['driver', 'user', 'technician'])): ?>
                 <div class="dropdown dropdown-compact">
-                    <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['stock_locations.php', 'categories.php', 'departments.php', 'locations.php', 'events.php', 'mobile_app.php', 'reports.php', 'hr_center.php', 'drivers.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
+                    <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['stock_locations.php', 'categories.php', 'departments.php', 'locations.php', 'events.php', 'mobile_app.php', 'reports.php', 'hr_center.php', 'drivers.php', 'users.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
                         <i class="fas fa-cog"></i> Setup
                     </a>
                     <ul class="dropdown-menu shadow">
                         <!-- Events -->
-                        <?php if ($user_role !== 'driver'): ?>
+                        <?php if (!in_array($user_role, ['driver', 'user', 'technician'])): ?>
                             <li><a class="dropdown-item <?php echo ($current_page == 'events.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>events.php"><i class="fas fa-calendar-alt me-2 text-info"></i> Events</a></li>
                         <?php endif; ?>
 
@@ -338,6 +366,7 @@ try {
                             <li>
                                 <hr class="dropdown-divider">
                             </li>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'users.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>users.php"><i class="fas fa-users-cog me-2 text-warning"></i> Users</a></li>
                             <li><a class="dropdown-item <?php echo ($current_page == 'stock_locations.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>stock_locations.php"><i class="fas fa-warehouse me-2"></i> Stock Locations</a></li>
                             <li><a class="dropdown-item <?php echo ($current_page == 'categories.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>categories.php"><i class="fas fa-list me-2"></i> Categories</a></li>
                             <li><a class="dropdown-item <?php echo ($current_page == 'departments.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>departments.php"><i class="fas fa-building me-2"></i> Departments</a></li>
@@ -345,6 +374,7 @@ try {
                         <?php endif; ?>
                     </ul>
                 </div>
+                <?php endif; ?>
 
 
                 <!-- User Profile Dropdown -->

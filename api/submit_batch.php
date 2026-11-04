@@ -35,17 +35,12 @@ if (empty($data['items']) || !is_array($data['items'])) {
     jsonResponse(false, 'No items in batch');
 }
 
-if (empty($data['technician_id'])) {
-    jsonResponse(false, 'Technician not authenticated');
+require_once __DIR__ . '/../includes/db_connect.php';
+$conn = getConnection();
+
+if (!$conn) {
+    jsonResponse(false, 'Database connection failed');
 }
-
-$conn = new mysqli('localhost', 'root', '', 'ability_db');
-
-if ($conn->connect_error) {
-    jsonResponse(false, 'Database connection failed: ' . $conn->connect_error);
-}
-
-$conn->set_charset("utf8mb4");
 
 // Ensure jobsheet_file column exists in stock_movements table
 $checkCol = $conn->query("SHOW COLUMNS FROM stock_movements LIKE 'jobsheet_file'");

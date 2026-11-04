@@ -1,8 +1,8 @@
 <?php
 // bootstrap.php - COMPLETELY FIXED VERSION
 
-define('BASE_PATH', realpath(__DIR__));
-define('APP_PATH', BASE_PATH);
+if (!defined('BASE_PATH')) define('BASE_PATH', realpath(__DIR__));
+if (!defined('APP_PATH')) define('APP_PATH', BASE_PATH);
 
 // Set include path
 set_include_path(get_include_path() . PATH_SEPARATOR . BASE_PATH);
@@ -28,23 +28,25 @@ if (session_status() === PHP_SESSION_NONE) {
 date_default_timezone_set('Africa/Kigali');
 
 // Define ROOT_DIR based on current file location
-define('ROOT_DIR', __DIR__);
+if (!defined('ROOT_DIR')) define('ROOT_DIR', __DIR__);
 
 // Define BASE_URL
-$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443 ? "https" : "http";
-$host = $_SERVER['HTTP_HOST'];
-$script = $_SERVER['SCRIPT_NAME'];
+if (!defined('BASE_URL')) {
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443) ? "https" : "http";
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $script = $_SERVER['SCRIPT_NAME'] ?? '';
 
-// Auto-detect BASE_URL
-$path = dirname($script);
-if ($path !== '/') {
-    define('BASE_URL', rtrim("$protocol://$host$path", '/') . '/');
-} else {
-    define('BASE_URL', "$protocol://$host/");
+    // Auto-detect BASE_URL
+    $path = dirname($script);
+    if ($path !== '/' && $path !== '\\') {
+        define('BASE_URL', rtrim("$protocol://$host$path", '/') . '/');
+    } else {
+        define('BASE_URL', "$protocol://$host/");
+    }
 }
 
 // Site configuration
-define('SITE_NAME', 'aBility Manager');
+if (!defined('SITE_NAME')) define('SITE_NAME', 'aBility Manager');
 
 // Load functions.php - using absolute path
 $functionsPath = ROOT_DIR . '/includes/functions.php';
@@ -113,3 +115,33 @@ if (!function_exists('validateCsrfToken')) {
 // echo "<!-- Bootstrap loaded from: " . __FILE__ . " -->";
 // echo "<!-- ROOT_DIR: " . ROOT_DIR . " -->";
 // echo "<!-- BASE_URL: " . BASE_URL . " -->";
+
+// Strict access control for 'user' role
+if (function_exists('isLoggedIn') && isLoggedIn()) {
+    $boot_role = function_exists('getUserRole') ? getUserRole() : ($_SESSION['user_role'] ?? $_SESSION['role'] ?? null);
+    if (in_array($boot_role, ['user', 'technician'])) {
+        $allowed_user_pages = [
+            'dashboard_full.php',
+            'scan_bulk.php',
+            'batch_history.php',
+            'technician_batch_history.php',
+            'batch_details_modal.php',
+            'batch_report.php',
+            'batch_view.php',
+            'gate_pass.php',
+            'profile.php',
+            'logout.php',
+            'login.php',
+            'index.php'
+        ];
+        $current_script = basename($_SERVER['PHP_SELF'] ?? $_SERVER['SCRIPT_NAME'] ?? '');
+        $req_uri = $_SERVER['REQUEST_URI'] ?? '';
+        $is_api = (strpos($req_uri, '/api/') !== false) || (strpos($current_script, '_ajax') !== false);
+
+        if (!empty($current_script) && !$is_api && !in_array($current_script, $allowed_user_pages)) {
+            $_SESSION['flash_messages']['error'] = 'Access restricted: Your account is only authorized to access Dashboard, Scanner, and Batch History.';
+            header('Location: ' . BASE_URL . 'dashboard_full.php');
+            exit();
+        }
+    }
+}

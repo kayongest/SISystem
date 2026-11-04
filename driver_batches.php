@@ -961,6 +961,7 @@ $pageTitle = "Driver Batches - aBility";
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
     <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
     <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
         let batchesTable;
@@ -1603,11 +1604,27 @@ $pageTitle = "Driver Batches - aBility";
                 data: { batch_id: currentBatchId },
                 success: function(response) {
                     if(response.success) {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Technician Onboard!',
+                                text: response.message || 'Technician confirmed on board.',
+                                timer: 2000
+                            });
+                        }
                         showNotification('success', 'Technician onboard confirmed!');
                         refreshBatchStatus();
                     } else {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire('Notice', response.message || 'Failed to confirm', 'warning');
+                        }
                         showNotification('error', response.message || 'Failed to confirm');
                     }
+                },
+                error: function(xhr) {
+                    let msg = "Server communication error"; if (xhr.responseJSON && xhr.responseJSON.message) { msg = xhr.responseJSON.message; } else if (xhr.responseText) { try { const p = JSON.parse(xhr.responseText); if (p && p.message) msg = p.message; } catch(e){} }
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', msg, 'error');
+                    showNotification('error', msg);
                 },
                 complete: function() {
                     hideLoading();
@@ -1625,11 +1642,27 @@ $pageTitle = "Driver Batches - aBility";
                 data: { batch_id: currentBatchId },
                 success: function(response) {
                     if(response.success) {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Receipt Accepted!',
+                                text: response.message || 'Equipment load verified successfully!',
+                                timer: 2000
+                            });
+                        }
                         showNotification('success', 'Equipment load verified successfully!');
                         refreshBatchStatus();
                     } else {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire('Error', response.message || 'Failed to verify', 'error');
+                        }
                         showNotification('error', response.message || 'Failed to verify');
                     }
+                },
+                error: function(xhr) {
+                    let msg = "Server communication error"; if (xhr.responseJSON && xhr.responseJSON.message) { msg = xhr.responseJSON.message; } else if (xhr.responseText) { try { const p = JSON.parse(xhr.responseText); if (p && p.message) msg = p.message; } catch(e){} }
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', msg, 'error');
+                    showNotification('error', msg);
                 },
                 complete: function() {
                     hideLoading();
@@ -1640,6 +1673,26 @@ $pageTitle = "Driver Batches - aBility";
         // Complete Driver Delivery
         function completeDriverDelivery() {
             if (!currentBatchId) return;
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Complete Delivery?',
+                    text: 'Confirm that all items have been safely delivered to their destination.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#0f8094',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: '<i class="fas fa-flag-checkered me-1"></i> Yes, Complete Delivery'
+                }).then((res) => {
+                    if (res.isConfirmed) {
+                        executeCompleteDelivery();
+                    }
+                });
+            } else {
+                executeCompleteDelivery();
+            }
+        }
+
+        function executeCompleteDelivery() {
             showLoading();
             $.ajax({
                 url: 'api/batches/driver_complete.php',
@@ -1647,14 +1700,27 @@ $pageTitle = "Driver Batches - aBility";
                 data: { batch_id: currentBatchId },
                 success: function(response) {
                     if(response.success) {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Delivered!',
+                                text: response.message || 'Delivery completed successfully!',
+                                timer: 2000
+                            });
+                        }
                         showNotification('success', 'Delivery completed successfully!');
                         refreshBatchStatus();
                     } else {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire('Error', response.message || 'Failed to complete delivery', 'error');
+                        }
                         showNotification('error', response.message || 'Failed to complete delivery');
                     }
                 },
-                error: function() {
-                    showNotification('error', 'Failed to complete delivery');
+                error: function(xhr) {
+                    const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Failed to complete delivery';
+                    if (typeof Swal !== 'undefined') Swal.fire('Error', msg, 'error');
+                    showNotification('error', msg);
                 },
                 complete: function() {
                     hideLoading();
