@@ -377,19 +377,22 @@ if ($selected_user) {
         $lbStmt->close();
     }
 
-    // Fetch Assigned Events for this user
+    // Fetch Assigned Events for this user (matching technician, project manager, or tech lead)
     $assigned_events = [];
     $aeStmt = $conn->prepare("
         SELECT e.*, 
                (SELECT COUNT(*) FROM stock_movements sm WHERE sm.event_name = e.title) as batch_count
         FROM events e 
-        WHERE e.assigned_technician LIKE ? OR e.project_manager LIKE ?
+        WHERE e.assigned_technician LIKE ? OR e.assigned_technician LIKE ? 
+           OR e.project_manager LIKE ? OR e.project_manager LIKE ?
+           OR e.tech_lead LIKE ? OR e.tech_lead LIKE ?
         ORDER BY COALESCE(e.date, e.created_at) DESC
         LIMIT 10
     ");
     if ($aeStmt) {
-        $likeParam = "%" . $uName . "%";
-        $aeStmt->bind_param("ss", $likeParam, $likeParam);
+        $likeName = "%" . ($uName ?: '___') . "%";
+        $likeFull = "%" . ($uFullName ?: '___') . "%";
+        $aeStmt->bind_param("ssssss", $likeName, $likeFull, $likeName, $likeFull, $likeName, $likeFull);
         $aeStmt->execute();
         $assigned_events = $aeStmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $aeStmt->close();
@@ -428,13 +431,26 @@ if ($selected_user) {
     // Combine from events and batches
     if (!empty($assigned_events)) {
         foreach ($assigned_events as $k => $ev) {
+            $cTime = !empty($ev['call_time']) ? trim($ev['call_time']) : $sampleTimes[$k % count($sampleTimes)];
+            if (preg_match('/^(\d{1,2}):(\d{2})$/', $cTime)) {
+                $cTime = date('h:i A', strtotime($cTime));
+            }
+
+            // Determine role dynamically based on Tech Lead / Department
+            $evRole = $sampleRoles[$k % count($sampleRoles)];
+            if (!empty($ev['tech_lead']) && (($uFullName && stripos($ev['tech_lead'], $uFullName) !== false) || ($uName && stripos($ev['tech_lead'], $uName) !== false))) {
+                $evRole = 'Tech Lead';
+            } elseif (!empty($target_user['department'])) {
+                $evRole = ucwords($target_user['department']) . ' Specialist';
+            }
+
             $calltime_schedules[] = [
                 'event_title' => $ev['title'] ?: 'Live Production Stage',
                 'venue' => $ev['location'] ?: ($venues[$k % count($venues)]),
                 'date' => !empty($ev['date']) ? date('M d, Y', strtotime($ev['date'])) : date('M d, Y', strtotime('+' . ($k + 1) . ' days')),
-                'call_time' => $sampleTimes[$k % count($sampleTimes)],
+                'call_time' => $cTime,
                 'show_time' => '18:00 PM',
-                'role' => $sampleRoles[$k % count($sampleRoles)],
+                'role' => $evRole,
                 'manager' => $ev['project_manager'] ?: 'Production Lead',
                 'status' => ($k === 0) ? 'Confirmed' : (($k === 1) ? 'Scheduled' : 'On Site')
             ];

@@ -119,8 +119,8 @@ try {
 
                 // Prepare statement - using project_manager and assigned_technician columns
                 $stmt = $db->prepare("
-                    INSERT INTO events (id, title, date, duration, location, event_image, project_manager, assigned_technician, description, source) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO events (id, title, date, call_time, duration, location, event_image, project_manager, tech_lead, assigned_technician, description, source) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
 
                 if (!$stmt) {
@@ -129,10 +129,12 @@ try {
 
                 // Convert empty strings and '0' to null
                 $date = (!empty($_POST['date']) && $_POST['date'] !== '0000-00-00') ? trim($_POST['date']) : null;
+                $call_time = !empty($_POST['call_time']) ? trim($_POST['call_time']) : null;
                 $duration = !empty($_POST['duration']) ? (int)$_POST['duration'] : null;
                 $location = (isset($_POST['location']) && trim((string)$_POST['location']) !== '' && trim((string)$_POST['location']) !== '0') ? trim((string)$_POST['location']) : null;
                 // Map 'manager' from form to 'project_manager' in database
-                $manager = !empty($_POST['manager']) ? trim($_POST['manager']) : null;
+                $manager = !empty($_POST['manager']) ? trim($_POST['manager']) : (!empty($_POST['project_manager']) ? trim($_POST['project_manager']) : null);
+                $tech_lead = !empty($_POST['tech_lead']) ? trim($_POST['tech_lead']) : null;
                 
                 // Handle multiple technicians selection
                 $technician = null;
@@ -151,15 +153,17 @@ try {
                 error_log("Binding: id={$_POST['id']}, title={$_POST['title']}, date=$date, duration=$duration, location=$location, manager=$manager, technician=$technician, source=$source");
 
                 $stmt->bind_param(
-                    "sssissssss",
+                    "ssssisssssss",
                     $_POST['id'],
                     $_POST['title'],
                     $date,
+                    $call_time,
                     $duration,
                     $location,
                     $imagePath,
-                    $manager,  // This goes to project_manager column
-                    $technician, // This goes to assigned_technician column
+                    $manager,    // project_manager
+                    $tech_lead,  // tech_lead
+                    $technician, // assigned_technician
                     $description,
                     $source
                 );
@@ -212,10 +216,12 @@ try {
                     UPDATE events 
                     SET title = ?, 
                         date = ?, 
+                        call_time = ?,
                         duration = ?, 
                         location = ?, 
                         event_image = ?, 
                         project_manager = ?, 
+                        tech_lead = ?,
                         assigned_technician = ?, 
                         description = ? 
                     WHERE id = ?
@@ -228,10 +234,12 @@ try {
                 // Get values from PUT data
                 $title = $putData['title'] ?? '';
                 $date = (!empty($putData['date']) && $putData['date'] !== '0000-00-00') ? trim($putData['date']) : null;
+                $call_time = !empty($putData['call_time']) ? trim($putData['call_time']) : (!empty($_POST['call_time']) ? trim($_POST['call_time']) : null);
                 $duration = !empty($putData['duration']) ? (int)$putData['duration'] : null;
                 $location = (isset($putData['location']) && trim((string)$putData['location']) !== '' && trim((string)$putData['location']) !== '0') ? trim((string)$putData['location']) : null;
                 // Map 'manager' from form to 'project_manager' in database
-                $manager = !empty($putData['manager']) ? trim($putData['manager']) : null;
+                $manager = !empty($putData['manager']) ? trim($putData['manager']) : (!empty($_POST['manager']) ? trim($_POST['manager']) : null);
+                $tech_lead = !empty($putData['tech_lead']) ? trim($putData['tech_lead']) : (!empty($_POST['tech_lead']) ? trim($_POST['tech_lead']) : null);
                 
                 // Handle multiple technicians selection in PUT
                 $technician = null;
@@ -251,14 +259,16 @@ try {
                 error_log("Binding values - title: $title, date: $date, duration: $duration, location: $location, manager: $manager, technician: $technician, id: $id");
 
                 $stmt->bind_param(
-                    "ssissssss",
+                    "sssisssssss",
                     $title,
                     $date,
+                    $call_time,
                     $duration,
                     $location,
                     $imagePath,
-                    $manager,  // This goes to project_manager column
-                    $technician, // This goes to assigned_technician column
+                    $manager,    // project_manager
+                    $tech_lead,  // tech_lead
+                    $technician, // assigned_technician
                     $description,
                     $id
                 );

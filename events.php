@@ -533,8 +533,16 @@ try {
                                         <span id="modalEventLocation">Location</span>
                                     </div>
                                     <div class="d-flex align-items-center gap-2">
+                                        <i class="far fa-clock" style="color: #ea5455; width:20px;"></i>
+                                        <span id="modalEventCallTime">Call Time: TBD</span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
                                         <i class="fas fa-user-tie" style="color: var(--accent-gold); width:20px;"></i>
                                         <span id="modalEventManager">Manager</span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="fas fa-user-shield" style="color: #ff9f43; width:20px;"></i>
+                                        <span id="modalEventTechLead">Tech Lead: None</span>
                                     </div>
                                     <div class="d-flex align-items-center gap-2">
                                         <i class="fas fa-tools" style="color: var(--accent-gold); width:20px;"></i>
@@ -600,22 +608,39 @@ try {
                             <input type="text" class="form-control bg-light text-dark border-secondary" id="formTitle" name="title" required>
                         </div>
                         <div class="row mb-3">
-                            <div class="col-6">
+                            <div class="col-md-5">
                                 <label class="form-label text-muted">Date *</label>
                                 <input type="date" class="form-control bg-light text-dark border-secondary" id="formDate" name="date" required>
                             </div>
-                            <div class="col-6">
-                                <label class="form-label text-muted">Duration (Days)</label>
+                            <div class="col-md-4">
+                                <label class="form-label text-muted"><i class="far fa-clock me-1 text-danger"></i>Call Time</label>
+                                <input type="time" class="form-control bg-light text-dark border-secondary" id="formCallTime" name="call_time">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label text-muted">Duration</label>
                                 <input type="number" class="form-control bg-light text-dark border-secondary" id="formDuration" name="duration" min="1" value="1">
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label text-muted">Location</label>
-                            <input type="text" class="form-control bg-light text-dark border-secondary" id="formLocation" name="location">
+                            <label class="form-label text-muted">Location / Venue</label>
+                            <input type="text" class="form-control bg-light text-dark border-secondary" id="formLocation" name="location" placeholder="e.g. Kigali Convention Centre">
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label text-muted">Project Manager</label>
-                            <input type="text" class="form-control bg-light text-dark border-secondary" id="formManager" name="manager">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">Project Manager</label>
+                                <input type="text" class="form-control bg-light text-dark border-secondary" id="formManager" name="manager" placeholder="PM Name">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted"><i class="fas fa-user-shield me-1 text-warning"></i>Tech Lead</label>
+                                <select class="form-select bg-light text-dark border-secondary" id="formTechLead" name="tech_lead">
+                                    <option value="">-- Select Tech Lead --</option>
+                                    <?php foreach ($technicians_list as $tech): ?>
+                                        <option value="<?php echo htmlspecialchars($tech['full_name']); ?>">
+                                            <?php echo htmlspecialchars($tech['full_name'] . ' (@' . $tech['username'] . ')'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label text-muted d-flex justify-content-between align-items-center">
@@ -844,10 +869,20 @@ try {
                                 <i class="fas fa-map-marker-alt"></i>
                                 <span>${escapeHtml(ev.location || 'Location TBA')}</span>
                             </div>
+                            ${ev.call_time ? `
+                            <div class="event-meta text-danger">
+                                <i class="far fa-clock"></i>
+                                <span>Call Time: <strong>${escapeHtml(ev.call_time)}</strong></span>
+                            </div>` : ''}
                             <div class="event-meta">
                                 <i class="fas fa-user-tie"></i>
-                                <span>${escapeHtml(ev.project_manager || 'Not Assigned')}</span>
+                                <span>PM: ${escapeHtml(ev.project_manager || 'Not Assigned')}</span>
                             </div>
+                            ${ev.tech_lead ? `
+                            <div class="event-meta">
+                                <i class="fas fa-user-shield text-warning"></i>
+                                <span class="badge bg-warning text-dark"><i class="fas fa-crown me-1"></i>${escapeHtml(ev.tech_lead)}</span>
+                            </div>` : ''}
                             <div class="event-meta align-items-start">
                                 <i class="fas fa-tools mt-1"></i>
                                 <div class="d-flex flex-wrap gap-1">
@@ -914,7 +949,9 @@ try {
             $('#modalEventName').text(eventObj.title || 'Unknown Event');
             $('#modalEventDate').text(eventObj.date ? new Date(eventObj.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'TBD');
             $('#modalEventLocation').text(eventObj.location || 'Location TBA');
+            $('#modalEventCallTime').text(eventObj.call_time ? (`Call Time: ` + eventObj.call_time) : 'Call Time: TBD');
             $('#modalEventManager').text(eventObj.project_manager || 'Not Assigned');
+            $('#modalEventTechLead').html(eventObj.tech_lead ? (`<span class="badge bg-warning text-dark"><i class="fas fa-crown me-1"></i>` + escapeHtml(eventObj.tech_lead) + `</span>`) : '<span class="text-muted">Not Assigned</span>');
             $('#modalEventTechnician').html(renderTechnicianBadges(eventObj.assigned_technician || eventObj.technician));
             
             if (eventObj.movement_type && eventObj.movement_type.toLowerCase() === 'stock to stock' && eventObj.driver) {
@@ -975,7 +1012,7 @@ try {
             $('#formMethod').val('POST');
             $('#eventFormModalLabel').text('Create Event');
             $('#saveEventBtn').text('Save Event');
-            $('#formTechnician').val([]);
+                        $('#formTechnician').val([]);
             $('#currentImagePreview').hide();
             $('#existingImage').val('');
             $('#eventFormModal').modal('show');
@@ -1006,14 +1043,16 @@ try {
             }
             $('#formDuration').val(ev.duration || 1);
             $('#formLocation').val(ev.location && ev.location !== '0' ? ev.location : '');
+            $('#formCallTime').val(ev.call_time || '');
             $('#formManager').val(ev.project_manager || '');
+            $('#formTechLead').val(ev.tech_lead || '');
             
             const rawTech = ev.assigned_technician || ev.technician || '';
             if (rawTech) {
                 const selectedTechs = rawTech.split(',').map(t => t.trim()).filter(t => t.length > 0);
                 $('#formTechnician').val(selectedTechs);
             } else {
-                $('#formTechnician').val([]);
+                            $('#formTechnician').val([]);
             }
 
             $('#formDescription').val(ev.description || '');
