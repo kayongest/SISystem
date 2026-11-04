@@ -11,10 +11,11 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 // Database connection
-$conn = new mysqli('localhost', 'root', '', 'ability_db');
+require_once __DIR__ . '/../includes/db_connect.php';
+$conn = getConnection();
 
 // Check connection
-if ($conn->connect_error) {
+if (!$conn) {
     echo json_encode(['error' => 'Database connection failed']);
     exit();
 }

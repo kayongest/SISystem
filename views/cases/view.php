@@ -113,6 +113,10 @@ try {
                     ?>
                     <span class="badge badge-status <?php echo $condClass; ?>"><?php echo ucfirst($case['condition']); ?></span>
                 </div>
+                <div class="mb-2">
+                    <span class="text-muted small uppercase fw-bold d-block">Packed Fixtures</span>
+                    <span class="badge bg-info fs-6"><i class="fas fa-box-open me-1"></i> <?php echo count($packedItems); ?> Items Packed</span>
+                </div>
                 <?php if (!empty($case['description'])): ?>
                     <div class="mb-2">
                         <span class="text-muted small uppercase fw-bold d-block">Description</span>

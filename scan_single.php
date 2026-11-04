@@ -2257,6 +2257,42 @@ $pageTitle = "Scan QR Code - aBility";
                 location
             });
 
+            let packedHtml = '';
+            const packedList = item.packed_items || item.nested_items;
+            if (packedList && packedList.length > 0) {
+                packedHtml = `
+                    <div class="mt-3 pt-2 border-top">
+                        <h6 class="text-primary fw-bold mb-2">
+                            <i class="fas fa-box-open me-2"></i>Items Packed Inside (${packedList.length}):
+                        </h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0 small">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Item Name</th>
+                                        <th>Serial Number</th>
+                                        <th>Category</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+                packedList.forEach(p => {
+                    packedHtml += `
+                        <tr>
+                            <td><strong>${p.item_name || ''}</strong></td>
+                            <td><code>${p.serial_number || 'N/A'}</code></td>
+                            <td><span class="badge bg-secondary">${p.category || 'General'}</span></td>
+                        </tr>
+                    `;
+                });
+                packedHtml += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
             updateStatus('success', 'Scan complete!');
 
             const resultsContainer = document.getElementById('results');
@@ -2295,6 +2331,8 @@ $pageTitle = "Scan QR Code - aBility";
                             ${location}</p>
                         </div>
                     </div>
+                    
+                    ${packedHtml}
                     
                     <hr>
                     

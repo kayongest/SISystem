@@ -1,6 +1,9 @@
 <?php
 // api/batches/technician_list.php
-session_start();
+require_once __DIR__ . '/../../config.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 header('Content-Type: application/json');
 
 if (!isset($_SESSION['user_id'])) {
@@ -12,8 +15,9 @@ $username = $_SESSION['username'] ?? '';
 
 try {
 // Database connection
-$conn = new mysqli('localhost', 'root', '', 'ability_db');
-if ($conn->connect_error) {
+require_once __DIR__ . '/../../includes/db_connect.php';
+$conn = getConnection();
+if (!$conn) {
     echo json_encode(['success' => false, 'message' => 'Database connection failed']);
     exit();
 }
@@ -67,7 +71,8 @@ $sql = "SELECT
             (SELECT COUNT(*) FROM batch_items bi WHERE bi.batch_id = sm.id) as item_count,
             (SELECT COALESCE(SUM(quantity), 0) FROM batch_items bi WHERE bi.batch_id = sm.id) as total_quantity,
             COALESCE(t.full_name, 'Unknown') as technician,
-            sm.driver_verified
+            sm.driver_verified,
+            sm.tech_onboard
         FROM stock_movements sm
         LEFT JOIN users t ON sm.technician_id = t.id
         WHERE sm.movement_type IN ('transport', 'stock_to_venue_transport', 'stock_to_stock')

@@ -37,11 +37,11 @@ if (file_exists($rate_limit_file)) {
 
 try {
     $conn = getConnection();
-    $stmt = $conn->prepare("SELECT id, username, email, full_name, password, role, department, is_active FROM users WHERE username = ? OR email = ?");
+    $stmt = $conn->prepare("SELECT id, username, email, full_name, password, role, department, is_active, profile_image FROM users WHERE username = ? OR email = ?");
     
     if (!$stmt) {
         // If prepare fails, likely due to missing columns like full_name in older schemas, try fallback
-        $stmt = $conn->prepare("SELECT id, username, email, password, role, department, is_active FROM users WHERE username = ? OR email = ?");
+        $stmt = $conn->prepare("SELECT id, username, email, password, role, department, is_active, profile_image FROM users WHERE username = ? OR email = ?");
         if (!$stmt) {
             echo json_encode(['success' => false, 'message' => 'Database error: ' . $conn->error]);
             exit();
@@ -66,6 +66,8 @@ try {
             $_SESSION['ajax_verified_role'] = $user['role'];
             $_SESSION['ajax_verified_department'] = $user['department'];
             $_SESSION['ajax_verified_roles'] = [$user['role']];
+            $_SESSION['ajax_verified_profile_image'] = $user['profile_image'] ?? null;
+            $_SESSION['profile_image'] = $user['profile_image'] ?? null;
             
             echo json_encode(['success' => true, 'message' => 'Credentials verified']);
         } else {

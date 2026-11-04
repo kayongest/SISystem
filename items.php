@@ -86,10 +86,10 @@ if ($action === 'create') {
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Marvel:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 
         * {
-            font-family: 'Titillium Web', sans-serif;
+            font-family: "Marvel", sans-serif !important;
         }
 
         .titillium-web-extralight {
@@ -447,8 +447,8 @@ if ($action === 'create') {
                 require_once 'views/items/create.php';
                 break;
             case 'edit':
-                require_once 'views/items/edit.php';
-                break;
+                header("Location: items/edit.php?id=" . $id);
+                exit();
             case 'view':
                 require_once 'views/items/view.php';
                 break;
@@ -459,21 +459,6 @@ if ($action === 'create') {
         }
         ?>
     </div>
-
-    <!-- // Add this to your items table to show QR codes -->
-    <td>
-        <?php if (!empty($item['qr_code'])): ?>
-            <img src="<?php echo htmlspecialchars($item['qr_code']); ?>"
-                alt="QR Code" style="width: 50px; height: 50px;">
-            <br>
-            <small>ID: <?php echo $item['id']; ?></small>
-        <?php else: ?>
-            <button class="btn btn-sm btn-outline-primary"
-                onclick="generateQRCode(<?php echo $item['id']; ?>)">
-                Generate QR
-            </button>
-        <?php endif; ?>
-    </td>
 
     <!-- jQuery MUST be loaded first -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

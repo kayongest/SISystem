@@ -12,9 +12,22 @@ require_once 'includes/functions.php';
 require_once 'includes/db_connect.php';
 
 $user_role = getUserRole();
-if ($user_role === 'driver') {
+if (in_array($user_role, ['driver', 'user', 'technician'])) {
     header("Location: dashboard_full.php");
     exit();
+}
+
+$conn = getConnection();
+$technicians_list = [];
+try {
+    $tResult = $conn->query("SELECT id, full_name, username FROM users WHERE role IN ('technician', 'admin', 'stock_controller') ORDER BY full_name ASC");
+    if ($tResult) {
+        while ($row = $tResult->fetch_assoc()) {
+            $technicians_list[] = $row;
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error fetching technicians: " . $e->getMessage());
 }
 ?>
 <!DOCTYPE html>
@@ -553,6 +566,7 @@ if ($user_role === 'driver') {
                                                 <th>Quantity</th>
                                                 <th>Status</th>
                                                 <th>Batch #</th>
+                                                <th class="text-end">Quick Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -602,6 +616,19 @@ if ($user_role === 'driver') {
                         <div class="mb-3">
                             <label class="form-label text-muted">Project Manager</label>
                             <input type="text" class="form-control bg-light text-dark border-secondary" id="formManager" name="manager">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted d-flex justify-content-between align-items-center">
+                                <span>Assigned Technicians</span>
+                                <small class="text-primary"><i class="fas fa-info-circle me-1"></i>Hold Ctrl/Cmd to select multiple</small>
+                            </label>
+                            <select multiple class="form-select bg-light text-dark border-secondary" id="formTechnician" name="technicians[]" style="min-height: 110px;">
+                                <?php foreach ($technicians_list as $tech): ?>
+                                    <option value="<?php echo htmlspecialchars($tech['full_name']); ?>">
+                                        <?php echo htmlspecialchars($tech['full_name'] . ' (@' . $tech['username'] . ')'); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
                         <div class="mb-3">
                             <label class="form-label text-muted">Description</label>
@@ -672,7 +699,15 @@ if ($user_role === 'driver') {
                         else if(data === 'rejected') color = 'danger';
                         return `<span class="badge bg-${color}">${data ? data.toUpperCase() : 'N/A'}</span>`;
                     }},
-                    { data: 'batch_number', render: function(data) { return `<small class="text-muted">#${data}</small>`; } }
+                    { data: 'batch_number', render: function(data) { return `<small class="text-muted">#${data}</small>`; } },
+                    { data: null, className: 'text-end', render: function(data, type, row) {
+                        const itemId = row.item_id || row.id;
+                        if (!itemId) return '-';
+                        return `<div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-light border" onclick="openQuickViewItemModal(${itemId})" title="Quick View Equipment"><i class="fas fa-eye text-info"></i></button>
+                            <button type="button" class="btn btn-light border" onclick="openQuickEditItemModal(${itemId})" title="Quick Edit Equipment"><i class="fas fa-edit text-primary"></i></button>
+                        </div>`;
+                    }}
                 ],
                 language: {
                     emptyTable: "No equipment assigned to this event yet.",
@@ -813,9 +848,11 @@ if ($user_role === 'driver') {
                                 <i class="fas fa-user-tie"></i>
                                 <span>${escapeHtml(ev.project_manager || 'Not Assigned')}</span>
                             </div>
-                            <div class="event-meta">
-                                <i class="fas fa-tools"></i>
-                                <span>${escapeHtml(ev.technician || 'Tech Not Specified')}</span>
+                            <div class="event-meta align-items-start">
+                                <i class="fas fa-tools mt-1"></i>
+                                <div class="d-flex flex-wrap gap-1">
+                                    ${renderTechnicianBadges(ev.assigned_technician || ev.technician)}
+                                </div>
                             </div>
                             ${(ev.movement_type && ev.movement_type.toLowerCase() === 'stock to stock' && ev.driver) ? `
                             <div class="event-meta">
@@ -836,6 +873,17 @@ if ($user_role === 'driver') {
             });
 
             renderPagination(totalPages);
+        }
+
+        function renderTechnicianBadges(rawTech) {
+            if (!rawTech || rawTech.toString().trim() === '') {
+                return '<span class="text-muted small">Tech Not Specified</span>';
+            }
+            const techList = rawTech.toString().split(',').map(t => t.trim()).filter(t => t.length > 0);
+            if (techList.length === 0) {
+                return '<span class="text-muted small">Tech Not Specified</span>';
+            }
+            return techList.map(t => `<span class="badge bg-secondary bg-opacity-10 text-dark border px-2 py-1 small rounded-pill"><i class="fas fa-user-gear text-primary me-1"></i>${escapeHtml(t)}</span>`).join('');
         }
 
         function renderPagination(totalPages) {
@@ -867,7 +915,7 @@ if ($user_role === 'driver') {
             $('#modalEventDate').text(eventObj.date ? new Date(eventObj.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'TBD');
             $('#modalEventLocation').text(eventObj.location || 'Location TBA');
             $('#modalEventManager').text(eventObj.project_manager || 'Not Assigned');
-            $('#modalEventTechnician').text(eventObj.technician || 'Not Specified');
+            $('#modalEventTechnician').html(renderTechnicianBadges(eventObj.assigned_technician || eventObj.technician));
             
             if (eventObj.movement_type && eventObj.movement_type.toLowerCase() === 'stock to stock' && eventObj.driver) {
                 $('#modalEventDriver').text(eventObj.driver);
@@ -927,6 +975,7 @@ if ($user_role === 'driver') {
             $('#formMethod').val('POST');
             $('#eventFormModalLabel').text('Create Event');
             $('#saveEventBtn').text('Save Event');
+            $('#formTechnician').val([]);
             $('#currentImagePreview').hide();
             $('#existingImage').val('');
             $('#eventFormModal').modal('show');
@@ -934,19 +983,39 @@ if ($user_role === 'driver') {
 
         function openEditModal(ev) {
             $('#eventForm')[0].reset();
-            $('#formEventId').val(ev.event_id || '');
+            $('#formEventId').val(ev.event_id || ev.id || '');
             $('#formMethod').val('PUT'); // Use PUT for edits
             $('#eventFormModalLabel').text('Edit Event');
             $('#saveEventBtn').text('Update Event');
             
             $('#formTitle').val(ev.title || '');
-            if(ev.date) {
-                // convert to YYYY-MM-DD
-                const d = new Date(ev.date);
-                if(!isNaN(d)) $('#formDate').val(d.toISOString().split('T')[0]);
+            if (ev.date) {
+                const rawDate = String(ev.date).trim();
+                const match = rawDate.match(/^(\d{4}-\d{2}-\d{2})/);
+                if (match) {
+                    $('#formDate').val(match[1]);
+                } else {
+                    const d = new Date(rawDate);
+                    if (!isNaN(d.getTime())) {
+                        const yr = d.getFullYear();
+                        const mo = String(d.getMonth() + 1).padStart(2, '0');
+                        const da = String(d.getDate()).padStart(2, '0');
+                        $('#formDate').val(`${yr}-${mo}-${da}`);
+                    }
+                }
             }
-            $('#formLocation').val(ev.location || '');
+            $('#formDuration').val(ev.duration || 1);
+            $('#formLocation').val(ev.location && ev.location !== '0' ? ev.location : '');
             $('#formManager').val(ev.project_manager || '');
+            
+            const rawTech = ev.assigned_technician || ev.technician || '';
+            if (rawTech) {
+                const selectedTechs = rawTech.split(',').map(t => t.trim()).filter(t => t.length > 0);
+                $('#formTechnician').val(selectedTechs);
+            } else {
+                $('#formTechnician').val([]);
+            }
+
             $('#formDescription').val(ev.description || '');
 
             if(ev.event_image) {
@@ -1015,5 +1084,7 @@ if ($user_role === 'driver') {
             }
         }
     </script>
+
+    <?php require_once 'includes/quick_item_modals.php'; ?>
 </body>
 </html>

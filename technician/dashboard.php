@@ -12,7 +12,7 @@ $statusQuery = $pdo->query("
     SELECT 
         status,
         COUNT(*) as count
-    FROM equipment 
+    FROM items 
     GROUP BY status 
     ORDER BY 
         FIELD(status, 'available', 'in_use', 'maintenance', 'reserved', 'damaged', 'lost')
@@ -32,8 +32,8 @@ foreach ($statusData as &$row) {
 
 // Get recent equipment
 $recentQuery = $pdo->query("
-    SELECT id, name, serial_number, status, updated_at 
-    FROM equipment 
+    SELECT id, item_name as name, serial_number, status, updated_at 
+    FROM items 
     ORDER BY updated_at DESC 
     LIMIT 10
 ");
@@ -49,11 +49,11 @@ $statsQuery = $pdo->query("
         SUM(CASE WHEN status = 'reserved' THEN 1 ELSE 0 END) as reserved_count,
         SUM(CASE WHEN status = 'damaged' THEN 1 ELSE 0 END) as damaged_count,
         SUM(CASE WHEN status = 'lost' THEN 1 ELSE 0 END) as lost_count,
-        COALESCE(SUM(value), 0) as total_value,
-        COALESCE(ROUND(AVG(value), 2), 0) as avg_value,
+        0 as total_value,
+        0 as avg_value,
         COUNT(DISTINCT category) as categories_count,
         COUNT(DISTINCT stock_location) as locations_count
-    FROM equipment
+    FROM items
 ");
 $stats = $statsQuery->fetch();
 
@@ -79,7 +79,7 @@ $categoryQuery = $pdo->query("
     SELECT 
         category,
         COUNT(*) as count
-    FROM equipment 
+    FROM items 
     WHERE category IS NOT NULL AND category != ''
     GROUP BY category 
     ORDER BY count DESC
@@ -89,11 +89,10 @@ $categories = $categoryQuery->fetchAll();
 
 // Get maintenance needed equipment
 $maintenanceQuery = $pdo->query("
-    SELECT id, name, serial_number, status, warranty_until 
-    FROM equipment 
+    SELECT id, item_name as name, serial_number, status, NULL as warranty_until 
+    FROM items 
     WHERE status IN ('maintenance', 'damaged')
-    OR (warranty_until IS NOT NULL AND warranty_until < CURDATE())
-    ORDER BY warranty_until ASC
+    ORDER BY updated_at DESC
     LIMIT 5
 ");
 $maintenanceItems = $maintenanceQuery->fetchAll();

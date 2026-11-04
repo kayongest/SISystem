@@ -507,11 +507,11 @@ $stats = getEquipmentStats($conn);
                             data: null,
                             render: function(data, type, row) {
                                 return '<div class="btn-group btn-group-sm" role="group">' +
-                                    '<a href="items.php?action=view&id=' + row.id + '" class="btn btn- text-white" title="View" style="background: #435585;">' +
-                                    '<i class="fas fa-eye"></i></a>' +
-                                    '<a href="items.php?action=edit&id=' + row.id + '" class="btn btn- text-white" title="Edit" style="background: #5C8374;">' +
-                                    '<i class="fas fa-edit"></i></a>' +
-                                    '<button type="button" class="btn btn- text-white" onclick="deleteItem(' + row.id + ')" title="Delete" style="background: #750E21;">' +
+                                    '<button type="button" class="btn text-white" onclick="openQuickViewItemModal(' + row.id + ')" title="Quick View Equipment" style="background: #435585;">' +
+                                    '<i class="fas fa-eye"></i></button>' +
+                                    '<button type="button" class="btn text-white" onclick="openQuickEditItemModal(' + row.id + ')" title="Quick Edit Equipment" style="background: #5C8374;">' +
+                                    '<i class="fas fa-edit"></i></button>' +
+                                    '<button type="button" class="btn text-white" onclick="deleteItem(' + row.id + ')" title="Delete" style="background: #750E21;">' +
                                     '<i class="fas fa-trash"></i></button>' +
                                     '</div>';
                             },
@@ -718,3 +718,5 @@ $stats = getEquipmentStats($conn);
         initDataTable();
     })();
 </script>
+
+<?php require_once __DIR__ . '/../../includes/quick_item_modals.php'; ?>

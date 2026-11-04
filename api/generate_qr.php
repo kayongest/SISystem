@@ -15,8 +15,12 @@ if (!isLoggedIn()) {
 // Include QR generator
 require_once '../includes/qr_generator.php';
 
-// Get POST data
-$item_id = $_POST['item_id'] ?? $_POST['id'] ?? 0;
+// Support both form POST and JSON body
+$rawInput = file_get_contents('php://input');
+$jsonInput = json_decode($rawInput, true);
+
+$item_id = $_POST['item_id'] ?? $_POST['id'] ?? $jsonInput['item_id'] ?? $jsonInput['id'] ?? 0;
+$item_id = intval($item_id);
 
 if (!$item_id) {
     echo json_encode(['success' => false, 'message' => 'Item ID is required']);
@@ -34,37 +38,45 @@ try {
     $stmt->execute();
     $result = $stmt->get_result();
     $item = $result->fetch_assoc();
+    $stmt->close();
     
     if (!$item) {
         echo json_encode(['success' => false, 'message' => 'Item not found']);
         exit;
     }
     
-    // Generate QR code
-    $qr_file = '../qrcodes/qr_' . $item['id'] . '.png';
-    if (file_exists($qr_file)) {
-        unlink($qr_file);
-    }
-    
+    // Force generate fresh QR code with current database item details
     $qr_result = generateQRCodeForItem(
         $item['id'],
         $item['item_name'],
         $item['serial_number'],
-        $item['stock_location'] ?? ''
+        $item['stock_location'] ?? '',
+        true // force overwrite
     );
     
     if ($qr_result && $qr_result['success']) {
-        // Get the full URL for the QR code
+        // Ensure database column is updated
+        $updateStmt = $conn->prepare("UPDATE items SET qr_code = ? WHERE id = ?");
+        if ($updateStmt) {
+            $updateStmt->bind_param("si", $qr_result['path'], $item_id);
+            $updateStmt->execute();
+            $updateStmt->close();
+        }
+        
         $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
-        $host = $_SERVER['HTTP_HOST'];
-        $baseUrl = $protocol . $host;
-        $fullQrUrl = $baseUrl . '/ability_app_main/' . ltrim($qr_result['path'], '/');
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $fullQrUrl = $protocol . $host . '/ability_app_main/' . ltrim($qr_result['path'], '/');
         
         echo json_encode([
             'success' => true,
             'message' => 'QR code generated successfully',
             'qr_code' => $fullQrUrl,
-            'qr_path' => $qr_result['path']
+            'qr_path' => $qr_result['path'],
+            'qr_data' => [
+                'i' => (int)$item['id'],
+                'n' => $item['item_name'],
+                's' => $item['serial_number']
+            ]
         ]);
     } else {
         echo json_encode([

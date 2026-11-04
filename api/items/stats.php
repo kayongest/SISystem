@@ -45,7 +45,23 @@ try {
     }
     
     // Get category breakdown
-    $categoryStmt = $conn->prepare("SELECT category, COUNT(*) as count FROM items WHERE category IS NOT NULL AND category != '' GROUP BY category ORDER BY count DESC");
+    $categoryStmt = $conn->prepare("
+        SELECT 
+            CASE 
+                WHEN LOWER(COALESCE(c.name, i.category, '')) IN ('1', 'cat-vid', 'video', 'video data') THEN 'Video'
+                WHEN LOWER(COALESCE(c.name, i.category, '')) IN ('2', 'cat-aud', 'audio', 'sound', 'sound data') THEN 'Audio & Sound'
+                WHEN LOWER(COALESCE(c.name, i.category, '')) IN ('3', 'cat-lght', 'lighting', 'lighting data') THEN 'Lighting'
+                WHEN LOWER(COALESCE(c.name, i.category, '')) IN ('cases', 'case', 'fly case', 'cases & packaging') THEN 'Cases'
+                WHEN TRIM(COALESCE(c.description, c.name, i.category, '')) != '' THEN COALESCE(c.description, c.name, i.category)
+                ELSE 'Uncategorized'
+            END as category, 
+            COUNT(i.id) as count 
+        FROM items i
+        LEFT JOIN categories c ON (CAST(i.category AS CHAR) = CAST(c.id AS CHAR) OR LOWER(i.category) = LOWER(c.name) OR LOWER(i.category) = LOWER(c.slug))
+        WHERE i.category IS NOT NULL AND i.category != '' 
+        GROUP BY 1 
+        ORDER BY count DESC
+    ");
     $categoryStmt->execute();
     $categoryResult = $categoryStmt->get_result();
     $categories = [];

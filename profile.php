@@ -179,7 +179,225 @@ try {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    if ($action === 'update_profile') {
+    // Action 1: Update Profile Picture Only
+    if ($action === 'update_picture' || (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] === UPLOAD_ERR_OK && $action !== 'update_profile' && $action !== 'update_signature')) {
+        try {
+            if (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] === UPLOAD_ERR_OK) {
+                $upload_dir = 'uploads/profiles/';
+                if (!file_exists($upload_dir)) {
+                    mkdir($upload_dir, 0777, true);
+                }
+
+                $file_ext = pathinfo($_FILES['profile_image']['name'], PATHINFO_EXTENSION);
+                $file_name = 'profile_' . $target_user_id . '_' . time() . '.' . $file_ext;
+                $target_path = $upload_dir . $file_name;
+
+                $allowed_types = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+                if (in_array(strtolower($file_ext), $allowed_types)) {
+                    if (move_uploaded_file($_FILES['profile_image']['tmp_name'], $target_path)) {
+                        if (!empty($user['profile_image']) && file_exists($user['profile_image'])) {
+                            @unlink($user['profile_image']);
+                        }
+                        $profile_image = $target_path;
+
+                        $update_sql = "UPDATE users SET profile_image = ?, updated_at = NOW() WHERE id = ?";
+                        $update_stmt = $conn->prepare($update_sql);
+                        $update_stmt->bind_param("si", $profile_image, $target_user_id);
+                        if ($update_stmt->execute()) {
+                            if (!$is_editing_other) {
+                                $_SESSION['profile_image'] = $profile_image;
+                            }
+                            $message = 'Profile picture updated successfully!';
+                            $messageType = 'success';
+                        } else {
+                            $message = 'Failed to update database with profile picture.';
+                            $messageType = 'danger';
+                        }
+                        $update_stmt->close();
+                    } else {
+                        $message = 'Failed to upload image file.';
+                        $messageType = 'danger';
+                    }
+                } else {
+                    $message = 'Invalid image format. Allowed: JPG, PNG, GIF, WEBP.';
+                    $messageType = 'danger';
+                }
+            } else {
+                $message = 'No picture file selected or upload error occurred.';
+                $messageType = 'danger';
+            }
+        } catch (Exception $e) {
+            $message = 'Error updating picture: ' . $e->getMessage();
+            $messageType = 'danger';
+        }
+    }
+
+    // Action 2: Update Digital Signature Only
+    elseif ($action === 'update_signature' || (isset($_FILES['signature_image']) && $_FILES['signature_image']['error'] === UPLOAD_ERR_OK && $action !== 'update_profile')) {
+        try {
+            if (isset($_FILES['signature_image']) && $_FILES['signature_image']['error'] === UPLOAD_ERR_OK) {
+                $sig_dir = 'uploads/signatures/';
+                if (!file_exists($sig_dir)) {
+                    mkdir($sig_dir, 0777, true);
+                }
+
+                $file_ext = pathinfo($_FILES['signature_image']['name'], PATHINFO_EXTENSION);
+                $file_name = 'signature_' . $target_user_id . '_' . time() . '.' . $file_ext;
+                $target_path = $sig_dir . $file_name;
+
+                $allowed_types = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+                if (in_array(strtolower($file_ext), $allowed_types)) {
+                    if (move_uploaded_file($_FILES['signature_image']['tmp_name'], $target_path)) {
+                        if (!empty($user['signature_image']) && file_exists($user['signature_image'])) {
+                            @unlink($user['signature_image']);
+                        }
+                        $signature_image = $target_path;
+
+                        $update_sql = "UPDATE users SET signature_image = ?, updated_at = NOW() WHERE id = ?";
+                        $update_stmt = $conn->prepare($update_sql);
+                        $update_stmt->bind_param("si", $signature_image, $target_user_id);
+                        if ($update_stmt->execute()) {
+                            if (!$is_editing_other) {
+                                $_SESSION['signature_image'] = $signature_image;
+                            }
+                            $message = 'Digital signature updated successfully!';
+                            $messageType = 'success';
+                        } else {
+                            $message = 'Failed to update database with signature.';
+                            $messageType = 'danger';
+                        }
+                        $update_stmt->close();
+                    } else {
+                        $message = 'Failed to upload signature file.';
+                        $messageType = 'danger';
+                    }
+                } else {
+                    $message = 'Invalid image format. Allowed: JPG, PNG, GIF, WEBP.';
+                    $messageType = 'danger';
+                }
+            } else {
+                $message = 'No signature file selected.';
+                $messageType = 'danger';
+            }
+        } catch (Exception $e) {
+            $message = 'Error updating signature: ' . $e->getMessage();
+            $messageType = 'danger';
+        }
+    }
+
+    // Action 3: Update Profile Details Only
+    elseif ($action === 'update_details') {
+        $full_name = trim($_POST['full_name'] ?? '');
+        $username = trim($_POST['username'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $phone = trim($_POST['phone'] ?? '');
+        $department = trim($_POST['department'] ?? '');
+        $bio = trim($_POST['bio'] ?? '');
+        $role = trim($_POST['role'] ?? $user['role']);
+
+        if (empty($username) || empty($email)) {
+            $message = 'Username and email are required.';
+            $messageType = 'danger';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $message = 'Invalid email format.';
+            $messageType = 'danger';
+        } else {
+            try {
+                $check_sql = "SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ? AND is_active = 1";
+                $check_stmt = $conn->prepare($check_sql);
+                $check_stmt->bind_param("ssi", $username, $email, $target_user_id);
+                $check_stmt->execute();
+                $existing = $check_stmt->get_result()->fetch_assoc();
+                $check_stmt->close();
+
+                if ($existing) {
+                    $message = 'Username or email already exists.';
+                    $messageType = 'danger';
+                } else {
+                    $update_role = (function_exists('isAdmin') && isAdmin()) ? $role : $user['role'];
+                    $update_sql = "UPDATE users SET full_name = ?, username = ?, email = ?, phone = ?, department = ?, bio = ?, role = ?, updated_at = NOW() WHERE id = ?";
+                    $update_stmt = $conn->prepare($update_sql);
+                    $update_stmt->bind_param("sssssssi", $full_name, $username, $email, $phone, $department, $bio, $update_role, $target_user_id);
+
+                    if ($update_stmt->execute()) {
+                        if (!$is_editing_other) {
+                            $_SESSION['username'] = $username;
+                            if (!empty($full_name)) $_SESSION['full_name'] = $full_name;
+                        }
+                        $message = 'Profile details updated successfully!';
+                        $messageType = 'success';
+                    } else {
+                        $message = 'Failed to update profile details.';
+                        $messageType = 'danger';
+                    }
+                    $update_stmt->close();
+                }
+            } catch (Exception $e) {
+                $message = 'Error updating profile details: ' . $e->getMessage();
+                $messageType = 'danger';
+            }
+        }
+    }
+
+    // Action 4: Update Password Only
+    elseif ($action === 'update_password') {
+        $current_password = $_POST['current_password'] ?? '';
+        $new_password = $_POST['new_password'] ?? '';
+        $confirm_password = $_POST['confirm_password'] ?? '';
+
+        if (!$is_editing_other && empty($current_password)) {
+            $message = 'Current password is required to change password.';
+            $messageType = 'danger';
+        } elseif (empty($new_password)) {
+            $message = 'New password cannot be empty.';
+            $messageType = 'danger';
+        } elseif ($new_password !== $confirm_password) {
+            $message = 'New passwords do not match.';
+            $messageType = 'danger';
+        } elseif (strlen($new_password) < 6) {
+            $message = 'New password must be at least 6 characters long.';
+            $messageType = 'danger';
+        } else {
+            try {
+                $passwordValid = true;
+                if (!$is_editing_other) {
+                    $pass_sql = "SELECT password FROM users WHERE id = ?";
+                    $pass_stmt = $conn->prepare($pass_sql);
+                    $pass_stmt->bind_param("i", $target_user_id);
+                    $pass_stmt->execute();
+                    $userData = $pass_stmt->get_result()->fetch_assoc();
+                    $pass_stmt->close();
+
+                    if (!password_verify($current_password, $userData['password'] ?? '')) {
+                        $passwordValid = false;
+                        $message = 'Current password is incorrect.';
+                        $messageType = 'danger';
+                    }
+                }
+
+                if ($passwordValid) {
+                    $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+                    $up_sql = "UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?";
+                    $up_stmt = $conn->prepare($up_sql);
+                    $up_stmt->bind_param("si", $hashed_password, $target_user_id);
+                    if ($up_stmt->execute()) {
+                        $message = 'Password changed successfully!';
+                        $messageType = 'success';
+                    } else {
+                        $message = 'Failed to update password.';
+                        $messageType = 'danger';
+                    }
+                    $up_stmt->close();
+                }
+            } catch (Exception $e) {
+                $message = 'Error updating password: ' . $e->getMessage();
+                $messageType = 'danger';
+            }
+        }
+    }
+
+    // Action 5: Legacy full update_profile handling
+    elseif ($action === 'update_profile') {
         $full_name = trim($_POST['full_name'] ?? '');
         $username = trim($_POST['username'] ?? '');
         $email = trim($_POST['email'] ?? '');
@@ -191,7 +409,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $confirm_password = $_POST['confirm_password'] ?? '';
         $role = trim($_POST['role'] ?? $user['role']);
 
-        // Validate required fields
         if (empty($username) || empty($email)) {
             $message = 'Username and email are required.';
             $messageType = 'danger';
@@ -200,27 +417,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'danger';
         } else {
             try {
-                // Check if username/email already exists (excluding current user)
                 $check_sql = "SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ? AND is_active = 1";
                 $check_stmt = $conn->prepare($check_sql);
-
-                if (!$check_stmt) {
-                    throw new Exception("Prepare failed: " . $conn->error);
-                }
-
                 $check_stmt->bind_param("ssi", $username, $email, $target_user_id);
                 $check_stmt->execute();
-                $check_result = $check_stmt->get_result();
-                $existing = $check_result->fetch_assoc();
+                $existing = $check_stmt->get_result()->fetch_assoc();
                 $check_stmt->close();
 
                 if ($existing) {
                     $message = 'Username or email already exists.';
                     $messageType = 'danger';
                 } else {
-                    // Handle password change
                     $passwordChanged = false;
-
                     if (!empty($new_password)) {
                         if (!$is_editing_other && empty($current_password)) {
                             $message = 'Current password is required to change password.';
@@ -233,18 +441,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $messageType = 'danger';
                         } else {
                             if (!$is_editing_other) {
-                                // Verify current password
                                 $pass_sql = "SELECT password FROM users WHERE id = ?";
                                 $pass_stmt = $conn->prepare($pass_sql);
-
-                                if (!$pass_stmt) {
-                                    throw new Exception("Prepare failed: " . $conn->error);
-                                }
-
                                 $pass_stmt->bind_param("i", $target_user_id);
                                 $pass_stmt->execute();
-                                $pass_result = $pass_stmt->get_result();
-                                $userData = $pass_result->fetch_assoc();
+                                $userData = $pass_stmt->get_result()->fetch_assoc();
                                 $pass_stmt->close();
 
                                 if (!password_verify($current_password, $userData['password'] ?? '')) {
@@ -254,139 +455,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $passwordChanged = true;
                                 }
                             } else {
-                                // Admin is editing, skip current password check
                                 $passwordChanged = true;
                             }
                         }
                     }
 
-                    // Handle profile picture upload
                     $profile_image = $user['profile_image'] ?? '';
                     if (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] === UPLOAD_ERR_OK) {
                         $upload_dir = 'uploads/profiles/';
-                        if (!file_exists($upload_dir)) {
-                            mkdir($upload_dir, 0777, true);
-                        }
-
+                        if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
                         $file_ext = pathinfo($_FILES['profile_image']['name'], PATHINFO_EXTENSION);
                         $file_name = 'profile_' . $target_user_id . '_' . time() . '.' . $file_ext;
                         $target_path = $upload_dir . $file_name;
-
-                        $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
-                        if (in_array(strtolower($file_ext), $allowed_types)) {
+                        if (in_array(strtolower($file_ext), ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
                             if (move_uploaded_file($_FILES['profile_image']['tmp_name'], $target_path)) {
-                                // Delete old profile picture if exists
-                                if (!empty($user['profile_image']) && file_exists($user['profile_image'])) {
-                                    unlink($user['profile_image']);
-                                }
+                                if (!empty($user['profile_image']) && file_exists($user['profile_image'])) @unlink($user['profile_image']);
                                 $profile_image = $target_path;
                             }
                         }
                     }
 
-                    // Handle digital signature upload
                     $signature_image = $user['signature_image'] ?? '';
                     if (isset($_FILES['signature_image']) && $_FILES['signature_image']['error'] === UPLOAD_ERR_OK) {
                         $sig_dir = 'uploads/signatures/';
-                        if (!file_exists($sig_dir)) {
-                            mkdir($sig_dir, 0777, true);
-                        }
-
+                        if (!file_exists($sig_dir)) mkdir($sig_dir, 0777, true);
                         $file_ext = pathinfo($_FILES['signature_image']['name'], PATHINFO_EXTENSION);
                         $file_name = 'signature_' . $target_user_id . '_' . time() . '.' . $file_ext;
                         $target_path = $sig_dir . $file_name;
-
-                        $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
-                        if (in_array(strtolower($file_ext), $allowed_types)) {
+                        if (in_array(strtolower($file_ext), ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
                             if (move_uploaded_file($_FILES['signature_image']['tmp_name'], $target_path)) {
-                                // Delete old signature if exists
-                                if (!empty($user['signature_image']) && file_exists($user['signature_image'])) {
-                                    unlink($user['signature_image']);
-                                }
+                                if (!empty($user['signature_image']) && file_exists($user['signature_image'])) @unlink($user['signature_image']);
                                 $signature_image = $target_path;
                             }
                         }
                     }
 
                     if ($messageType !== 'danger') {
+                        $update_role = (function_exists('isAdmin') && isAdmin()) ? $role : $user['role'];
                         if ($passwordChanged) {
-                            // Update with password change
                             $update_sql = "UPDATE users SET full_name = ?, username = ?, email = ?, phone = ?, department = ?, bio = ?, profile_image = ?, signature_image = ?, password = ?, role = ?, updated_at = NOW() WHERE id = ?";
                             $update_stmt = $conn->prepare($update_sql);
-
-                            if (!$update_stmt) {
-                                throw new Exception("Prepare failed: " . $conn->error);
-                            }
-
                             $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-                            $update_role = isAdmin() ? $role : $user['role'];
                             $update_stmt->bind_param("ssssssssssi", $full_name, $username, $email, $phone, $department, $bio, $profile_image, $signature_image, $hashed_password, $update_role, $target_user_id);
                         } else {
-                            // Update without password change
                             $update_sql = "UPDATE users SET full_name = ?, username = ?, email = ?, phone = ?, department = ?, bio = ?, profile_image = ?, signature_image = ?, role = ?, updated_at = NOW() WHERE id = ?";
                             $update_stmt = $conn->prepare($update_sql);
-
-                            if (!$update_stmt) {
-                                throw new Exception("Prepare failed: " . $conn->error);
-                            }
-
-                            $update_role = isAdmin() ? $role : $user['role'];
                             $update_stmt->bind_param("sssssssssi", $full_name, $username, $email, $phone, $department, $bio, $profile_image, $signature_image, $update_role, $target_user_id);
                         }
-
-                        $result = $update_stmt->execute();
-
-                        if ($result) {
+                        if ($update_stmt->execute()) {
                             if (!$is_editing_other) {
-                                // Update session data
                                 $_SESSION['username'] = $username;
-                                if (!empty($full_name)) {
-                                    $_SESSION['full_name'] = $full_name;
-                                }
-                                // UPDATE: Set session images so they refresh immediately
+                                if (!empty($full_name)) $_SESSION['full_name'] = $full_name;
                                 $_SESSION['profile_image'] = $profile_image;
                                 $_SESSION['signature_image'] = $signature_image;
                             }
-
                             $message = 'Profile updated successfully!';
                             $messageType = 'success';
-
-                            // Refresh user data
-                            $refresh_sql = "SELECT u.*, COUNT(a.id) as activity_count FROM users u LEFT JOIN activity_log a ON u.id = a.user_id WHERE u.id = ? GROUP BY u.id";
-                            $refresh_stmt = $conn->prepare($refresh_sql);
-                            if ($refresh_stmt) {
-                                $refresh_stmt->bind_param("i", $target_user_id);
-                                $refresh_stmt->execute();
-                                $refresh_result = $refresh_stmt->get_result();
-                                $user = $refresh_result->fetch_assoc();
-                                $refresh_stmt->close();
-                            }
-
-                            // Log activity
-                            $log_sql = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, 'profile_updated', ?, ?)";
-                            $log_stmt = $conn->prepare($log_sql);
-                            if ($log_stmt) {
-                                $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                                $desc = $is_editing_other ? "Admin updated profile for user ID: $target_user_id" : "Updated profile information";
-                                $log_stmt->bind_param("iss", $_SESSION['user_id'], $desc, $ip);
-                                $log_stmt->execute();
-                                $log_stmt->close();
-                            }
                         } else {
                             $message = 'Failed to update profile.';
                             $messageType = 'danger';
                         }
-
-                        if (isset($update_stmt)) {
-                            $update_stmt->close();
-                        }
+                        $update_stmt->close();
                     }
                 }
             } catch (Exception $e) {
-                error_log("Profile update error: " . $e->getMessage());
                 $message = 'Error updating profile: ' . $e->getMessage();
                 $messageType = 'danger';
             }
+        }
+    }
+
+    // Refresh user data if successful
+    if ($messageType === 'success') {
+        $refresh_sql = "SELECT u.*, COUNT(a.id) as activity_count FROM users u LEFT JOIN activity_log a ON u.id = a.user_id WHERE u.id = ? GROUP BY u.id";
+        $refresh_stmt = $conn->prepare($refresh_sql);
+        if ($refresh_stmt) {
+            $refresh_stmt->bind_param("i", $target_user_id);
+            $refresh_stmt->execute();
+            $user = $refresh_stmt->get_result()->fetch_assoc();
+            $refresh_stmt->close();
+        }
+
+        $log_sql = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, 'profile_updated', ?, ?)";
+        $log_stmt = $conn->prepare($log_sql);
+        if ($log_stmt) {
+            $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+            $desc = $is_editing_other ? "Admin updated profile for user ID: $target_user_id" : "Updated profile information";
+            $log_stmt->bind_param("iss", $_SESSION['user_id'], $desc, $ip);
+            $log_stmt->execute();
+            $log_stmt->close();
         }
     }
 
@@ -396,8 +553,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode([
             'success' => $messageType === 'success',
             'message' => $message,
-            'profile_image' => $profile_image . '?v=' . time(), // Cache buster
-            'signature_image' => $signature_image . '?v=' . time()
+            'profile_image' => isset($profile_image) ? $profile_image . '?v=' . time() : ($user['profile_image'] ? $user['profile_image'] . '?v=' . time() : ''),
+            'signature_image' => isset($signature_image) ? $signature_image . '?v=' . time() : ($user['signature_image'] ? $user['signature_image'] . '?v=' . time() : '')
         ]);
         exit();
     }
@@ -1037,194 +1194,191 @@ $departments = [
     }
 </style>
 
-<form method="POST" enctype="multipart/form-data" id="profileForm">
-    <div class="profile-layout fade-in">
-        <!-- Sidebar -->
-        <div class="profile-sidebar">
-            <!-- Main Sidebar Card -->
-            <div class="sidebar-card">
+<div class="profile-layout fade-in">
+    <!-- Sidebar -->
+    <div class="profile-sidebar">
+        <!-- Main Sidebar Card -->
+        <div class="sidebar-card">
+            <!-- Profile Picture Form -->
+            <form id="pictureForm" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="action" value="update_picture">
                 <div class="avatar-container mx-auto mb-3" style="width: 150px; height: 150px; position: relative;">
                     <div class="profile-avatar">
                         <?php if ($user['profile_image']): ?>
                             <img src="<?php echo htmlspecialchars($user['profile_image']); ?>" id="avatar_preview" alt="Profile">
                         <?php else: ?>
-                            <span id="avatar_placeholder"><?php echo strtoupper(substr($user['full_name'], 0, 1)); ?></span>
+                            <span id="avatar_placeholder"><?php echo strtoupper(substr($user['full_name'] ?? 'U', 0, 1)); ?></span>
                         <?php endif; ?>
                     </div>
-                    <label for="profile_image_input" class="avatar-upload shadow-sm">
+                    <label for="profile_image_input" class="avatar-upload shadow-sm" title="Change Profile Picture">
                         <i class="fas fa-camera"></i>
                     </label>
                     <input type="file" id="profile_image_input" name="profile_image" style="display: none;" accept="image/*">
                 </div>
+            </form>
 
-                <h4 class="fw-bold mb-1" style="color: var(--primary-color);">
-                    <?php echo htmlspecialchars($user['full_name']); ?>
-                </h4>
-                <div class="badge-role bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill mb-3 d-inline-block">
-                    <i class="fas fa-shield-alt me-1"></i>
-                    <?php echo $roles[$user['role']] ?? $user['role']; ?>
+            <h4 class="fw-bold mb-1" style="color: var(--primary-color);">
+                <?php echo htmlspecialchars($user['full_name']); ?>
+            </h4>
+            <div class="badge-role bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill mb-3 d-inline-block">
+                <i class="fas fa-shield-alt me-1"></i>
+                <?php echo $roles[$user['role']] ?? $user['role']; ?>
+            </div>
+
+            <hr class="opacity-10">
+
+            <div class="text-start">
+                <div class="d-flex flex-column gap-2">
+                    <?php
+                    $allowed_pages_list = [];
+
+                    $user_role = getUserRole();
+
+                    if ($user_role === 'admin') {
+                        $allowed_pages_list = [
+                            'Dashboard' => ['dashboard_full.php', 'fa-tachometer-alt'],
+                            'Equipment' => ['items.php', 'fa-boxes'],
+                            'Scanning' => ['scan_bulk.php', 'fa-qrcode'],
+                            'Batch Approvals' => ['batch_history.php', 'fa-check-double'],
+                            'User Management' => ['user_management.php', 'fa-users-cog'],
+                            'Reports' => ['reports.php', 'fa-chart-bar']
+                        ];
+                    } elseif ($user_role === 'stock_controller') {
+                        $allowed_pages_list = [
+                            'Batch Approvals' => ['batch_history.php', 'fa-check-double'],
+                        ];
+                    } elseif ($user_role === 'technician') {
+                        $allowed_pages_list = [
+                            'Bulk Scanning' => ['scan_bulk.php', 'fa-qrcode'],
+                            'My Batches' => ['technician_batch_history.php', 'fa-history'],
+                        ];
+                    } else {
+                        $allowed_pages_list = [
+                            'Home' => ['index.php', 'fa-home'],
+                        ];
+                    }
+
+                    foreach ($allowed_pages_list as $p_name => $p_data): ?>
+                        <a href="<?php echo $p_data[0]; ?>" class="badge text-decoration-none p-3 page-badge text-start">
+                            <i class="fas <?php echo $p_data[1]; ?> me-2"></i>
+                            <?php echo $p_name; ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="profile-container">
+        <!-- Welcome Section -->
+        <div class="welcome-section">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <!-- Welcome Message with Role Badge -->
+                <div>
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                        <h2 class="text-white mb-0">
+                            Welcome back, <span id="userFullName"><?php echo htmlspecialchars($_SESSION['full_name'] ?? $_SESSION['username']); ?></span>!
+                        </h2>
+                    </div>
+                    <p class="text-white-50 mb-0">
+                        <span class="badge permission-badge-admin" style="font-size: 0.7rem; padding: 4px 8px;">
+                            <i class="fas fa-file-alt me-1"></i>
+                            <?php echo isAdmin() ? '22 Pages' : '8 Pages'; ?> Accessible
+                        </span>
+                    </p>
                 </div>
 
-                <hr class="opacity-10">
-
-                <div class="text-start">
-                    <div class="d-flex flex-column gap-2">
-                        <?php
-                        $allowed_pages_list = [];
-
-                        // Always show Profile-related or Home if appropriate
-                        // But let's follow the user's specific role requests
-
-                        $user_role = getUserRole();
-
-                        if ($user_role === 'admin') {
-                            $allowed_pages_list = [
-                                'Dashboard' => ['dashboard_full.php', 'fa-tachometer-alt'],
-                                'Equipment' => ['items.php', 'fa-boxes'],
-                                'Scanning' => ['scan_bulk.php', 'fa-qrcode'],
-                                'Batch Approvals' => ['batch_history.php', 'fa-check-double'],
-                                'User Management' => ['user_management.php', 'fa-users-cog'],
-                                'Reports' => ['reports.php', 'fa-chart-bar']
-                            ];
-                        } elseif ($user_role === 'stock_controller') {
-                            $allowed_pages_list = [
-                                'Batch Approvals' => ['batch_history.php', 'fa-check-double'],
-                            ];
-                        } elseif ($user_role === 'technician') {
-                            $allowed_pages_list = [
-                                'Bulk Scanning' => ['scan_bulk.php', 'fa-qrcode'],
-                                'My Batches' => ['technician_batch_history.php', 'fa-history'],
-                            ];
-                        } else {
-                            // Default fallback
-                            $allowed_pages_list = [
-                                'Home' => ['index.php', 'fa-home'],
-                            ];
-                        }
-
-                        foreach ($allowed_pages_list as $p_name => $p_data): ?>
-                            <a href="<?php echo $p_data[0]; ?>" class="badge text-decoration-none p-3 page-badge text-start">
-                                <i class="fas <?php echo $p_data[1]; ?> me-2"></i>
-                                <?php echo $p_name; ?>
-                            </a>
-                        <?php endforeach; ?>
+                <!-- Role & Permissions -->
+                <div class="d-flex align-items-center gap-4">
+                    <div class="text-end d-none d-md-block">
+                        <div id="permissionBadges" class="d-flex gap-2 flex-wrap align-items-center" style="max-width: 400px; justify-content: flex-end;">
+                            <span class="role-badge-large">
+                                <i class="fas fa-crown"></i>
+                                <span id="userRole"><?php echo $roles[$_SESSION['role']] ?? $_SESSION['role']; ?></span>
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
-
-
         </div>
 
-        <!-- Main Content Area -->
-        <div class="profile-container">
-            <!-- Welcome Section -->
-            <div class="welcome-section">
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-                    <!-- Welcome Message with Role Badge -->
-                    <div>
-                        <div class="d-flex align-items-center gap-3 mb-2">
-                            <h2 class="text-white mb-0">
-                                Welcome back, <span id="userFullName"><?php echo htmlspecialchars($_SESSION['full_name'] ?? $_SESSION['username']); ?></span>!
-                            </h2>
-                        </div>
-                        <p class="text-white-50 mb-0">
-                            <span class="badge permission-badge-admin" style="font-size: 0.7rem; padding: 4px 8px;">
-                                <i class="fas fa-file-alt me-1"></i>
-                                <?php echo isAdmin() ? '22 Pages' : '8 Pages'; ?> Accessible
-                            </span>
-                        </p>
+        <!-- Messages -->
+        <?php if ($message): ?>
+            <div class="alert alert-<?php echo $messageType; ?> alert-dismissible fade show shadow-sm mb-4" role="alert">
+                <i class="fas <?php echo $messageType === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'; ?> me-2"></i>
+                <?php echo htmlspecialchars($message); ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php endif; ?>
+
+        <!-- Admin Search Widget -->
+        <?php if (isAdmin()): ?>
+            <div class="profile-card mb-4 border-0 shadow-sm" style="background: #f8f9fa; position: relative; z-index: 1051;">
+                <div class="row align-items-center g-0">
+                    <div class="col-md-3 p-4 text-white text-center" style="background:#456882; border-radius:10px; color: white;">
+                        <i class="fas fa-users-cog fa-2x mb-2"></i>
+                        <h6 class="mb-0">Admin Controls</h6>
+                        <p class="small opacity-75 mb-0">Platform Access</p>
                     </div>
-
-                    <!-- Role & Permissions -->
-                    <div class="d-flex align-items-center gap-4">
-                        <div class="text-end d-none d-md-block">
-                            <div id="permissionBadges" class="d-flex gap-2 flex-wrap align-items-center" style="max-width: 400px; justify-content: flex-end;">
-
-                                <span class="role-badge-large">
-                                    <i class="fas fa-crown"></i>
-                                    <span id="userRole"><?php echo $roles[$_SESSION['role']] ?? $_SESSION['role']; ?></span>
-                                </span>
+                    <div class="col-md-9 p-4">
+                        <label class="form-label fw-bold text-primary mb-2">Quick User Search</label>
+                        <div class="input-group input-group-lg shadow-sm position-relative">
+                            <span class="input-group-text bg-white border-end-0">
+                                <i class="fas fa-search text-muted"></i>
+                            </span>
+                            <input type="text" id="admin_user_search" class="form-control border-start-0 ps-0" placeholder="Type name, email or technician ID...">
+                            <div id="search_results" class="position-absolute w-100 shadow-lg rounded-bottom border overflow-auto" style="top: 100%; left: 0; z-index: 1060; display: none; background: white; max-height: 350px;">
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+        <?php endif; ?>
 
-            <!-- Messages -->
-            <?php if ($message): ?>
-                <div class="alert alert-<?php echo $messageType; ?> alert-dismissible fade show shadow-sm mb-4" role="alert">
-                    <i class="fas <?php echo $messageType === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'; ?> me-2"></i>
-                    <?php echo htmlspecialchars($message); ?>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            <?php endif; ?>
-
-            <!-- Admin Search Widget (Full Width of Content Area) -->
-            <?php if (isAdmin()): ?>
-                <div class="profile-card mb-4 border-0 shadow-sm" style="background: #f8f9fa; position: relative; z-index: 1051;">
-                    <div class="row align-items-center g-0">
-                        <div class="col-md-3 p-4 text-white text-center" style="background:#456882; border-radius:10px; color: white;">
-                            <i class="fas fa-users-cog fa-2x mb-2"></i>
-                            <h6 class="mb-0">Admin Controls</h6>
-                            <p class="small opacity-75 mb-0">Platform Access</p>
-                        </div>
-                        <div class="col-md-9 p-4">
-                            <label class="form-label fw-bold text-primary mb-2">Quick User Search</label>
-                            <div class="input-group input-group-lg shadow-sm">
-                                <span class="input-group-text bg-white border-end-0">
-                                    <i class="fas fa-search text-muted"></i>
-                                </span>
-                                <input type="text" id="admin_user_search" class="form-control border-start-0 ps-0" placeholder="Type name, email or technician ID...">
-                                <div id="search_results" class="position-absolute w-100 shadow-lg rounded-bottom overflow-hidden" style="top: 100%; left: 0; z-index: 1050; display: none; background: white;">
-                                    <!-- Results will appear here -->
-                                </div>
+        <div class="profile-card p-0 overflow-hidden border-0 shadow-lg">
+            <div class="row g-0">
+                <!-- Left Status Column (Summary Info & Signature Form) -->
+                <div class="col-md-4 col-lg-3 border-end" style="background: #fdfdfd;">
+                    <div class="p-4 h-100">
+                        <div class="mb-5">
+                            <h4 class="fw-bold mb-3" style="color: var(--primary-color);">
+                                <i class="fas fa-user-shield me-2 text-primary"></i>
+                                Account Settings
+                            </h4>
+                            <div class="d-flex align-items-center gap-2 mb-4">
+                                <?php if ($is_editing_other): ?>
+                                    <span class="badge bg-warning text-dark px-3 py-2 rounded-pill">
+                                        <i class="fas fa-edit me-1"></i> Admin Edit Mode
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
+                                        <i class="fas fa-check-circle me-1"></i> Personal Access
+                                    </span>
+                                <?php endif; ?>
                             </div>
                         </div>
-                    </div>
-                </div>
-            <?php endif; ?>
 
-            <div class="profile-card p-0 overflow-hidden border-0 shadow-lg">
-                <div class="row g-0">
-                    <!-- Left Status Column (Summary Info) -->
-                    <div class="col-md-4 col-lg-3 border-end" style="background: #fdfdfd;">
-                        <div class="p-4 h-100">
-                            <div class="mb-5">
-                                <h4 class="fw-bold mb-3" style="color: var(--primary-color);">
-                                    <i class="fas fa-user-shield me-2 text-primary"></i>
-                                    Account Settings
-                                </h4>
-                                <div class="d-flex align-items-center gap-2 mb-4">
-                                    <?php if ($is_editing_other): ?>
-                                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill">
-                                            <i class="fas fa-edit me-1"></i> Admin Edit Mode
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
-                                            <i class="fas fa-check-circle me-1"></i> Personal Access
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
+                        <div class="mb-4">
+                            <h6 class="text-uppercase small fw-bold text-muted mb-3">Personal Information</h6>
+                            <div class="info-item mb-3">
+                                <label class="small text-muted d-block mb-1">Department</label>
+                                <span class="fw-bold text-dark fs-5"><?php echo htmlspecialchars($user['department'] ?? 'Not assigned'); ?></span>
                             </div>
-
-                            <div class="mb-4">
-                                <h6 class="text-uppercase small fw-bold text-muted mb-3">Personal Information</h6>
-                                <div class="info-item mb-3">
-                                    <label class="small text-muted d-block mb-1">Department</label>
-                                    <span class="fw-bold text-dark fs-5"><?php echo htmlspecialchars($user['department'] ?? 'Not assigned'); ?></span>
-                                </div>
-                                <div class="info-item mb-3">
-                                    <label class="small text-muted d-block mb-1">Last Updated</label>
-                                    <span class="text-secondary small"><?php echo $user['updated_at'] ? date('M j, Y', strtotime($user['updated_at'])) : 'Never'; ?></span>
-                                </div>
+                            <div class="info-item mb-3">
+                                <label class="small text-muted d-block mb-1">Last Updated</label>
+                                <span class="text-secondary small"><?php echo $user['updated_at'] ? date('M j, Y', strtotime($user['updated_at'])) : 'Never'; ?></span>
                             </div>
+                        </div>
 
-                            <hr class="my-4 opacity-10">
+                        <hr class="my-4 opacity-10">
 
-                            <div class="mb-4">
-                                <h6 class="text-uppercase small fw-bold text-muted mb-3">Digital Signature</h6>
-                                <p class="small text-muted mb-3">Used for validating stock transfers and reports.</p>
+                        <div class="mb-4">
+                            <h6 class="text-uppercase small fw-bold text-muted mb-3">Digital Signature</h6>
+                            <p class="small text-muted mb-3">Used for validating stock transfers and reports.</p>
 
+                            <form id="signatureForm" method="POST" enctype="multipart/form-data">
+                                <input type="hidden" name="action" value="update_signature">
                                 <div id="signature_preview_container">
                                     <?php if (!empty($user['signature_image']) && file_exists($user['signature_image'])): ?>
                                         <div class="signature-preview mb-3 p-3 border rounded-3 bg-white text-center shadow-sm">
@@ -1241,150 +1395,149 @@ $departments = [
                                     <?php endif; ?>
                                 </div>
 
+                                <input type="file" name="signature_image" id="signature_image_input" style="display: none;" accept="image/*">
                                 <button type="button" id="signature_upload_btn" class="btn btn-sm btn-outline-primary mt-3 w-100 rounded-pill" onclick="document.getElementById('signature_image_input').click()">
                                     <i class="fas fa-pen-nib me-1"></i> Update Signature
                                 </button>
-                            </div>
+                            </form>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Right Action Column (Edit Form) -->
-                    <div class="col-md-8 col-lg-9 bg-white">
-                        <div class="p-4 p-lg-5">
-                            <div class="d-flex align-items-center mb-4">
-                                <h5 class="fw-bold mb-0">
-                                    <i class="fas fa-user-edit me-2 text-primary"></i>
-                                    Edit Profile Details
-                                </h5>
-                                <?php if ($is_editing_other): ?>
-                                    <a href="profile.php" class="ms-auto btn btn-sm btn-outline-primary rounded-pill px-3">
-                                        <i class="fas fa-user-circle me-1"></i> My Profile
-                                    </a>
-                                <?php endif; ?>
-                            </div>
+                <!-- Right Action Column (Edit Profile Details & Change Password Forms) -->
+                <div class="col-md-8 col-lg-9 bg-white">
+                    <div class="p-4 p-lg-5">
+                        <div class="d-flex align-items-center mb-4">
+                            <h5 class="fw-bold mb-0">
+                                <i class="fas fa-user-edit me-2 text-primary"></i>
+                                Edit Profile Details
+                            </h5>
+                            <?php if ($is_editing_other): ?>
+                                <a href="profile.php" class="ms-auto btn btn-sm btn-outline-primary rounded-pill px-3">
+                                    <i class="fas fa-user-circle me-1"></i> My Profile
+                                </a>
+                            <?php endif; ?>
+                        </div>
 
-                            <div class="p-4 p-lg-5">
-                                <input type="hidden" name="action" value="update_profile">
+                        <!-- Profile Details Form -->
+                        <form id="detailsForm" method="POST" class="mb-5">
+                            <input type="hidden" name="action" value="update_details">
 
-                                <div class="row g-4">
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-medium">Full Name</label>
-                                        <input type="text" class="form-control form-control-lg bg-light border-0 px-4" name="full_name"
-                                            value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>"
-                                            placeholder="Enter your full name">
-                                    </div>
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-medium">Full Name</label>
+                                    <input type="text" class="form-control form-control-lg bg-light border-0 px-4" name="full_name"
+                                        value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>"
+                                        placeholder="Enter your full name">
+                                </div>
 
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-medium">Username *</label>
-                                        <input type="text" class="form-control form-control-lg bg-light border-0 px-4" name="username"
-                                            value="<?php echo htmlspecialchars($user['username']); ?>" required>
-                                    </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-medium">Username *</label>
+                                    <input type="text" class="form-control form-control-lg bg-light border-0 px-4" name="username"
+                                        value="<?php echo htmlspecialchars($user['username']); ?>" required>
+                                </div>
 
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-medium">Email *</label>
-                                        <input type="email" class="form-control form-control-lg bg-light border-0 px-4" name="email"
-                                            value="<?php echo htmlspecialchars($user['email']); ?>" required>
-                                    </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-medium">Email *</label>
+                                    <input type="email" class="form-control form-control-lg bg-light border-0 px-4" name="email"
+                                        value="<?php echo htmlspecialchars($user['email']); ?>" required>
+                                </div>
 
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-medium">Phone Number</label>
-                                        <input type="tel" class="form-control form-control-lg bg-light border-0 px-4" name="phone"
-                                            value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>"
-                                            placeholder="+250 XXX XXX XXX">
-                                    </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-medium">Phone Number</label>
+                                    <input type="tel" class="form-control form-control-lg bg-light border-0 px-4" name="phone"
+                                        value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>"
+                                        placeholder="+250 XXX XXX XXX">
+                                </div>
 
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-medium">Department</label>
-                                        <select class="form-select form-select-lg bg-light border-0 px-4" name="department">
-                                            <option value="">Select Department</option>
-                                            <?php foreach ($departments as $key => $value): ?>
-                                                <?php 
-                                                $user_dept = strtolower($user['department'] ?? '');
-                                                $key_lower = strtolower($key);
-                                                $val_lower = strtolower($value);
-                                                $is_selected = ($user_dept === $key_lower || $user_dept === $val_lower || (!empty($user_dept) && strpos($user_dept, $key_lower) !== false));
-                                                ?>
-                                                <option value="<?php echo $key; ?>" <?php echo $is_selected ? 'selected' : ''; ?>>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-medium">Department</label>
+                                    <select class="form-select form-select-lg bg-light border-0 px-4" name="department">
+                                        <option value="">Select Department</option>
+                                        <?php foreach ($departments as $key => $value): ?>
+                                            <?php 
+                                            $user_dept = strtolower($user['department'] ?? '');
+                                            $key_lower = strtolower($key);
+                                            $val_lower = strtolower($value);
+                                            $is_selected = ($user_dept === $key_lower || $user_dept === $val_lower || (!empty($user_dept) && strpos($user_dept, $key_lower) !== false));
+                                            ?>
+                                            <option value="<?php echo $key; ?>" <?php echo $is_selected ? 'selected' : ''; ?>>
+                                                <?php echo $value; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-medium">Role</label>
+                                    <?php if (isAdmin()): ?>
+                                        <select class="form-select form-select-lg bg-light border-0 px-4" name="role">
+                                            <?php foreach ($roles as $key => $value): ?>
+                                                <option value="<?php echo $key; ?>" <?php echo ($user['role'] ?? '') == $key ? 'selected' : ''; ?>>
                                                     <?php echo $value; ?>
                                                 </option>
                                             <?php endforeach; ?>
                                         </select>
-                                    </div>
+                                    <?php else: ?>
+                                        <input type="text" class="form-control form-control-lg bg-light border-0 px-4"
+                                            value="<?php echo $roles[$user['role']] ?? $user['role']; ?>" readonly>
+                                    <?php endif; ?>
+                                </div>
 
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-medium">Role</label>
-                                        <?php if (isAdmin()): ?>
-                                            <select class="form-select form-select-lg bg-light border-0 px-4" name="role">
-                                                <?php foreach ($roles as $key => $value): ?>
-                                                    <option value="<?php echo $key; ?>" <?php echo ($user['role'] ?? '') == $key ? 'selected' : ''; ?>>
-                                                        <?php echo $value; ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        <?php else: ?>
-                                            <input type="text" class="form-control form-control-lg bg-light border-0 px-4"
-                                                value="<?php echo $roles[$user['role']] ?? $user['role']; ?>" readonly>
-                                        <?php endif; ?>
-                                    </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-medium">Bio</label>
+                                    <textarea class="form-control bg-light border-0 px-4 py-3" name="bio" rows="3"
+                                        placeholder="Tell us a little about yourself"><?php echo htmlspecialchars($user['bio'] ?? ''); ?></textarea>
+                                </div>
 
-                                    <div class="col-12">
-                                        <label class="form-label fw-medium">Bio</label>
-                                        <textarea class="form-control bg-light border-0 px-4 py-3" name="bio" rows="3"
-                                            placeholder="Tell us a little about yourself"><?php echo htmlspecialchars($user['bio'] ?? ''); ?></textarea>
-                                    </div>
+                                <div class="col-12 text-end mt-4">
+                                    <button type="submit" class="btn btn-primary px-5 py-3 rounded-pill fw-bold shadow-sm">
+                                        <i class="fas fa-save me-2"></i> Save Profile Details
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
 
-                                    <div class="col-12">
-                                        <div class="p-4 rounded-4 bg-light bg-opacity-50 border border-light shadow-sm">
-                                            <h6 class="fw-bold text-primary mb-3">
-                                                <i class="fas fa-lock me-2"></i>
-                                                Security & Password
-                                            </h6>
-                                            <div class="row g-3">
-                                                <div class="col-md-4">
-                                                    <label class="form-label small">Current Password</label>
-                                                    <input type="password" class="form-control border-0 px-3" name="current_password"
-                                                        <?php if ($is_editing_other) echo 'disabled placeholder="••••••••"'; ?>>
-                                                </div>
-                                                <div class="col-md-4">
-                                                    <label class="form-label small">New Password</label>
-                                                    <input type="password" class="form-control border-0 px-3" name="new_password">
-                                                </div>
-                                                <div class="col-md-4">
-                                                    <label class="form-label small">Confirm</label>
-                                                    <input type="password" class="form-control border-0 px-3" name="confirm_password">
-                                                </div>
-                                            </div>
+                        <hr class="my-5 opacity-10">
+
+                        <!-- Password Change Form -->
+                        <form id="passwordForm" method="POST">
+                            <input type="hidden" name="action" value="update_password">
+                            <div class="p-4 rounded-4 bg-light bg-opacity-50 border border-light shadow-sm">
+                                <h6 class="fw-bold text-primary mb-3">
+                                    <i class="fas fa-lock me-2"></i>
+                                    Security & Password Update
+                                </h6>
+                                <div class="row g-3">
+                                    <?php if (!$is_editing_other): ?>
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Current Password</label>
+                                            <input type="password" class="form-control border-0 px-3" name="current_password">
                                         </div>
+                                    <?php endif; ?>
+                                    <div class="<?php echo $is_editing_other ? 'col-md-6' : 'col-md-4'; ?>">
+                                        <label class="form-label small">New Password</label>
+                                        <input type="password" class="form-control border-0 px-3" name="new_password">
                                     </div>
-
-                                    <div class="col-12 text-end mt-4">
-                                        <hr class="mb-4 opacity-5">
-                                        <div class="d-flex gap-3 justify-content-end align-items-center">
-                                            <button type="button" class="btn btn-link text-muted text-decoration-none px-4" onclick="window.location.href='dashboard_full.php'">
-                                                Cancel
-                                            </button>
-                                            <button type="submit" class="btn btn-primary px-5 py-3 rounded-pill fw-bold shadow-sm">
-                                                <i class="fas fa-save me-2"></i> Save Changes
-                                            </button>
-                                        </div>
+                                    <div class="<?php echo $is_editing_other ? 'col-md-6' : 'col-md-4'; ?>">
+                                        <label class="form-label small">Confirm New Password</label>
+                                        <input type="password" class="form-control border-0 px-3" name="confirm_password">
                                     </div>
                                 </div>
-                                <!-- End of form fields -->
+                                <div class="text-end mt-4">
+                                    <button type="submit" class="btn btn-outline-primary rounded-pill px-4 py-2 fw-bold shadow-sm">
+                                        <i class="fas fa-key me-2"></i> Change Password
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                        </form>
+
                     </div>
                 </div>
             </div>
         </div>
-
     </div>
-
-    <!-- Coming Soon: Stock Management Carousel -->
-
-
-    <!-- Signature hidden input -->
-    <input type="file" name="signature_image" id="signature_image_input" style="display: none;" accept="image/*">
-</form>
+</div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -1433,33 +1586,179 @@ $departments = [
             }
         }
 
-        // User Search functionality
+        // Generic AJAX Form submit helper
+        function submitFormAjax(formElement, triggerBtn, successCallback) {
+            let originalText = '';
+            if (triggerBtn) {
+                originalText = triggerBtn.innerHTML;
+                triggerBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+                triggerBtn.disabled = true;
+            }
+
+            const formData = new FormData(formElement);
+
+            fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.json();
+                })
+                .then(data => {
+                    if (triggerBtn) {
+                        triggerBtn.innerHTML = originalText;
+                        triggerBtn.disabled = false;
+                    }
+
+                    if (data.success) {
+                        showCenteredToast(data.message || 'Updated successfully!', 'success');
+                        if (successCallback) successCallback(data);
+                    } else {
+                        showCenteredToast(data.message || 'Failed to update.', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch Error:', error);
+                    if (triggerBtn) {
+                        triggerBtn.innerHTML = originalText;
+                        triggerBtn.disabled = false;
+                    }
+                    showCenteredToast('An error occurred while saving. Please try again.', 'danger');
+                });
+        }
+
+        // 1. Profile Picture upload trigger
+        const profileInput = document.getElementById('profile_image_input');
+        const pictureForm = document.getElementById('pictureForm');
+        if (profileInput && pictureForm) {
+            profileInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const uploadLabel = document.querySelector('.avatar-upload');
+                    submitFormAjax(pictureForm, uploadLabel, function(data) {
+                        if (data.profile_image) {
+                            const avatars = document.querySelectorAll('.profile-avatar img, .nav-profile-img, .navbar .avatar-img, #avatar_preview');
+                            avatars.forEach(img => img.src = data.profile_image);
+
+                            const previewContainer = document.querySelector('.profile-avatar');
+                            const placeholder = document.getElementById('avatar_placeholder');
+                            if (placeholder) placeholder.style.display = 'none';
+
+                            if (previewContainer && !previewContainer.querySelector('img')) {
+                                previewContainer.innerHTML = `<img src="${data.profile_image}" id="avatar_preview" alt="Profile">`;
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        // 2. Digital Signature upload trigger
+        const signatureInput = document.getElementById('signature_image_input');
+        const signatureForm = document.getElementById('signatureForm');
+        if (signatureInput && signatureForm) {
+            signatureInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const uploadBtn = document.getElementById('signature_upload_btn');
+                    submitFormAjax(signatureForm, uploadBtn, function(data) {
+                        if (data.signature_image) {
+                            const sigPreviewContainer = document.getElementById('signature_preview_container');
+                            if (sigPreviewContainer) {
+                                sigPreviewContainer.innerHTML = `
+                                    <div class="signature-preview mb-3 p-3 border rounded-3 bg-white text-center shadow-sm">
+                                        <img src="${data.signature_image}" alt="Signature" style="max-width: 100%; max-height: 80px; filter: grayscale(1) contrast(1.2);">
+                                    </div>
+                                    <p class="small text-success fw-medium mb-0" id="signature_status_text">
+                                        <i class="fas fa-check-circle me-1"></i> Signature Active
+                                    </p>
+                                `;
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        // 3. Profile Details Form
+        const detailsForm = document.getElementById('detailsForm');
+        if (detailsForm) {
+            detailsForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const submitBtn = this.querySelector('button[type="submit"]');
+                submitFormAjax(this, submitBtn, function(data) {
+                    const fullNameInput = detailsForm.querySelector('input[name="full_name"]');
+                    if (fullNameInput && fullNameInput.value) {
+                        const userFullNameSpan = document.getElementById('userFullName');
+                        if (userFullNameSpan) userFullNameSpan.textContent = fullNameInput.value;
+                    }
+                });
+            });
+        }
+
+        // 4. Password Change Form
+        const passwordForm = document.getElementById('passwordForm');
+        if (passwordForm) {
+            passwordForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const currentPassInput = this.querySelector('input[name="current_password"]');
+                const newPassInput = this.querySelector('input[name="new_password"]');
+                const confirmPassInput = this.querySelector('input[name="confirm_password"]');
+
+                const currentPass = currentPassInput ? currentPassInput.value : '';
+                const newPass = newPassInput ? newPassInput.value : '';
+                const confirmPass = confirmPassInput ? confirmPassInput.value : '';
+
+                if (currentPassInput && !currentPass) {
+                    showCenteredToast('Current password is required to change password.', 'danger');
+                    return;
+                }
+                if (!newPass) {
+                    showCenteredToast('New password cannot be empty.', 'danger');
+                    return;
+                }
+                if (newPass !== confirmPass) {
+                    showCenteredToast('New passwords do not match.', 'danger');
+                    return;
+                }
+                if (newPass.length < 6) {
+                    showCenteredToast('New password must be at least 6 characters long.', 'danger');
+                    return;
+                }
+
+                const submitBtn = this.querySelector('button[type="submit"]');
+                submitFormAjax(this, submitBtn, function(data) {
+                    if (currentPassInput) currentPassInput.value = '';
+                    if (newPassInput) newPassInput.value = '';
+                    if (confirmPassInput) confirmPassInput.value = '';
+                });
+            });
+        }
+
+        // User Search functionality for admin
         const searchInput = document.getElementById('admin_user_search');
         const searchResults = document.getElementById('search_results');
 
         if (searchInput) {
-            // Using 'keyup' and 'input' for maximum compatibility with browsers like Maxthon
             const triggerSearch = function() {
                 const query = searchInput.value.trim();
-                console.log("Triggering search for:", query);
-                console.log("Search query:", query); // Debug for Maxthon
 
-                if (query.length < 2) {
+                if (query.length < 1) {
                     searchResults.style.display = 'none';
                     return;
                 }
 
-                // Using 'q' to match the browser's observed behavior
                 fetch(`api/search_users.php?q=${encodeURIComponent(query)}`)
                     .then(res => res.json())
                     .then(data => {
-                        console.log("Search data received:", data);
-                        if (data.length > 0) {
+                        if (Array.isArray(data) && data.length > 0) {
                             let html = '';
                             data.forEach(u => {
                                 html += `
-                                    <a href="profile.php?id=${u.id}" class="d-flex align-items-center p-3 text-decoration-none border-bottom search-item">
-                                        <div class="rounded-circle bg-primary text-white me-3 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; min-width: 40px;">
+                                    <a href="profile.php?id=${u.id}" class="d-flex align-items-center p-3 text-decoration-none border-bottom search-item bg-white hover-bg-light">
+                                        <div class="rounded-circle bg-primary text-white me-3 d-flex align-items-center justify-content-center fw-bold" style="width: 40px; height: 40px; min-width: 40px;">
                                             ${u.full_name ? u.full_name[0].toUpperCase() : u.username[0].toUpperCase()}
                                         </div>
                                         <div>
@@ -1482,170 +1781,11 @@ $departments = [
 
             searchInput.addEventListener('input', triggerSearch);
             searchInput.addEventListener('keyup', triggerSearch);
+            searchInput.addEventListener('focus', triggerSearch);
 
             document.addEventListener('click', function(e) {
                 if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
                     searchResults.style.display = 'none';
-                }
-            });
-        }
-
-        // Profile Form AJAX Submission
-        let lastTriggerElement = null;
-        const profileForm = document.getElementById('profileForm');
-
-        if (profileForm) {
-            profileForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-
-                try {
-                    const triggerElement = lastTriggerElement || e.submitter || this.querySelector('button[type="submit"]');
-                    lastTriggerElement = null; // reset
-
-                    const newPassword = document.querySelector('input[name="new_password"]').value;
-                    const confirmPassword = document.querySelector('input[name="confirm_password"]').value;
-                    const currentPasswordInput = document.querySelector('input[name="current_password"]');
-                    const currentPassword = currentPasswordInput ? currentPasswordInput.value : '';
-                    const isCurrentDisabled = currentPasswordInput && currentPasswordInput.disabled;
-
-                    if (newPassword || confirmPassword || (!isCurrentDisabled && currentPassword && currentPassword.trim() !== '')) {
-                        if (currentPasswordInput && !isCurrentDisabled && !currentPassword) {
-                            showCenteredToast('Current password is required to change password', 'danger');
-                            return false;
-                        }
-                        if (newPassword !== confirmPassword) {
-                            showCenteredToast('New passwords do not match', 'danger');
-                            return false;
-                        }
-                        if (newPassword.length < 6) {
-                            showCenteredToast('New password must be at least 6 characters long', 'danger');
-                            return false;
-                        }
-                    }
-
-                    const isButton = triggerElement.tagName === 'BUTTON';
-                    let originalText = '';
-                    if (isButton) {
-                        originalText = triggerElement.innerHTML;
-                        triggerElement.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
-                        triggerElement.disabled = true;
-                    }
-
-                    const formData = new FormData(this);
-                    console.log("Submitting Profile Form. Files:", {
-                        profile: formData.get('profile_image'),
-                        signature: formData.get('signature_image')
-                    });
-
-                    fetch(window.location.href, {
-                            method: 'POST',
-                            body: formData,
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest'
-                            }
-                        })
-                        .then(response => {
-                            if (!response.ok) throw new Error('Network response was not ok');
-                            return response.json();
-                        })
-                        .then(data => {
-                            if (isButton) {
-                                triggerElement.innerHTML = originalText;
-                                triggerElement.disabled = false;
-                            }
-
-                            if (data.success) {
-                                showCenteredToast(data.message || 'Profile updated successfully!', 'success');
-
-                                // Update all profile images on the page (including navbar)
-                                if (data.profile_image) {
-                                    console.log("Updating profile images with:", data.profile_image);
-                                    const avatars = document.querySelectorAll('.profile-avatar img, .nav-profile-img, .navbar .avatar-img, #avatar_preview');
-                                    avatars.forEach(img => {
-                                        img.src = data.profile_image;
-                                    });
-
-                                    // Also update the preview container if it was empty
-                                    const previewContainer = document.querySelector('.profile-avatar');
-                                    const placeholder = document.getElementById('avatar_placeholder');
-                                    if (placeholder) placeholder.style.display = 'none';
-
-                                    if (previewContainer && !previewContainer.querySelector('img')) {
-                                        previewContainer.innerHTML = `<img src="${data.profile_image}" id="avatar_preview" alt="Profile">`;
-                                    }
-                                }
-
-                                // Update signature display
-                                if (data.signature_image) {
-                                    console.log("Updating signature image with:", data.signature_image);
-                                    const sigPreviewContainer = document.getElementById('signature_preview_container');
-                                    if (sigPreviewContainer) {
-                                        sigPreviewContainer.innerHTML = `
-                                            <div class="signature-preview mb-3 p-3 border rounded-3 bg-white text-center shadow-sm">
-                                                <img src="${data.signature_image}" alt="Signature" style="max-width: 100%; max-height: 80px; filter: grayscale(1) contrast(1.2);">
-                                            </div>
-                                            <p class="small text-success fw-medium mb-0" id="signature_status_text">
-                                                <i class="fas fa-check-circle me-1"></i> Signature Active
-                                            </p>
-                                        `;
-                                    }
-                                }
-
-                                // Clear password fields
-                                const pwdFields = document.querySelectorAll('input[type="password"]');
-                                pwdFields.forEach(f => f.value = '');
-                            } else {
-                                showCenteredToast(data.message || 'Failed to update profile.', 'danger');
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Fetch Error:', error);
-                            if (isButton) {
-                                triggerElement.innerHTML = originalText;
-                                triggerElement.disabled = false;
-                            }
-                            showCenteredToast('An error occurred while saving. Please try again.', 'danger');
-                        });
-                } catch (generalError) {
-                    console.error('JS Error:', generalError);
-                    alert("A JavaScript error occurred: " + generalError.message);
-                }
-            });
-        }
-
-        // Image triggers
-        const profileInput = document.getElementById('profile_image_input');
-        if (profileInput) {
-            profileInput.addEventListener('change', function() {
-                if (this.files && this.files[0]) {
-                    console.log("Profile image selected, triggering submit...");
-                    lastTriggerElement = document.querySelector('.avatar-upload');
-                    if (typeof profileForm.requestSubmit === 'function') {
-                        profileForm.requestSubmit();
-                    } else {
-                        profileForm.dispatchEvent(new Event('submit', {
-                            cancelable: true,
-                            bubbles: true
-                        }));
-                    }
-                }
-            });
-        }
-
-        const signatureInput = document.getElementById('signature_image_input');
-        if (signatureInput) {
-            signatureInput.addEventListener('change', function() {
-                if (this.files && this.files[0]) {
-                    console.log("Signature image selected, triggering submit...");
-                    lastTriggerElement = document.getElementById('signature_upload_btn');
-                    if (typeof profileForm.requestSubmit === 'function') {
-                        profileForm.requestSubmit();
-                    } else {
-                        profileForm.dispatchEvent(new Event('submit', {
-                            cancelable: true,
-                            bubbles: true
-                        }));
-                    }
                 }
             });
         }

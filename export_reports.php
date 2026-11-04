@@ -84,7 +84,7 @@ if ($report_type === 'inventory') {
     
     $stmt = $pdo->prepare("SELECT i.id, i.item_name, i.serial_number, i.status, COUNT(bi.id) as utilization_count 
                            FROM items i
-                           LEFT JOIN batch_items bi ON i.id = bi.item_id AND bi.created_at BETWEEN :start AND :end
+                           LEFT JOIN batch_items bi ON (i.id = bi.item_id OR i.serial_number = bi.serial_number) AND bi.created_at BETWEEN :start AND :end
                            WHERE i.status NOT IN ('retired', 'damaged', 'lost')
                            GROUP BY i.id
                            ORDER BY utilization_count DESC");
@@ -98,11 +98,31 @@ if ($report_type === 'inventory') {
     
     $stmt = $pdo->prepare("SELECT destination_name, COUNT(*) as movement_count 
                            FROM stock_movements 
-                           WHERE destination_name IS NOT NULL AND destination_name != '' AND created_at BETWEEN :start AND :end
+                           WHERE created_at BETWEEN :start AND :end
                            GROUP BY destination_name
                            ORDER BY movement_count DESC");
     $stmt->execute([':start' => $start_date . ' 00:00:00', ':end' => $end_date . ' 23:59:59']);
     
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        fputcsv($output, $row);
+    }
+} elseif ($report_type === 'inventory_full') {
+    fputcsv($output, ['ID', 'Item Name', 'Serial Number', 'Category', 'Department', 'Condition', 'Status', 'Total Movements']);
+    
+    $stmt = $pdo->query("
+        SELECT 
+            i.id, 
+            i.item_name, 
+            i.serial_number, 
+            COALESCE(c.name, i.category) as category_name, 
+            COALESCE(d.name, i.department) as department_name, 
+            i.`condition`, 
+            i.status,
+            (SELECT COUNT(*) FROM batch_items bi WHERE bi.item_id = i.id OR bi.serial_number = i.serial_number) as total_movements
+        FROM items i 
+        LEFT JOIN categories c ON i.category = CAST(c.id AS CHAR) OR i.category = c.name
+        LEFT JOIN departments d ON COALESCE(NULLIF(i.department, ''), i.category) = CAST(d.id AS CHAR) OR COALESCE(NULLIF(i.department, ''), i.category) = d.code OR COALESCE(NULLIF(i.department, ''), i.category) = d.name
+    ");
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         fputcsv($output, $row);
     }

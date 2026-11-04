@@ -36,7 +36,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
 
-            <li class="dropdown <?php echo (in_array($current_page, ['categories.php', 'departments.php', 'locations.php'])) ? 'active' : ''; ?>">
+            <li class="dropdown <?php echo (in_array($current_page, ['categories.php', 'departments.php', 'stock_locations.php', 'locations.php'])) ? 'active' : ''; ?>">
                 <a href="#settingsSubmenu" data-bs-toggle="collapse" class="dropdown-toggle">
                     <i class="fas fa-cog me-2"></i>
                     Settings
@@ -53,8 +53,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
                         </a>
                     </li>
                     <li>
-                        <a href="<?php echo BASE_URL; ?>locations.php" class="<?php echo ($current_page == 'locations.php') ? 'active' : ''; ?>">
-                            <i class="fas fa-map-marker-alt me-2"></i> Locations
+                        <a href="<?php echo BASE_URL; ?>stock_locations.php" class="<?php echo ($current_page == 'stock_locations.php') ? 'active' : ''; ?>">
+                            <i class="fas fa-warehouse me-2"></i> Stock Locations
                         </a>
                     </li>
                 </ul>

@@ -136,7 +136,7 @@ try {
                            JOIN items i ON bi.item_id = i.id 
                            WHERE bi.created_at >= :start_date 
                            GROUP BY bi.item_id 
-                           ORDER BY scan_count DESC LIMIT 10");
+                           ORDER BY scan_count DESC LIMIT 50");
     $stmt->execute([':start_date' => $start_date]);
     $statistics['top_scanned_items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -146,7 +146,7 @@ try {
                              FROM batch_items bi 
                              JOIN items i ON bi.item_id = i.id 
                              GROUP BY bi.item_id 
-                             ORDER BY scan_count DESC LIMIT 10");
+                             ORDER BY scan_count DESC LIMIT 50");
         $statistics['top_scanned_items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -163,7 +163,7 @@ try {
                          FROM batch_items bi
                          JOIN items i ON bi.item_id = i.id
                          GROUP BY bi.item_id
-                         ORDER BY request_count DESC LIMIT 10");
+                         ORDER BY request_count DESC LIMIT 50");
     $statistics['top_requested_items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Top Search Terms (from activity_log)
@@ -179,14 +179,24 @@ try {
                          FROM batch_items bi
                          JOIN items i ON bi.item_id = i.id
                          GROUP BY bi.item_id
-                         ORDER BY movement_count DESC LIMIT 10");
+                         ORDER BY movement_count DESC LIMIT 50");
     $statistics['top_moved_items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Demand by Category (Requests per category)
-    $stmt = $pdo->query("SELECT i.category, COUNT(bi.id) as request_count 
+    $stmt = $pdo->query("SELECT 
+                            CASE 
+                                WHEN LOWER(COALESCE(c.name, i.category, '')) IN ('1', 'cat-vid', 'video', 'video data') THEN 'Video'
+                                WHEN LOWER(COALESCE(c.name, i.category, '')) IN ('2', 'cat-aud', 'audio', 'sound', 'sound data') THEN 'Audio & Sound'
+                                WHEN LOWER(COALESCE(c.name, i.category, '')) IN ('3', 'cat-lght', 'lighting', 'lighting data') THEN 'Lighting'
+                                WHEN LOWER(COALESCE(c.name, i.category, '')) IN ('cases', 'case', 'fly case', 'cases & packaging') THEN 'Cases'
+                                WHEN TRIM(COALESCE(c.description, c.name, i.category, '')) != '' THEN COALESCE(c.description, c.name, i.category)
+                                ELSE 'Uncategorized'
+                            END as category,
+                            COUNT(bi.id) as request_count 
                          FROM batch_items bi
                          JOIN items i ON bi.item_id = i.id
-                         GROUP BY i.category
+                         LEFT JOIN categories c ON (CAST(i.category AS CHAR) = CAST(c.id AS CHAR) OR LOWER(i.category) = LOWER(c.name) OR LOWER(i.category) = LOWER(c.slug))
+                         GROUP BY 1
                          ORDER BY request_count DESC");
     $statistics['demand_by_category'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -737,9 +747,9 @@ require_once 'views/partials/header.php';
                     <div class="card-header bg-white border-0 py-3">
                         <h6 class="m-0 font-weight-bold text-primary">Top 10 Most Scanned / Requested Items</h6>
                     </div>
-                    <div class="card-body p-0">
+                    <div class="card-body p-3">
                         <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
+                            <table class="table table-hover align-middle mb-0" id="topScannedTable">
                                 <thead class="bg-light text-muted small">
                                     <tr>
                                         <th class="ps-4">Item Name</th>
@@ -756,7 +766,7 @@ require_once 'views/partials/header.php';
                                             <td class="text-center">
                                                 <span class="badge bg-primary rounded-pill px-3"><?php echo $item['scan_count']; ?></span>
                                             </td>
-                                            <td class="pe-4 text-end text-muted small">Just now</td>
+                                            <td class="pe-4 text-end text-muted small">Recent</td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>
@@ -771,7 +781,7 @@ require_once 'views/partials/header.php';
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
-                                    <table class="table table-hover mb-0">
+                                    <table class="table table-hover mb-0" id="topRequestedTable">
                                         <thead class="bg-light">
                                             <tr>
                                                 <th>Item Name</th>
@@ -787,7 +797,7 @@ require_once 'views/partials/header.php';
                                             <?php else: ?>
                                                 <?php foreach ($statistics['top_requested_items'] as $item): ?>
                                                     <tr>
-                                                        <td><?php echo htmlspecialchars($item['item_name']); ?></td>
+                                                        <td class="fw-bold"><?php echo htmlspecialchars($item['item_name']); ?></td>
                                                         <td><code class="text-primary"><?php echo htmlspecialchars($item['serial_number']); ?></code></td>
                                                         <td class="text-center">
                                                             <span class="badge bg-primary rounded-pill"><?php echo $item['request_count']; ?></span>
@@ -837,25 +847,24 @@ require_once 'views/partials/header.php';
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
-                                    <table class="table table-hover mb-0">
+                                    <table class="table table-hover mb-0" id="topMovedTable">
                                         <thead class="bg-light">
                                             <tr>
                                                 <th>Item Name</th>
+                                                <th>Serial Number</th>
                                                 <th class="text-center">Movements</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <?php if (empty($statistics['top_moved_items'])): ?>
                                                 <tr>
-                                                    <td colspan="2" class="text-center text-muted py-4">No circulation data available</td>
+                                                    <td colspan="3" class="text-center text-muted py-4">No circulation data available</td>
                                                 </tr>
                                             <?php else: ?>
                                                 <?php foreach ($statistics['top_moved_items'] as $item): ?>
                                                     <tr>
-                                                        <td>
-                                                            <div class="font-weight-bold"><?php echo htmlspecialchars($item['item_name']); ?></div>
-                                                            <small class="text-muted"><?php echo htmlspecialchars($item['serial_number']); ?></small>
-                                                        </td>
+                                                        <td class="fw-bold"><?php echo htmlspecialchars($item['item_name']); ?></td>
+                                                        <td><code class="text-secondary"><?php echo htmlspecialchars($item['serial_number']); ?></code></td>
                                                         <td class="text-center">
                                                             <span class="badge bg-success rounded-pill"><?php echo $item['movement_count']; ?></span>
                                                         </td>
@@ -1820,6 +1829,48 @@ require_once 'views/partials/header.php';
         } else if (reportType === 'maintenance_report') {
             initTable('table-repairs', 'search-repairs', 'pagination-repairs');
             initTable('table-current-maint', 'search-current-maint', 'pagination-current-maint');
+        }
+
+        // Initialize DataTables for top items summary tables
+        if ($.fn.DataTable) {
+            if ($('#topScannedTable').length && $('#topScannedTable tbody tr').length && !$('#topScannedTable tbody tr td[colspan]').length) {
+                $('#topScannedTable').DataTable({
+                    pageLength: 5,
+                    lengthMenu: [[5, 10, 25, -1], [5, 10, 25, "All"]],
+                    ordering: true,
+                    order: [[2, 'desc']],
+                    language: {
+                        search: "_INPUT_",
+                        searchPlaceholder: "Search items..."
+                    }
+                });
+            }
+
+            if ($('#topRequestedTable').length && $('#topRequestedTable tbody tr').length && !$('#topRequestedTable tbody tr td[colspan]').length) {
+                $('#topRequestedTable').DataTable({
+                    pageLength: 5,
+                    lengthMenu: [[5, 10, 25, -1], [5, 10, 25, "All"]],
+                    ordering: true,
+                    order: [[2, 'desc']],
+                    language: {
+                        search: "_INPUT_",
+                        searchPlaceholder: "Search items..."
+                    }
+                });
+            }
+
+            if ($('#topMovedTable').length && $('#topMovedTable tbody tr').length && !$('#topMovedTable tbody tr td[colspan]').length) {
+                $('#topMovedTable').DataTable({
+                    pageLength: 5,
+                    lengthMenu: [[5, 10, 25, -1], [5, 10, 25, "All"]],
+                    ordering: true,
+                    order: [[2, 'desc']],
+                    language: {
+                        search: "_INPUT_",
+                        searchPlaceholder: "Search items..."
+                    }
+                });
+            }
         }
     });
 </script>

@@ -3,16 +3,15 @@ error_reporting(0);
 ini_set('display_errors', 0);
 
 header('Content-Type: application/json');
-session_start();
+require_once __DIR__ . '/../../config.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-$host = 'localhost';
-$username = 'root';
-$password = '';
-$database = 'ability_db';
+require_once __DIR__ . '/../../includes/db_connect.php';
+$conn = getConnection();
 
-$conn = new mysqli($host, $username, $password, $database);
-
-if ($conn->connect_error) {
+if (!$conn) {
     echo json_encode(['success' => false, 'message' => 'Database connection failed']);
     exit();
 }
@@ -65,6 +64,7 @@ $sql = "SELECT
             b.approval_status,
             b.stock_controller_id,
             b.stock_controller_name,
+            b.stock_location_name,
             b.driver_verified,
             b.tech_onboard
         FROM stock_movements b

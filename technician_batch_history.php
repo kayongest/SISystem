@@ -18,7 +18,7 @@ if (!isLoggedIn()) {
 $user_role = getUserRole();
 
 // RESTRICT ACCESS - Only technicians and admins can access this page
-$allowed_roles = ['technician', 'admin'];
+$allowed_roles = ['technician', 'admin', 'user'];
 if (!in_array($user_role, $allowed_roles)) {
     if ($user_role === 'stock_controller') {
         header('Location: batch_history.php');
@@ -1492,7 +1492,13 @@ $pageTitle = "My Batches - aBility";
             let dName = batch.transport_driver || '';
             if (dName === 'Valetine' || dName === 'valentinb') dName = 'Bembeleza Valentin';
             
-            let driverSublabel = isLoaded ? dName + ' (Loaded)' : (isTechOnboard ? 'Tech Onboard' : (isApproved && !isRejected ? 'Awaiting Dispatch' : '-'));
+            const isTransportBatch = ['transport', 'stock_to_venue_transport', 'stock_to_stock'].includes(batch.movement_type) && batch.transport_driver && batch.transport_driver !== '-- Select Driver --';
+            let driverSublabel = isTransportBatch 
+                ? (isLoaded ? dName + ' (Loaded)' : (isTechOnboard ? 'Tech Onboard' : (isApproved && !isRejected ? 'Awaiting Dispatch' : '-')))
+                : (isApproved ? 'Verified by ' + (batch.stock_controller_name || 'Controller') : 'Pending Handover');
+            let step3Label = isTransportBatch ? 'Driver Loaded' : 'Stock Handover';
+            let step3Icon = isTransportBatch ? 'fa-truck-loading' : 'fa-people-carry';
+            let step4Label = isTransportBatch ? 'Completed' : (batch.movement_type === 'venue_room_to_stock' ? 'In Stock' : 'Deployed to Room');
 
             const milestoneHtml = `
             <div class="milestone-tracker">
@@ -1511,14 +1517,14 @@ $pageTitle = "My Batches - aBility";
                 </div>
                 
                 <div class="milestone-step ${stepLoadedClass}">
-                    <div class="milestone-icon"><i class="fas fa-truck-loading"></i></div>
-                    <div class="milestone-label">Driver Loaded</div>
+                    <div class="milestone-icon"><i class="fas ${step3Icon}"></i></div>
+                    <div class="milestone-label">${step3Label}</div>
                     <div class="milestone-sublabel">${escapeHtml(driverSublabel)}</div>
                 </div>
                 
                 <div class="milestone-step ${stepCompletedClass}">
                     <div class="milestone-icon"><i class="fas fa-flag-checkered"></i></div>
-                    <div class="milestone-label">Completed</div>
+                    <div class="milestone-label">${step4Label}</div>
                     <div class="milestone-sublabel">${isCompleted ? 'Delivered' : '-'}</div>
                 </div>
             </div>

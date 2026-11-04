@@ -1,6 +1,9 @@
 <?php
 // api/batches/technician_list.php
-session_start();
+require_once __DIR__ . '/../../config.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 header('Content-Type: application/json');
 
 if (!isset($_SESSION['user_id'])) {
@@ -12,8 +15,9 @@ $username = $_SESSION['username'] ?? '';
 
 try {
 // Database connection
-$conn = new mysqli('localhost', 'root', '', 'ability_db');
-if ($conn->connect_error) {
+require_once __DIR__ . '/../../includes/db_connect.php';
+$conn = getConnection();
+if (!$conn) {
     echo json_encode(['success' => false, 'message' => 'Database connection failed']);
     exit();
 }
@@ -22,7 +26,7 @@ if ($conn->connect_error) {
     $technician_id = $_SESSION['user_id'];
 
     // Verify user is actually a technician (optional but good for safety)
-    $checkQuery = "SELECT id FROM users WHERE id = ? AND (role = 'technician' OR role = 'admin')";
+    $checkQuery = "SELECT id FROM users WHERE id = ? AND (role = 'technician' OR role = 'admin' OR role = 'user')";
     $stmt = $conn->prepare($checkQuery);
     if ($stmt) {
         $stmt->bind_param("i", $technician_id);
@@ -59,16 +63,17 @@ $sql = "SELECT
             sm.submitted_by,
             sm.stock_controller_name,
             sm.stock_controller_id,
+            sm.stock_location_name,
             (SELECT COUNT(*) FROM batch_items bi WHERE bi.batch_id = sm.id) as item_count,
             (SELECT COALESCE(SUM(quantity), 0) FROM batch_items bi WHERE bi.batch_id = sm.id) as total_quantity,
             COALESCE(t.full_name, 'Unknown') as technician
         FROM stock_movements sm
         LEFT JOIN users t ON sm.technician_id = t.id
-        WHERE sm.technician_id = ?
+        WHERE (sm.technician_id = ? OR sm.submitted_by = ?)
         AND DATE(sm.created_at) BETWEEN ? AND ?";
 
-$params = [$technician_id, $date_from, $date_to];
-$types = "iss";
+$params = [$technician_id, $technician_id, $date_from, $date_to];
+$types = "iiss";
 
 if (!empty($status)) {
     // Check both status and approval_status for compatibility
@@ -127,12 +132,12 @@ $statsSql = "SELECT
                 SUM(CASE WHEN sm.status = 'approved' OR sm.approval_status = 'approved' THEN 1 ELSE 0 END) as approved_batches,
                 SUM(CASE WHEN sm.movement_type IN ('stock_to_stock', 'stock_to_venue_transport') THEN 1 ELSE 0 END) as gate_passes
             FROM stock_movements sm
-            WHERE sm.technician_id = ?
+            WHERE (sm.technician_id = ? OR sm.submitted_by = ?)
             AND DATE(sm.created_at) BETWEEN ? AND ?";
 
 $stmt = $conn->prepare($statsSql);
 if ($stmt) {
-    $stmt->bind_param("iss", $technician_id, $date_from, $date_to);
+    $stmt->bind_param("iiss", $technician_id, $technician_id, $date_from, $date_to);
     $stmt->execute();
     $statsResult = $stmt->get_result();
     $stats = $statsResult->fetch_assoc();

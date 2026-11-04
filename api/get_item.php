@@ -57,6 +57,35 @@ try {
         $accessoryIds[] = $acc['id'];
     }
 
+    // Get items packed inside this case (if applicable)
+    $packedItems = [];
+    $caseName = $item['item_name'] ?? '';
+    $caseSerial = $item['serial_number'] ?? '';
+    if ($caseName || $caseSerial) {
+        $packedStmt = $db->prepare("
+            SELECT id, item_name, serial_number, category, status, `condition`
+            FROM items
+            WHERE storage_location = ? OR storage_location = ?
+            ORDER BY item_name ASC
+        ");
+        if ($packedStmt) {
+            $packedStmt->bind_param("ss", $caseName, $caseSerial);
+            $packedStmt->execute();
+            $packedResult = $packedStmt->get_result();
+            while ($pRow = $packedResult->fetch_assoc()) {
+                $packedItems[] = [
+                    'id' => (int)$pRow['id'],
+                    'item_name' => $pRow['item_name'],
+                    'serial_number' => $pRow['serial_number'],
+                    'category' => $pRow['category'] ?? 'General',
+                    'status' => $pRow['status'] ?? 'available',
+                    'condition' => $pRow['condition'] ?? 'good'
+                ];
+            }
+            $packedStmt->close();
+        }
+    }
+
     // ========== FIX QR CODE HANDLING ==========
     $qrCode = '';
     
@@ -222,6 +251,8 @@ try {
             'last_scanned' => $item['last_scanned'],
             'accessories' => $accessories,
             'accessory_ids' => $accessoryIds,
+            'packed_items' => $packedItems,
+            'packed_count' => count($packedItems),
             'checked_out_by' => $checkedOutBy,
             'checked_out_at' => $checkedOutAt
         ]

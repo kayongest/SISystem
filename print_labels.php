@@ -23,14 +23,11 @@ if (empty($idArray)) {
 $inClause = implode(',', $idArray);
 
 // Database connection
-$host = 'localhost';
-$username = 'root';
-$password = '';
-$database = 'ability_db';
-$conn = new mysqli($host, $username, $password, $database);
+require_once __DIR__ . '/includes/db_connect.php';
+$conn = getConnection();
 
-if ($conn->connect_error) {
-    die("Database connection failed: " . $conn->connect_error);
+if (!$conn) {
+    die("Database connection failed. Please contact administrator.");
 }
 
 $conn->set_charset("utf8mb4");

@@ -36,9 +36,29 @@ try {
         exit();
     }
 
+    // Get items packed inside this case if applicable
+    $packed_items = [];
+    $caseName = $item['item_name'] ?? '';
+    $caseSerial = $item['serial_number'] ?? '';
+    if (($item['category'] ?? '') === 'Cases' || stripos($caseName, 'Case') !== false) {
+        $packedStmt = $conn->prepare("
+            SELECT id, item_name, serial_number, category, status, `condition`
+            FROM items
+            WHERE storage_location = ? OR storage_location = ?
+            ORDER BY item_name ASC
+        ");
+        if ($packedStmt) {
+            $packedStmt->bind_param("ss", $caseName, $caseSerial);
+            $packedStmt->execute();
+            $packedResult = $packedStmt->get_result();
+            $packed_items = $packedResult->fetch_all(MYSQLI_ASSOC);
+            $packedStmt->close();
+        }
+    }
+
     // Get current accessories
     $accStmt = $conn->prepare("
-        SELECT a.id, a.name, a.description, ia.quantity
+        SELECT a.id, a.name, a.description, COALESCE(ia.quantity, 1) AS quantity
         FROM accessories a
         INNER JOIN item_accessories ia ON a.id = ia.accessory_id
         WHERE ia.item_id = ?
@@ -69,21 +89,29 @@ $pageTitle = "Edit Equipment - aBility";
 $showBreadcrumb = true;
 $breadcrumbItems = [
     'Dashboard' => '../dashboard_full.php',
-    'View Item' => 'view.php?id=' . $item_id,
+    'Equipment' => '../items.php',
+    'View Item' => '../items.php?action=view&id=' . $item_id,
     'Edit' => ''
 ];
 
 require_once '../views/partials/header.php';
 ?>
 
-<div class="container-fluid">
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Marvel:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+    body, h1, h2, h3, h4, h5, h6, input, select, textarea, button, label, table, div, span, small, strong {
+        font-family: "Marvel", sans-serif !important;
+    }
+</style>
+
+<div class="container-fluid py-2">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h3 mb-0 text-gray-800">
-            <i class="fas fa-edit me-2"></i>
+        <h2 class="fw-bold mb-0 text-dark">
+            <i class="fas fa-edit me-2 text-primary"></i>
             Edit Equipment: <?php echo htmlspecialchars($item['item_name']); ?>
-        </h1>
-        <a href="view.php?id=<?php echo $item_id; ?>" class="btn btn-secondary">
-            <i class="fas fa-arrow-left me-1"></i> Back to View
+        </h2>
+        <a href="../items.php?action=view&id=<?php echo $item_id; ?>" class="btn btn-outline-secondary rounded-pill px-3">
+            <i class="fas fa-arrow-left me-1"></i> Back to Details
         </a>
     </div>
 
@@ -259,7 +287,45 @@ require_once '../views/partials/header.php';
                             <div class="form-text">Leave empty to keep current image</div>
                         </div>
 
-                        <div class="d-flex justify-content-end">
+                        <?php if (($item['category'] ?? '') === 'Cases' || stripos($item['item_name'] ?? '', 'Case') !== false || !empty($packed_items)): ?>
+                            <div class="mt-4 pt-3 border-top">
+                                <h6 class="font-weight-bold text-primary mb-3">
+                                    <i class="fas fa-box-open me-2"></i>Items Packed Inside This Case (<?php echo count($packed_items); ?>)
+                                </h6>
+                                <?php if (!empty($packed_items)): ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered table-hover align-middle mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th style="width: 40px;">#</th>
+                                                    <th>Item Name</th>
+                                                    <th>Serial Number</th>
+                                                    <th>Category</th>
+                                                    <th>Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($packed_items as $idx => $pItem): ?>
+                                                    <tr>
+                                                        <td><?php echo $idx + 1; ?></td>
+                                                        <td><strong><?php echo htmlspecialchars($pItem['item_name']); ?></strong></td>
+                                                        <td><code><?php echo htmlspecialchars($pItem['serial_number']); ?></code></td>
+                                                        <td><span class="badge bg-secondary"><?php echo htmlspecialchars($pItem['category']); ?></span></td>
+                                                        <td><span class="badge bg-info"><?php echo ucfirst(htmlspecialchars($pItem['status'])); ?></span></td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="alert alert-light border text-muted mb-0">
+                                        <i class="fas fa-info-circle me-2"></i>No equipment items are currently stored inside this case.
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="d-flex justify-content-end mt-4">
                             <button type="submit" class="btn btn-primary" id="saveItemBtn">
                                 <i class="fas fa-save me-1"></i> Save Changes
                             </button>

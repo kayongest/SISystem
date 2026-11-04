@@ -3,16 +3,15 @@ error_reporting(0);
 ini_set('display_errors', 0);
 
 header('Content-Type: application/json');
-session_start();
+require_once __DIR__ . '/../../config.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-$host = 'localhost';
-$username = 'root';
-$password = '';
-$database = 'ability_db';
+require_once __DIR__ . '/../../includes/db_connect.php';
+$conn = getConnection();
 
-$conn = new mysqli($host, $username, $password, $database);
-
-if ($conn->connect_error) {
+if (!$conn) {
     echo json_encode(['success' => false, 'message' => 'Connection failed']);
     exit();
 }
@@ -46,6 +45,7 @@ $sql = "SELECT
             b.project_manager,
             b.stock_controller_id,
             b.stock_controller_name,
+            b.stock_location_name,
             b.movement_type
         FROM stock_movements b
         LEFT JOIN users t ON b.technician_id = t.id
@@ -59,7 +59,7 @@ $userRole = $_SESSION['role'] ?? '';
 $userId = $_SESSION['user_id'] ?? 0;
 
 if ($userRole === 'stock_controller') {
-    $sql .= " AND (b.stock_controller_id = ? OR b.movement_type IN ('transport', 'stock_to_venue_transport', 'stock_to_stock'))";
+    $sql .= " AND (b.stock_controller_id = ? OR b.movement_type IN ('transport', 'stock_to_venue_transport', 'stock_to_stock', 'stock_to_venue_room', 'venue_room_to_stock'))";
     $params[] = $userId;
     $types .= "i";
 }

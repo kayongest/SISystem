@@ -29,12 +29,13 @@ require_once 'includes/functions.php';
 $user_role = getUserRole();
 
 // RESTRICT ACCESS - Only admins, managers, stock controllers, and technicians can access the main dashboard
-$allowed_dashboard_roles = ['admin', 'manager', 'stock_controller', 'stock_manager', 'tech_lead', 'technician'];
+$allowed_dashboard_roles = ['admin', 'manager', 'stock_controller', 'stock_manager', 'tech_lead', 'technician', 'user'];
 if (!in_array($user_role, $allowed_dashboard_roles)) {
     if ($user_role === 'driver') {
         header('Location: driver_batches.php');
         exit();
     } else {
+        unset($_SESSION['logged_in']);
         header('Location: login.php');
         exit();
     }
@@ -1470,6 +1471,14 @@ require_once 'assets/css/chart.css';
                                     </div>
                                     <div class="card-body p-3" id="viewAccessoriesList"></div>
                                 </div>
+
+                                <div class="premium-card border mb-4" id="viewPackedItemsCard" style="display:none;">
+                                    <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+                                        <span class="text-overline text-primary fw-bold"><i class="fas fa-box-open me-2"></i>Items Packed Inside Case</span>
+                                        <span class="badge bg-primary rounded-pill" id="viewPackedItemsBadge">0 Items</span>
+                                    </div>
+                                    <div class="card-body p-3" id="viewPackedItemsList"></div>
+                                </div>
                             </div>
 
                             <div class="col-md-5">
@@ -2423,6 +2432,27 @@ require_once 'assets/css/chart.css';
                 } else {
                     $('#viewAccessoriesList').html('<div class="text-center py-2 text-muted small"><i class="fas fa-info-circle me-2"></i>No accessories assigned to this asset</div>');
                 }
+
+                // Populate Packed Items Inside Case (if applicable)
+                const packedItems = data.packed_items || data.nested_items || [];
+                if (packedItems && Array.isArray(packedItems) && packedItems.length > 0) {
+                    $('#viewPackedItemsCard').show();
+                    $('#viewPackedItemsBadge').text(packedItems.length + ' Item(s)');
+                    let packedRows = '<div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-0 small"><thead class="table-light"><tr><th>Item Name</th><th>Serial Number</th><th>Category</th><th>Status</th></tr></thead><tbody>';
+                    packedItems.forEach(p => {
+                        packedRows += `<tr>
+                            <td><strong>${escapeHtml(p.item_name || '')}</strong></td>
+                            <td><code>${escapeHtml(p.serial_number || 'N/A')}</code></td>
+                            <td><span class="badge bg-secondary">${escapeHtml(p.category || 'General')}</span></td>
+                            <td><span class="badge bg-info">${escapeHtml(p.status || 'available')}</span></td>
+                        </tr>`;
+                    });
+                    packedRows += '</tbody></table></div>';
+                    $('#viewPackedItemsList').html(packedRows);
+                } else {
+                    $('#viewPackedItemsCard').hide();
+                }
+
                 window.currentViewItemData = data;
             }
 

@@ -197,9 +197,9 @@ $reports_pages = ['reports.php', 'report_generator.php', 'report_history.php'];
                                 </a>
                             </li>
                             <li>
-                                <a class="dropdown-item <?php echo $current_page == 'locations.php' ? 'active' : ''; ?>"
-                                    href="<?php echo BASE_URL; ?>locations.php">
-                                    <i class="fas fa-map-marker-alt me-2"></i>Locations
+                                <a class="dropdown-item <?php echo $current_page == 'stock_locations.php' ? 'active' : ''; ?>"
+                                    href="<?php echo BASE_URL; ?>stock_locations.php">
+                                    <i class="fas fa-warehouse me-2"></i>Stock Locations
                                 </a>
                             </li>
                             <li>

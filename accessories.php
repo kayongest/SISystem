@@ -147,6 +147,17 @@ $stats = [
 
 if ($tableExists) {
     try {
+        // Ensure accessory_categories table exists
+        $conn->query("CREATE TABLE IF NOT EXISTS `accessory_categories` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `name` varchar(100) NOT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `name` (`name`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // Ensure category column exists in accessories table
+        $conn->query("ALTER TABLE `accessories` ADD COLUMN IF NOT EXISTS `category` varchar(100) DEFAULT NULL AFTER `name`");
+
         // Fetch accessory categories
         $accessory_categories_list = [];
         $catResult = $conn->query("SELECT * FROM accessory_categories ORDER BY name");

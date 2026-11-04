@@ -23,6 +23,11 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+$user_role = getUserRole();
+if ($user_role !== 'admin') {
+    header('Location: dashboard_full.php');
+    exit();
+}
 $title = 'Import Items from Excel';
 $page = 'import';
 

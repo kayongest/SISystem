@@ -22,6 +22,10 @@ $is_stock_controller = ($user_role === 'stock_controller');
 // RESTRICT ACCESS - Only stock controllers and admins can access this page
 $allowed_roles = ['stock_controller', 'admin'];
 if (!in_array($user_role, $allowed_roles)) {
+    if (in_array($user_role, ['technician', 'user'])) {
+        header('Location: technician_batch_history.php');
+        exit();
+    }
     $_SESSION['flash_messages']['error'] = 'Access denied. Only Stock Controllers can view this page.';
     header('Location: technician_batch_history.php');
     exit();
@@ -1094,16 +1098,38 @@ function updateBatchesTable(batches) {
         if (parseInt(batch.driver_verified) === 1) isLoaded = true;
         if (bStatus === 'completed') isCompleted = true;
 
+        const hasDriver = batch.transport_driver && batch.transport_driver !== '-- Select Driver --';
+        const isTransport = ['transport', 'stock_to_venue_transport', 'stock_to_stock'].includes(batch.movement_type) && hasDriver;
+
         let fillPercent = 10;
         let bgClass = 'bg-secondary';
         let label = 'Submitted';
 
-        if (isRejected) { fillPercent = 100; bgClass = 'bg-danger'; label = 'Rejected'; }
-        else if (isCompleted) { fillPercent = 100; bgClass = 'bg-success'; label = 'Delivered'; }
-        else if (isLoaded) { fillPercent = 75; bgClass = 'bg-info'; label = 'Loaded'; }
-        else if (isTechOnboard) { fillPercent = 50; bgClass = 'bg-primary'; label = 'Tech Onboard'; }
-        else if (isApproved) { fillPercent = 35; bgClass = 'bg-primary'; label = 'Approved'; }
-        else { fillPercent = 25; bgClass = 'bg-warning'; label = 'Pending'; }
+        if (isRejected) {
+            fillPercent = 100;
+            bgClass = 'bg-danger';
+            label = 'Rejected';
+        } else if (isCompleted) {
+            fillPercent = 100;
+            bgClass = 'bg-success';
+            label = batch.movement_type === 'venue_room_to_stock' ? 'In Stock' : (isTransport ? 'Delivered' : 'In Room');
+        } else if (isTransport) {
+            if (isLoaded) { fillPercent = 75; bgClass = 'bg-info'; label = 'Loaded'; }
+            else if (isTechOnboard) { fillPercent = 50; bgClass = 'bg-primary'; label = 'Tech Onboard'; }
+            else if (isApproved) { fillPercent = 35; bgClass = 'bg-primary'; label = 'Approved'; }
+            else { fillPercent = 25; bgClass = 'bg-warning'; label = 'Pending'; }
+        } else {
+            // Direct handover (Stock to Venue Room, Venue Room to Stock, or direct movement without driver)
+            if (isApproved) {
+                fillPercent = 65;
+                bgClass = 'bg-primary';
+                label = 'Handover Ready';
+            } else {
+                fillPercent = 25;
+                bgClass = 'bg-warning';
+                label = 'Pending';
+            }
+        }
 
         const progressHtml = `
         <div style="min-width: 100px;">
@@ -1126,7 +1152,22 @@ function updateBatchesTable(batches) {
                 <td>${escapeHtml(batch.stock_controller_name || '—')}</td>
                 <td class="text-center">${batch.item_count || 0}</td>
                 <td class="text-center">${batch.total_quantity || 0}</td>
-                <td>${escapeHtml(batch.location || '—')}</td>
+                <td>
+                    <div>
+                        <div class="fw-bold" style="font-size: 0.8rem; color: #1e293b;">
+                            ${escapeHtml(batch.source_name || 'Stock')} 
+                            <i class="fas fa-arrow-right text-muted mx-1" style="font-size: 0.65rem;"></i> 
+                            <span class="text-primary">${escapeHtml(batch.location || '—')}</span>
+                        </div>
+                        <div class="mt-1">
+                            ${batch.movement_type === 'stock_to_venue_room' ? '<span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.65rem;"><i class="fas fa-door-open me-1"></i>Venue Room</span>' : ''}
+                            ${batch.movement_type === 'stock_to_venue_transport' ? '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size: 0.65rem;"><i class="fas fa-truck me-1"></i>Venue Transport</span>' : ''}
+                            ${batch.movement_type === 'stock_to_stock' ? '<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle" style="font-size: 0.65rem;"><i class="fas fa-exchange-alt me-1"></i>Stock Transfer</span>' : ''}
+                            ${batch.movement_type === 'venue_room_to_stock' ? '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" style="font-size: 0.65rem;"><i class="fas fa-undo me-1"></i>Stock Return</span>' : ''}
+                            ${!['stock_to_venue_room', 'stock_to_venue_transport', 'stock_to_stock', 'venue_room_to_stock'].includes(batch.movement_type) ? `<span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">${escapeHtml(batch.movement_type || 'Movement')}</span>` : ''}
+                        </div>
+                    </div>
+                </td>
                 <td>${progressHtml}</td>
                 <td><small>${escapeHtml(batch.job_sheet || '-')}</small></td>
                 <td><span class="batch-badge ${statusClass}">${batch.status}</span></td>
@@ -1135,6 +1176,27 @@ function updateBatchesTable(batches) {
                         <button class="btn btn-sm btn-info btn-icon" onclick="viewBatchDetails('${batch.batch_id}')" title="View Details">
                             <i class="fas fa-eye"></i>
                         </button>
+                        ${(batch.status === 'pending' || batch.approval_status === 'pending') ? `
+                            <button class="btn btn-sm btn-success btn-icon" onclick="quickApproveBatch('${batch.batch_id}')" title="Quick Approve">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger btn-icon" onclick="quickRejectBatch('${batch.batch_id}')" title="Reject">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        ` : ''}
+                        ${batch.status === 'approved' ? `
+                            <button class="btn btn-sm btn-primary btn-icon" onclick="quickCompleteBatch('${batch.batch_id}')" title="Complete Handover & Mark 100% Delivered">
+                                <i class="fas fa-check-double"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning btn-icon" onclick="quickResetBatch('${batch.batch_id}')" title="Reset to Pending">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                        ` : ''}
+                        ${batch.status === 'completed' ? `
+                            <button class="btn btn-sm btn-outline-secondary btn-icon" onclick="quickResetBatch('${batch.batch_id}')" title="Reset to Pending">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                        ` : ''}
                         ${(batch.status === 'approved' || batch.status === 'completed') ? `
                             <a href="batch_report.php?batch_id=${encodeURIComponent(batch.batch_id)}&download=1" class="btn btn-sm btn-success btn-icon" title="Download Report" target="_blank">
                                 <i class="fas fa-file-pdf"></i>
@@ -1274,23 +1336,40 @@ function displayBatchDetails(batch) {
         isCompleted = true;
     }
 
-    let fillPercent = 10;
-    let stepSubmittedClass = 'completed';
-    let stepApprovedClass = isApproved ? (isLoaded ? 'completed' : 'active') : (isRejected ? 'rejected' : 'active');
-    let stepLoadedClass = isLoaded ? (isCompleted ? 'completed' : 'active') : (isTechOnboard ? 'active' : (isApproved && !isRejected ? 'active' : ''));
-    let stepCompletedClass = isCompleted ? 'completed' : (isLoaded ? 'active' : '');
-
-    if (isRejected) fillPercent = 40;
-    else if (isCompleted) fillPercent = 100;
-    else if (isLoaded) fillPercent = 75;
-    else if (isTechOnboard) fillPercent = 65;
-    else if (isApproved) fillPercent = 40;
-    else fillPercent = 25; // Awaiting approval
-
+    const isTransportBatch = ['transport', 'stock_to_venue_transport', 'stock_to_stock'].includes(batch.movement_type) && batch.transport_driver && batch.transport_driver !== '-- Select Driver --';
     let dName = batch.transport_driver || '';
     if (dName === 'Valetine' || dName === 'valentinb') dName = 'Bembeleza Valentin';
+
+    let fillPercent = 10;
+    let stepSubmittedClass = 'completed';
+    let stepApprovedClass = isApproved ? 'completed' : (isRejected ? 'rejected' : 'active');
+    let stepLoadedClass = '';
+    let stepCompletedClass = isCompleted ? 'completed' : '';
+
+    if (isTransportBatch) {
+        stepLoadedClass = isLoaded ? 'completed' : (isTechOnboard || isApproved ? 'active' : '');
+        stepCompletedClass = isCompleted ? 'completed' : (isLoaded ? 'active' : '');
+        if (isRejected) fillPercent = 40;
+        else if (isCompleted) fillPercent = 100;
+        else if (isLoaded) fillPercent = 75;
+        else if (isTechOnboard) fillPercent = 65;
+        else if (isApproved) fillPercent = 40;
+        else fillPercent = 25;
+    } else {
+        stepLoadedClass = isCompleted ? 'completed' : (isApproved ? 'active' : '');
+        stepCompletedClass = isCompleted ? 'completed' : '';
+        if (isRejected) fillPercent = 40;
+        else if (isCompleted) fillPercent = 100;
+        else if (isApproved) fillPercent = 65;
+        else fillPercent = 25;
+    }
     
-    let driverSublabel = isLoaded ? dName + ' (Loaded)' : (isTechOnboard ? 'Tech Onboard' : (isApproved && !isRejected ? 'Awaiting Dispatch' : '-'));
+    let driverSublabel = isTransportBatch 
+        ? (isLoaded ? dName + ' (Loaded)' : (isTechOnboard ? 'Tech Onboard' : (isApproved && !isRejected ? 'Awaiting Dispatch' : '-')))
+        : (isApproved ? (isCompleted ? 'Handover Completed' : 'Verified by ' + (batch.stock_controller_name || 'Controller')) : 'Pending Handover');
+    let step3Label = isTransportBatch ? 'Driver Loaded' : 'Stock Handover';
+    let step3Icon = isTransportBatch ? 'fa-truck-loading' : 'fa-people-carry';
+    let step4Label = isTransportBatch ? 'Completed' : (batch.movement_type === 'venue_room_to_stock' ? 'In Stock' : 'Deployed to Room');
 
     const milestoneHtml = `
     <div class="row">
@@ -1311,14 +1390,14 @@ function displayBatchDetails(batch) {
                 </div>
                 
                 <div class="milestone-step ${stepLoadedClass}">
-                    <div class="milestone-icon"><i class="fas fa-truck-loading"></i></div>
-                    <div class="milestone-label">Driver Loaded</div>
+                    <div class="milestone-icon"><i class="fas ${step3Icon}"></i></div>
+                    <div class="milestone-label">${step3Label}</div>
                     <div class="milestone-sublabel">${escapeHtml(driverSublabel)}</div>
                 </div>
                 
                 <div class="milestone-step ${stepCompletedClass}">
                     <div class="milestone-icon"><i class="fas fa-flag-checkered"></i></div>
-                    <div class="milestone-label">Completed</div>
+                    <div class="milestone-label">${step4Label}</div>
                     <div class="milestone-sublabel">${isCompleted ? 'Delivered' : '-'}</div>
                 </div>
             </div>
@@ -1468,7 +1547,43 @@ function displayBatchDetails(batch) {
         `);
         footer.prepend(rejectBtn);
         footer.prepend(approveBtn);
-    } else if (batch.status === 'approved' || batch.status === 'completed') {
+    } else if (batch.status === 'approved') {
+        const completeBtn = $(`
+            <button type="button" class="btn btn-primary action-btn" onclick="quickCompleteBatch('${batch.batch_id}')">
+                <i class="fas fa-check-double me-1"></i>Complete Handover (100%)
+            </button>
+        `);
+        const resetBtn = $(`
+            <button type="button" class="btn btn-outline-warning action-btn" onclick="quickResetBatch('${batch.batch_id}')">
+                <i class="fas fa-undo me-1"></i>Reset to Pending
+            </button>
+        `);
+        footer.prepend(resetBtn);
+        footer.prepend(completeBtn);
+
+        const downloadBtn = $(`
+            <a href="batch_report.php?batch_id=${encodeURIComponent(batch.batch_id)}" class="btn btn-success action-btn" target="_blank">
+                <i class="fas fa-file-pdf me-1"></i>Download Report
+            </a>
+        `);
+        footer.prepend(downloadBtn);
+        
+        if (['stock_to_stock', 'stock_to_venue_transport'].includes(batch.movement_type)) {
+            const gatePassBtn = $(`
+                <a href="gate_pass.php?batch_id=${encodeURIComponent(batch.batch_id)}" class="btn btn-warning action-btn" target="_blank">
+                    <i class="fas fa-ticket-alt me-1"></i>Gate Pass
+                </a>
+            `);
+            footer.prepend(gatePassBtn);
+        }
+    } else if (batch.status === 'completed') {
+        const resetBtn = $(`
+            <button type="button" class="btn btn-outline-secondary action-btn" onclick="quickResetBatch('${batch.batch_id}')">
+                <i class="fas fa-undo me-1"></i>Reset to Pending
+            </button>
+        `);
+        footer.prepend(resetBtn);
+
         const downloadBtn = $(`
             <a href="batch_report.php?batch_id=${encodeURIComponent(batch.batch_id)}" class="btn btn-success action-btn" target="_blank">
                 <i class="fas fa-file-pdf me-1"></i>Download Report
@@ -1672,6 +1787,49 @@ function downloadBatchPDF(batchId) {
     window.open(`batch_report.php?batch_id=${encodeURIComponent(batchId)}&download=1`, '_blank');
 }
 function printCurrentBatch() { if (currentBatchId) viewBatchDetails(currentBatchId); }
+function quickApproveBatch(batchId) {
+    Swal.fire({
+        title: 'Approve Batch?',
+        html: `<p class="mb-2">Authorize equipment movement for batch <code>${escapeHtml(batchId)}</code>.</p><input type="text" id="quickApproveNotes" class="form-control form-control-sm" placeholder="Optional approval notes...">`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-check me-1"></i> Approve Batch',
+        preConfirm: () => {
+            return document.getElementById('quickApproveNotes').value;
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            processBatchAction(batchId, 'approve', result.value || 'Quick approved');
+        }
+    });
+}
+
+function quickRejectBatch(batchId) {
+    Swal.fire({
+        title: 'Reject Batch?',
+        html: `<p class="mb-2 text-danger">Please enter the rejection reason for <code>${escapeHtml(batchId)}</code>:</p><textarea id="quickRejectReason" class="form-control form-control-sm" rows="3" placeholder="Reason for rejection..."></textarea>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-times me-1"></i> Reject Batch',
+        preConfirm: () => {
+            const reason = document.getElementById('quickRejectReason').value;
+            if (!reason || !reason.trim()) {
+                Swal.showValidationMessage('Rejection reason is required');
+                return false;
+            }
+            return reason;
+        }
+    }).then((result) => {
+        if (result.isConfirmed && result.value) {
+            processBatchAction(batchId, 'reject', result.value);
+        }
+    });
+}
+
 function approveBatch(batchId) {
     const notes = $('#reviewNotes').val();
     
@@ -1686,6 +1844,41 @@ function approveBatch(batchId) {
     }).then((result) => {
         if (result.isConfirmed) {
             processBatchAction(batchId, 'approve', notes);
+        }
+    });
+}
+
+function quickCompleteBatch(batchId) {
+    Swal.fire({
+        title: 'Complete Handover?',
+        html: `<p class="mb-2">Mark batch <code>${escapeHtml(batchId)}</code> as fully completed and update all items to their destination (100% In Room / In Stock).</p><input type="text" id="quickCompleteNotes" class="form-control form-control-sm" placeholder="Optional handover notes...">`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0d6efd',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-check-double me-1"></i> Complete Handover',
+        preConfirm: () => {
+            return document.getElementById('quickCompleteNotes').value;
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            processBatchAction(batchId, 'complete', result.value || 'Handover completed');
+        }
+    });
+}
+
+function quickResetBatch(batchId) {
+    Swal.fire({
+        title: 'Reset Batch to Pending?',
+        html: `<p class="mb-2 text-warning">This will reset batch <code>${escapeHtml(batchId)}</code> back to <strong>Pending Approval</strong> so you can test approving or rejecting it again.</p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ffc107',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-undo me-1"></i> Reset to Pending'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            processBatchAction(batchId, 'reset_pending', 'Reset to pending by admin');
         }
     });
 }
@@ -1721,6 +1914,7 @@ function processBatchAction(batchId, action, notes) {
         url: 'api/batches/approve.php',
         method: 'POST',
         contentType: 'application/json',
+        dataType: 'json',
         data: JSON.stringify({
             batch_id: batchId,
             action: action,
@@ -1752,8 +1946,39 @@ function processBatchAction(batchId, action, notes) {
                 Swal.fire('Error', response.message || 'Action failed', 'error');
             }
         },
-        error: function() {
-            Swal.fire('Error', 'Server communication error', 'error');
+        error: function(xhr, status, error) {
+            console.error('Batch Action Error:', xhr.status, xhr.responseText);
+            let msg = 'Server communication error';
+            if (xhr.status === 0) {
+                msg = 'Network connection failed or server is unreachable. Please ensure you are logged into ' + window.location.hostname;
+            } else if (xhr.status === 401 || xhr.status === 403) {
+                msg = 'Your session has expired or you do not have permission. Please refresh and log in again.';
+            } else if (xhr.responseJSON && xhr.responseJSON.message) {
+                msg = xhr.responseJSON.message;
+            } else if (xhr.responseText) {
+                try {
+                    const parsed = JSON.parse(xhr.responseText);
+                    if (parsed && parsed.message) msg = parsed.message;
+                } catch(e) {
+                    if (xhr.responseText.includes('Not authenticated') || xhr.responseText.includes('session')) {
+                        msg = 'Session expired. Please log in again to continue.';
+                    } else if (xhr.responseText.length < 150) {
+                        msg = xhr.responseText.replace(/<[^>]*>?/gm, '');
+                    } else {
+                        msg = 'Server error occurred (HTTP ' + xhr.status + '). Please try again.';
+                    }
+                }
+            }
+            Swal.fire({
+                icon: 'error',
+                title: 'Action Failed',
+                text: msg,
+                confirmButtonText: xhr.status === 401 ? 'Log In' : 'OK'
+            }).then((res) => {
+                if (xhr.status === 401 && res.isConfirmed) {
+                    window.location.href = 'login.php';
+                }
+            });
         },
         complete: function() {
             hideLoading();

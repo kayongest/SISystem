@@ -246,6 +246,14 @@ try {
         }
     }
 
+    // Regenerate QR code with updated item details
+    try {
+        require_once $rootDir . '/includes/qr_generator.php';
+        generateQRCodeForItem($item_id, $item_name, $serial_number, $stock_location, true);
+    } catch (Exception $qrErr) {
+        error_log("Failed to regenerate QR code upon update: " . $qrErr->getMessage());
+    }
+
     $response['success'] = true;
     $response['message'] = 'Item updated successfully';
 

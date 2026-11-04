@@ -20,9 +20,10 @@ if (!isset($_GET['batch_id'])) {
 $batch_id = $_GET['batch_id'];
 
 // Database connection
-$conn = new mysqli('localhost', 'root', '', 'ability_db');
-if ($conn->connect_error) {
-    die("Database connection failed: " . $conn->connect_error);
+require_once __DIR__ . '/includes/db_connect.php';
+$conn = getConnection();
+if (!$conn) {
+    die("Database connection failed.");
 }
 
 // Get batch details

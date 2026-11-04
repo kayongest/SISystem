@@ -7,15 +7,16 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$conn = new mysqli('localhost', 'root', '', 'ability_db');
-if ($conn->connect_error) {
+require_once __DIR__ . '/../includes/db_connect.php';
+$conn = getConnection();
+if (!$conn) {
     echo json_encode(['success' => false, 'message' => 'Database connection failed']);
     exit();
 }
 
 $conn->set_charset("utf8mb4");
 
-$sql = "SELECT id, full_name, phone_number, vehicle_type, vehicle_number 
+$sql = "SELECT id, full_name, COALESCE(phone_number, phone, '') as phone_number, vehicle_type, vehicle_number 
         FROM drivers 
         WHERE is_active = 1 AND status = 'available'
         ORDER BY full_name ASC";

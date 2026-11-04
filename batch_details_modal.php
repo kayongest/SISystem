@@ -19,8 +19,9 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 $batch_id = intval($_GET['id']);
 
 // Database connection
-$conn = new mysqli('localhost', 'root', '', 'ability_db');
-if ($conn->connect_error) {
+require_once __DIR__ . '/includes/db_connect.php';
+$conn = getConnection();
+if (!$conn) {
     echo '<div class="alert alert-danger">Database connection failed</div>';
     exit();
 }

@@ -63,6 +63,31 @@ if (!isset($_SESSION['user_id'])) {
 } else {
     // If user is logged in, we can set a flag for convenience
     $_SESSION['logged_in'] = true;
+
+    // Check if user role is 'user' and restrict access to allowed pages only
+    $header_user_role = function_exists('getUserRole') ? getUserRole() : ($_SESSION['user_role'] ?? $_SESSION['role'] ?? null);
+    if (in_array($header_user_role, ['user', 'technician'])) {
+        $allowed_user_pages = [
+            'dashboard_full.php',
+            'scan_bulk.php',
+            'batch_history.php',
+            'technician_batch_history.php',
+            'batch_details_modal.php',
+            'batch_report.php',
+            'batch_view.php',
+            'gate_pass.php',
+            'profile.php',
+            'logout.php',
+            'login.php',
+            'index.php'
+        ];
+        $current_script = basename($_SERVER['PHP_SELF'] ?? $_SERVER['SCRIPT_NAME'] ?? '');
+        if (!in_array($current_script, $allowed_user_pages)) {
+            $_SESSION['flash_messages']['error'] = 'Access restricted: Your account is only authorized to access Dashboard, Scanner, and Batch History.';
+            header('Location: ' . BASE_URL . 'dashboard_full.php');
+            exit();
+        }
+    }
 }
 ?>
 
@@ -126,6 +151,10 @@ if (!isset($_SESSION['user_id'])) {
         }
 
         /* Global Styles */
+        * {
+            font-family: "Marvel", sans-serif;
+        }
+
         body {
             background-color: #f5f7fb;
             font-family: "Marvel", sans-serif;
