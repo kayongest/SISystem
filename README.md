@@ -20,13 +20,20 @@
 * **Real-time Barcode & QR Code Scanning**: Fast bulk and single item scanning supporting hardware USB/Bluetooth scanners and mobile device camera scanning.
 * **Digital Chain of Custody**: Every equipment transfer requires a multi-role digital handshake (Technician submit → Stock Controller approve → Driver verify load → Venue receive).
 * **Dual-Signature Audit Trail**: Dynamically captures and embeds user signatures into official PDF Gate Passes and Material Requisitions.
+* **User Profile & Team Management (`users.php`)**: Modern executive profile dashboard with role metrics, avatar previews, and 5 dedicated operational tabs:
+  1. **Account**: Core overview, project/service status list, and chronological activity timeline.
+  2. **Authentication**: Credentials, password updates, 2FA status, and digital signature verification.
+  3. **Assigned Events**: Event and production assignments linked directly to the event scheduling engine.
+  4. **Active Events**: Real-time monitoring of live stage deployments, in-transit batches, and venue rooms.
+  5. **Calltime**: Call sheets, shift schedules, on-duty roles, reporting venues, and interactive crew check-ins.
+* **Stock Locations with Image Management (`stock_locations.php`)**: Full CRUD support for physical warehouses and rooms with photo uploads, thumbnail zoom lightboxes, and capacity indicators.
 * **Role-Based Access Control (RBAC)**: Fine-grained permissions for `admin`, `stock_controller`, `technician`/`tech_lead`, and `driver`.
 * **Support for 4 Core Movement Types**:
   1. **Stock-to-Stock**: Inter-warehouse transfers (requires driver & gate pass).
   2. **Stock-to-Venue**: Moving gear from warehouse to event sites (requires driver & gate pass).
   3. **Venue-to-Stock**: Returning gear after events (requires driver & gate pass).
   4. **Direct Movement**: Internal transfers or direct handovers without transport.
-* **Driver Logistics Portal**: Dedicated dashboard for drivers to review cargo lists, verify loaded items, and acknowledge transport responsibility.
+* **Driver Logistics Portal & Compliance Checklist**: Dedicated dashboard for drivers featuring a 3-point compliance verification checklist (Equipment secured, Technician onboard, Transport accepted) before authorizing vehicle departure.
 * **Automated QR & Label Printing**: Batch printable QR code labels for fast tagging and inventory audits.
 
 ---
@@ -99,9 +106,12 @@ sequenceDiagram
 
 4. **Verify Upload Directories**
    Ensure the following directories exist and have write permissions:
-   * `uploads/signatures/`
-   * `uploads/items/`
-   * `assets/qrcodes/`
+   * `uploads/signatures/` (Digital user signatures)
+   * `uploads/profiles/` (User profile avatars)
+   * `uploads/locations/` (Warehouse & stock location photos)
+   * `uploads/items/` (Equipment catalog photos)
+   * `uploads/events/` (Event cover images)
+   * `assets/qrcodes/` (Generated barcode & QR images)
 
 ---
 
@@ -229,21 +239,32 @@ ini_set('display_errors', 0);
 ability_app_main/
 ├── api/                     # REST API backend scripts (submit, approve, verify)
 │   ├── submit_batch.php     # Handles new batch submission
-│   ├── batches/             # Approval & status modification endpoints
-│   └── ...
+│   ├── batches/             # Approval, driver verification & status modification endpoints
+│   └── items/               # Item lifecycle & inventory update APIs
 ├── assets/                  # Frontend assets (CSS, JS, Fonts, QR codes)
 │   ├── css/                 # Custom stylesheet & theme definitions
 │   ├── js/                  # Scanning scripts & interactive UI handlers
 │   └── qrcodes/             # Generated QR code image files
-├── config/                  # Configuration & bootstrap initialization
+├── includes/                # Shared utilities, navbar components & DB connection
+│   ├── db_connect.php       # Database PDO/MySQLi connection helper
+│   └── navbar_main.php      # Main navigation bar with Setup & Admin dropdowns
 ├── config.php               # Master database & system constants config
+├── bootstrap.php            # Application lifecycle initialization & auth guards
+├── users.php                # User management dashboard (Account, Auth, Events, Calltime)
+├── stock_locations.php      # Physical warehouse & stock location management with image upload
+├── events.php               # Event & production stage schedule center
+├── batch_history.php        # Centralized movement approval & audit log center
+├── driver_batches.php       # Dedicated Driver verification & compliance portal
 ├── gate_pass.php            # PDF & HTML printable Gate Pass generator
 ├── items.php                # Main equipment & asset catalog interface
 ├── scan_bulk.php            # Bulk barcode & QR scanning interface
-├── driver_batches.php       # Dedicated Driver verification portal
 ├── role_access_matrix.php   # RBAC permission matrix configuration
-├── uploads/                 # Storage for user signatures and item photos
-│   └── signatures/          # High-resolution digital signature files
+├── uploads/                 # Local media storage directory
+│   ├── profiles/            # User profile photos
+│   ├── signatures/          # High-resolution digital signature files
+│   ├── locations/           # Physical warehouse and stock location images
+│   ├── items/               # Gear and equipment catalog images
+│   └── events/              # Event production banners and cover photos
 ├── ability_db (v).sql       # Complete MySQL database export
 ├── composer.json            # Composer PHP dependency specifications
 └── README.md                # System documentation
