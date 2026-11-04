@@ -364,7 +364,7 @@ if ($selected_user) {
     $lbStmt = $conn->prepare("
         SELECT sm.id, sm.batch_number, sm.movement_type, sm.source_name, sm.destination_name, 
                sm.destination_room, sm.technician_id, sm.submitted_by, sm.stock_controller_name, 
-               sm.status, sm.approval_status, sm.created_at, sm.event_name, sm.job_sheet,
+               sm.status, sm.approval_status, sm.transport_driver, sm.created_at, sm.event_name, sm.job_sheet,
                (SELECT COUNT(*) FROM batch_items bi WHERE bi.batch_id = sm.id) as item_count,
                (SELECT COALESCE(SUM(quantity), 0) FROM batch_items bi WHERE bi.batch_id = sm.id) as total_qty
         FROM stock_movements sm
@@ -404,7 +404,7 @@ if ($selected_user) {
     $actStmt = $conn->prepare("
         SELECT sm.id, sm.batch_number, sm.movement_type, sm.source_name, sm.destination_name, 
                sm.destination_room, sm.technician_id, sm.submitted_by, sm.stock_controller_name, 
-               sm.status, sm.approval_status, sm.created_at, sm.event_name, sm.job_sheet,
+               sm.status, sm.approval_status, sm.transport_driver, sm.created_at, sm.event_name, sm.job_sheet,
                (SELECT COUNT(*) FROM batch_items bi WHERE bi.batch_id = sm.id) as item_count,
                (SELECT COALESCE(SUM(quantity), 0) FROM batch_items bi WHERE bi.batch_id = sm.id) as total_qty
         FROM stock_movements sm
@@ -1548,7 +1548,7 @@ require_once 'views/partials/header.php';
                                                     <div class="text-muted small"><i class="fas fa-warehouse me-1 text-primary"></i><?php echo htmlspecialchars($ab['destination_name']); ?> <?php echo !empty($ab['destination_room']) ? ' - ' . htmlspecialchars($ab['destination_room']) : ''; ?></div>
                                                 </td>
                                                 <td>
-                                                    <span class="text-muted fw-semibold"><?php echo htmlspecialchars($ab['transport_driver'] ?: 'Assigned Driver'); ?></span>
+                                                    <span class="text-muted fw-semibold"><?php echo htmlspecialchars(!empty($ab['transport_driver']) ? $ab['transport_driver'] : 'Assigned Driver'); ?></span>
                                                 </td>
                                                 <td>
                                                     <strong><?php echo $ab['total_qty'] ?? ($ab['item_count'] ?? 1); ?></strong> pcs
