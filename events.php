@@ -839,14 +839,15 @@ try {
                     imageHtml = `<img src="${ev.event_image}" class="event-img" alt="${ev.title}" onerror="this.outerHTML='<div class=\\'event-img-placeholder\\'><i class=\\'fas fa-calendar-alt\\'></i></div>'">`;
                 }
 
+                const evId = escapeHtml(ev.event_id || ev.id || '');
                 let adminActions = '';
                 if(isAdmin) {
                     adminActions = `
                         <div class="d-flex gap-2 w-100 mt-2">
-                            <button class="btn btn-sm btn-outline-secondary w-50" onclick='openEditModal(${JSON.stringify(ev).replace(/'/g, "&#39;")})'>
+                            <button class="btn btn-sm btn-outline-secondary w-50" onclick="openEditModalById('${evId}')">
                                 <i class="fas fa-edit"></i> Edit
                             </button>
-                            <button class="btn btn-sm btn-outline-danger w-50" onclick='deleteEvent(${ev.event_id ? JSON.stringify(ev.event_id).replace(/'/g, "&#39;") : "null"}, ${JSON.stringify(ev.title || "").replace(/'/g, "&#39;")})'>
+                            <button class="btn btn-sm btn-outline-danger w-50" onclick="deleteEventById('${evId}')">
                                 <i class="fas fa-trash"></i> Delete
                             </button>
                         </div>
@@ -896,7 +897,7 @@ try {
                             </div>` : ''}
                             
                             <div class="event-actions d-flex flex-column gap-2 mt-auto pt-3">
-                                <button class="btn-view-details" onclick='openEventDetails(${JSON.stringify(ev).replace(/'/g, "&#39;")})'>
+                                <button class="btn-view-details" onclick="openEventDetailsById('${evId}')">
                                     View Details
                                 </button>
                                 ${adminActions}
@@ -944,7 +945,30 @@ try {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
+        function openEventDetailsById(eventId) {
+            const ev = allEvents.find(e => (e.event_id == eventId || e.id == eventId));
+            if (ev) {
+                openEventDetails(ev);
+            }
+        }
+
+        function openEditModalById(eventId) {
+            const ev = allEvents.find(e => (e.event_id == eventId || e.id == eventId));
+            if (ev) {
+                openEditModal(ev);
+            }
+        }
+
+        function deleteEventById(eventId) {
+            const ev = allEvents.find(e => (e.event_id == eventId || e.id == eventId));
+            if (ev) {
+                deleteEvent(ev.event_id || ev.id, ev.title || '');
+            }
+        }
+
         function openEventDetails(eventObj) {
+            if (!eventObj) return;
+
             // Populate Modal Info
             $('#modalEventName').text(eventObj.title || 'Unknown Event');
             $('#modalEventDate').text(eventObj.date ? new Date(eventObj.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'TBD');
@@ -972,22 +996,34 @@ try {
             // Fetch Equipment for this event
             equipmentTable.clear().draw();
             $('#equipmentCountBadge').text('Loading...');
-            $('#equipmentTable_processing').show(); // Optional if you want to show built-in loader
+            $('#equipmentTable_processing').show();
+
+            const evTitle = (eventObj.title || '').trim();
+            if (!evTitle) {
+                $('#equipmentCountBadge').text('0 Items');
+                $('#equipmentTable_processing').hide();
+                $('#eventDetailsModal').modal('show');
+                return;
+            }
 
             $.ajax({
                 url: 'api/events/equipment.php',
                 method: 'GET',
-                data: { event_title: eventObj.title },
+                data: { event_title: evTitle },
                 success: function(res) {
-                    if(res.success && res.data) {
+                    if (res && res.success && res.data && res.data.length > 0) {
                         equipmentTable.rows.add(res.data).draw();
-                        $('#equipmentCountBadge').text(`${res.total_quantity} Items`);
+                        $('#equipmentCountBadge').text(`${res.total_quantity || res.data.length} Items`);
                     } else {
                         $('#equipmentCountBadge').text('0 Items');
                     }
                 },
-                error: function() {
-                    $('#equipmentCountBadge').text('Error fetching data');
+                error: function(xhr, status, error) {
+                    console.warn("Could not fetch equipment details:", status, error);
+                    $('#equipmentCountBadge').text('0 Items');
+                },
+                complete: function() {
+                    $('#equipmentTable_processing').hide();
                 }
             });
 

@@ -5,7 +5,7 @@ ini_set('display_errors', 0);
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 
-require_once '../../config/database.php';
+require_once __DIR__ . '/../../config/database.php';
 
 try {
     $db = getConnection();
@@ -14,19 +14,27 @@ try {
         throw new Exception('Database connection failed');
     }
 
-    $event_title = isset($_GET['event_title']) ? $_GET['event_title'] : null;
+    $event_title = isset($_GET['event_title']) ? trim($_GET['event_title']) : '';
 
-    if (!$event_title) {
-        throw new Exception('Event title is required');
+    if ($event_title === '') {
+        echo json_encode([
+            'success' => true,
+            'event_title' => '',
+            'total_unique_records' => 0,
+            'total_quantity' => 0,
+            'data' => []
+        ]);
+        exit;
     }
 
     // Query to fetch all batch items associated with this event via stock_movements
     $query = "SELECT 
                 bi.id,
+                bi.item_id,
                 bi.item_name,
                 bi.quantity,
                 bi.serial_number,
-                bi.status as item_status,
+                COALESCE(NULLIF(bi.item_status, ''), bi.status, 'pending') as item_status,
                 sm.batch_number,
                 sm.status as batch_status,
                 sm.driver_verified,
@@ -34,7 +42,7 @@ try {
                 sm.id as movement_id
               FROM batch_items bi
               JOIN stock_movements sm ON bi.batch_id = sm.id
-              WHERE LOWER(sm.event_name) = LOWER(?) OR LOWER(sm.job_sheet) = LOWER(?)
+              WHERE LOWER(TRIM(sm.event_name)) = LOWER(TRIM(?)) OR LOWER(TRIM(sm.job_sheet)) = LOWER(TRIM(?))
               ORDER BY sm.created_at DESC, bi.item_name ASC";
 
     $stmt = $db->prepare($query);
@@ -65,10 +73,12 @@ try {
     ]);
 
 } catch (Exception $e) {
-    http_response_code(500);
     echo json_encode([
         'success' => false,
-        'error' => $e->getMessage()
+        'error' => $e->getMessage(),
+        'total_unique_records' => 0,
+        'total_quantity' => 0,
+        'data' => []
     ]);
 }
 ?>
