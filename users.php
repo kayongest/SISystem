@@ -1424,8 +1424,13 @@ require_once 'views/partials/header.php';
                                                         </a>
                                                     </li>
                                                     <li>
+                                                        <button type="button" class="dropdown-item small" onclick="openOverviewEditEventModal(<?php echo htmlspecialchars(json_encode($ev), ENT_QUOTES, 'UTF-8'); ?>)">
+                                                            <i class="fas fa-edit me-2 text-warning"></i> Edit Event
+                                                        </button>
+                                                    </li>
+                                                    <li>
                                                         <a class="dropdown-item small" href="batch_history.php?search=<?php echo urlencode($evTitle); ?>">
-                                                            <i class="fas fa-truck-loading me-2 text-warning"></i> View Batch Movements
+                                                            <i class="fas fa-truck-loading me-2 text-info"></i> View Batch Movements
                                                         </a>
                                                     </li>
                                                 </ul>
@@ -2028,6 +2033,111 @@ require_once 'views/partials/header.php';
     </div>
 </div>
 
+<!-- ==================== OVERVIEW EDIT EVENT MODAL ==================== -->
+<div class="modal fade" id="overviewEditEventModal" tabindex="-1" aria-labelledby="overviewEditEventModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow">
+            <form id="overviewEditEventForm" onsubmit="saveOverviewEvent(event)">
+                <input type="hidden" id="editEvId" name="id">
+                <input type="hidden" name="_method" value="PUT">
+                <input type="hidden" id="editEvExistingImage" name="existing_image">
+
+                <div class="modal-header border-bottom">
+                    <h5 class="modal-title fw-bold text-dark" id="overviewEditEventModalLabel">
+                        <i class="fas fa-edit me-2 text-warning"></i>Edit Event Details
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body p-4 text-dark">
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold text-dark">Event Title <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="editEvTitle" name="title" required placeholder="e.g. World Bank">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-dark">Date</label>
+                            <input type="date" class="form-control" id="editEvDate" name="date">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-dark">Call Time</label>
+                            <input type="time" class="form-control" id="editEvCallTime" name="call_time">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-dark">Duration (Days)</label>
+                            <input type="number" class="form-control" id="editEvDuration" name="duration" min="1" value="1">
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold text-dark">Location / Venue</label>
+                            <input type="text" class="form-control" id="editEvLocation" name="location" placeholder="e.g. Marriot Hotel">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-dark">Project Manager</label>
+                            <select class="form-select" id="editEvManager" name="manager">
+                                <option value="">-- Select Project Manager --</option>
+                                <?php foreach ($all_users as $usr): ?>
+                                    <option value="<?php echo htmlspecialchars($usr['full_name']); ?>">
+                                        <?php echo htmlspecialchars($usr['full_name']); ?> (@<?php echo htmlspecialchars($usr['username']); ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-dark">Tech Lead</label>
+                            <select class="form-select" id="editEvTechLead" name="tech_lead">
+                                <option value="">-- Select Tech Lead --</option>
+                                <?php foreach ($all_users as $usr): ?>
+                                    <option value="<?php echo htmlspecialchars($usr['full_name']); ?>">
+                                        <?php echo htmlspecialchars($usr['full_name']); ?> (@<?php echo htmlspecialchars($usr['username']); ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold text-dark">Assigned Technicians</label>
+                            <select class="form-select" id="editEvTechnicians" name="technicians[]" multiple style="height: 110px;">
+                                <?php foreach ($all_users as $usr): ?>
+                                    <option value="<?php echo htmlspecialchars($usr['full_name']); ?>">
+                                        <?php echo htmlspecialchars($usr['full_name']); ?> (@<?php echo htmlspecialchars($usr['username']); ?>) - <?php echo ucfirst($usr['department'] ?: $usr['role']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text small text-muted">Hold Ctrl (Windows) / Cmd (Mac) to select multiple technicians.</div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold text-dark">Description</label>
+                            <textarea class="form-control" id="editEvDesc" name="description" rows="3" placeholder="Brief event summary or technical rider requirements..."></textarea>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold text-dark">Event Banner / Image</label>
+                            <input type="file" class="form-control" name="image" accept="image/*" onchange="previewOverviewEventImg(this)">
+                            <div id="overviewImgPreview" class="mt-2" style="display:none;">
+                                <img src="" id="overviewImgPreviewTag" style="max-height: 80px; border-radius: 6px; border: 1px solid #ddd;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-top bg-light">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" id="saveOverviewEventBtn" class="btn btn-sm btn-primary">
+                        <i class="fas fa-save me-1"></i> Update Event
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <?php
 // Buffer scripts so they execute cleanly AFTER footer loads jQuery, Bootstrap & DataTables
 ob_start();
@@ -2051,6 +2161,123 @@ ob_start();
         $('.project-table-row').each(function() {
             const text = $(this).text().toLowerCase();
             $(this).toggle(text.indexOf(val) > -1);
+        });
+    }
+
+    function openOverviewEditEventModal(ev) {
+        if (!ev) return;
+        $('#overviewEditEventForm')[0].reset();
+        $('#editEvId').val(ev.id || ev.event_id || '');
+        $('#editEvTitle').val(ev.title || '');
+        
+        if (ev.date) {
+            const rawDate = String(ev.date).trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+                $('#editEvDate').val(rawDate);
+            } else {
+                const d = new Date(rawDate);
+                if (!isNaN(d.getTime())) {
+                    const yr = d.getFullYear();
+                    const mo = String(d.getMonth() + 1).padStart(2, '0');
+                    const da = String(d.getDate()).padStart(2, '0');
+                    $('#editEvDate').val(`${yr}-${mo}-${da}`);
+                }
+            }
+        } else {
+            $('#editEvDate').val('');
+        }
+
+        $('#editEvCallTime').val(ev.call_time || '');
+        $('#editEvDuration').val(ev.duration || 1);
+        $('#editEvLocation').val(ev.location && ev.location !== '0' ? ev.location : '');
+        $('#editEvManager').val(ev.project_manager || '');
+        $('#editEvTechLead').val(ev.tech_lead || '');
+
+        const rawTech = ev.assigned_technician || ev.technician || '';
+        if (rawTech) {
+            const selectedTechs = rawTech.split(',').map(t => t.trim()).filter(t => t.length > 0);
+            $('#editEvTechnicians').val(selectedTechs);
+        } else {
+            $('#editEvTechnicians').val([]);
+        }
+
+        $('#editEvDesc').val(ev.description || '');
+
+        if (ev.event_image) {
+            $('#editEvExistingImage').val(ev.event_image);
+            $('#overviewImgPreviewTag').attr('src', ev.event_image);
+            $('#overviewImgPreview').show();
+        } else {
+            $('#editEvExistingImage').val('');
+            $('#overviewImgPreview').hide();
+        }
+
+        const modalEl = document.getElementById('overviewEditEventModal');
+        if (modalEl) {
+            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    }
+
+    function previewOverviewEventImg(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                $('#overviewImgPreviewTag').attr('src', e.target.result);
+                $('#overviewImgPreview').show();
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function saveOverviewEvent(e) {
+        e.preventDefault();
+        const btn = $('#saveOverviewEventBtn');
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i> Saving...');
+
+        const formData = new FormData(document.getElementById('overviewEditEventForm'));
+
+        $.ajax({
+            url: 'api/events.php',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(res) {
+                btn.prop('disabled', false).html('<i class="fas fa-save me-1"></i> Update Event');
+                if (res && res.success) {
+                    $('#overviewEditEventModal').modal('hide');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Event Updated',
+                            text: 'The event details have been updated successfully.',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        alert('Event updated successfully!');
+                        location.reload();
+                    }
+                } else {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', res.message || res.error || 'Failed to update event.', 'error');
+                    } else {
+                        alert(res.message || res.error || 'Failed to update event.');
+                    }
+                }
+            },
+            error: function(xhr, status, error) {
+                btn.prop('disabled', false).html('<i class="fas fa-save me-1"></i> Update Event');
+                console.error("Event update error:", xhr.responseText);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'Server error updating event.', 'error');
+                } else {
+                    alert('Server error updating event.');
+                }
+            }
         });
     }
 
