@@ -20,9 +20,10 @@ if (in_array($user_role, ['driver', 'user', 'technician'])) {
 $conn = getConnection();
 $technicians_list = [];
 try {
-    $tResult = $conn->query("SELECT id, full_name, username FROM users WHERE role IN ('technician', 'admin', 'stock_controller') ORDER BY full_name ASC");
+    $tResult = $conn->query("SELECT id, full_name, username, role, department FROM users WHERE is_active = 1 ORDER BY COALESCE(NULLIF(TRIM(full_name), ''), username) ASC");
     if ($tResult) {
         while ($row = $tResult->fetch_assoc()) {
+            $row['display_name'] = !empty(trim($row['full_name'] ?? '')) ? trim($row['full_name']) : trim($row['username']);
             $technicians_list[] = $row;
         }
     }
@@ -637,15 +638,36 @@ try {
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label text-muted">Project Manager</label>
-                                <input type="text" class="form-control bg-light text-dark border-secondary" id="formManager" name="manager" placeholder="PM Name">
+                                <select class="form-select bg-light text-dark border-secondary" id="formManager" name="manager">
+                                    <option value="">-- Select Project Manager --</option>
+                                    <?php foreach ($technicians_list as $tech): 
+                                        $val = $tech['display_name'];
+                                        $roleDept = !empty($tech['department']) ? ucfirst($tech['department']) : ucfirst(str_replace('_', ' ', $tech['role'] ?? ''));
+                                        $label = !empty(trim($tech['full_name'] ?? '')) 
+                                            ? trim($tech['full_name']) . ' (@' . $tech['username'] . ')' 
+                                            : '@' . $tech['username'];
+                                        if ($roleDept) $label .= ' - ' . $roleDept;
+                                    ?>
+                                        <option value="<?php echo htmlspecialchars($val); ?>" data-username="<?php echo htmlspecialchars($tech['username']); ?>">
+                                            <?php echo htmlspecialchars($label); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label text-muted"><i class="fas fa-user-shield me-1 text-warning"></i>Tech Lead</label>
                                 <select class="form-select bg-light text-dark border-secondary" id="formTechLead" name="tech_lead">
                                     <option value="">-- Select Tech Lead --</option>
-                                    <?php foreach ($technicians_list as $tech): ?>
-                                        <option value="<?php echo htmlspecialchars($tech['full_name']); ?>">
-                                            <?php echo htmlspecialchars($tech['full_name'] . ' (@' . $tech['username'] . ')'); ?>
+                                    <?php foreach ($technicians_list as $tech): 
+                                        $val = $tech['display_name'];
+                                        $roleDept = !empty($tech['department']) ? ucfirst($tech['department']) : ucfirst(str_replace('_', ' ', $tech['role'] ?? ''));
+                                        $label = !empty(trim($tech['full_name'] ?? '')) 
+                                            ? trim($tech['full_name']) . ' (@' . $tech['username'] . ')' 
+                                            : '@' . $tech['username'];
+                                        if ($roleDept) $label .= ' - ' . $roleDept;
+                                    ?>
+                                        <option value="<?php echo htmlspecialchars($val); ?>" data-username="<?php echo htmlspecialchars($tech['username']); ?>">
+                                            <?php echo htmlspecialchars($label); ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -656,10 +678,17 @@ try {
                                 <span>Assigned Technicians</span>
                                 <small class="text-primary"><i class="fas fa-info-circle me-1"></i>Hold Ctrl/Cmd to select multiple</small>
                             </label>
-                            <select multiple class="form-select bg-light text-dark border-secondary" id="formTechnician" name="technicians[]" style="min-height: 110px;">
-                                <?php foreach ($technicians_list as $tech): ?>
-                                    <option value="<?php echo htmlspecialchars($tech['full_name']); ?>">
-                                        <?php echo htmlspecialchars($tech['full_name'] . ' (@' . $tech['username'] . ')'); ?>
+                            <select multiple class="form-select bg-light text-dark border-secondary" id="formTechnician" name="technicians[]" style="min-height: 130px;">
+                                <?php foreach ($technicians_list as $tech): 
+                                    $val = $tech['display_name'];
+                                    $roleDept = !empty($tech['department']) ? ucfirst($tech['department']) : ucfirst(str_replace('_', ' ', $tech['role'] ?? ''));
+                                    $label = !empty(trim($tech['full_name'] ?? '')) 
+                                        ? trim($tech['full_name']) . ' (@' . $tech['username'] . ')' 
+                                        : '@' . $tech['username'];
+                                    if ($roleDept) $label .= ' - ' . $roleDept;
+                                ?>
+                                    <option value="<?php echo htmlspecialchars($val); ?>" data-username="<?php echo htmlspecialchars($tech['username']); ?>">
+                                        <?php echo htmlspecialchars($label); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -1089,15 +1118,58 @@ try {
             $('#formDuration').val(ev.duration || 1);
             $('#formLocation').val(ev.location && ev.location !== '0' ? ev.location : '');
             $('#formCallTime').val(ev.call_time || '');
-            $('#formManager').val(ev.project_manager || '');
-            $('#formTechLead').val(ev.tech_lead || '');
+            // Smart select helper for single select
+            function setSmartSelect($select, rawVal) {
+                const val = (rawVal || '').trim();
+                if (!val) {
+                    $select.val('');
+                    return;
+                }
+                let matchedVal = null;
+                $select.find('option').each(function() {
+                    const optVal = ($(this).val() || '').trim();
+                    const optUser = ($(this).attr('data-username') || '').trim();
+                    if (optVal && (optVal.toLowerCase() === val.toLowerCase() || (optUser && optUser.toLowerCase() === val.toLowerCase()))) {
+                        matchedVal = $(this).val();
+                        return false;
+                    }
+                });
+                if (matchedVal !== null) {
+                    $select.val(matchedVal);
+                } else {
+                    $select.append(new Option(val, val, true, true));
+                    $select.val(val);
+                }
+            }
+
+            setSmartSelect($('#formManager'), ev.project_manager);
+            setSmartSelect($('#formTechLead'), ev.tech_lead);
             
             const rawTech = ev.assigned_technician || ev.technician || '';
             if (rawTech) {
                 const selectedTechs = rawTech.split(',').map(t => t.trim()).filter(t => t.length > 0);
-                $('#formTechnician').val(selectedTechs);
+                const resolvedTechs = [];
+                const $techSelect = $('#formTechnician');
+                selectedTechs.forEach(t => {
+                    let foundVal = null;
+                    $techSelect.find('option').each(function() {
+                        const optVal = ($(this).val() || '').trim();
+                        const optUser = ($(this).attr('data-username') || '').trim();
+                        if (optVal && (optVal.toLowerCase() === t.toLowerCase() || (optUser && optUser.toLowerCase() === t.toLowerCase()))) {
+                            foundVal = $(this).val();
+                            return false;
+                        }
+                    });
+                    if (foundVal !== null) {
+                        resolvedTechs.push(foundVal);
+                    } else {
+                        $techSelect.append(new Option(t, t));
+                        resolvedTechs.push(t);
+                    }
+                });
+                $techSelect.val(resolvedTechs);
             } else {
-                            $('#formTechnician').val([]);
+                $('#formTechnician').val([]);
             }
 
             $('#formDescription').val(ev.description || '');

@@ -2579,9 +2579,12 @@ require_once 'views/partials/header.php';
                             <label class="form-label small fw-bold text-dark">Project Manager</label>
                             <select class="form-select" id="editEvManager" name="manager">
                                 <option value="">-- Select Project Manager --</option>
-                                <?php foreach ($all_users as $usr): ?>
-                                    <option value="<?php echo htmlspecialchars($usr['full_name']); ?>">
-                                        <?php echo htmlspecialchars($usr['full_name']); ?> (@<?php echo htmlspecialchars($usr['username']); ?>)
+                                <?php foreach ($all_users as $usr): 
+                                    $uDisplay = !empty(trim($usr['full_name'] ?? '')) ? trim($usr['full_name']) : trim($usr['username']);
+                                    $uLabel = !empty(trim($usr['full_name'] ?? '')) ? trim($usr['full_name']) . ' (@' . $usr['username'] . ')' : '@' . $usr['username'];
+                                ?>
+                                    <option value="<?php echo htmlspecialchars($uDisplay); ?>" data-username="<?php echo htmlspecialchars($usr['username']); ?>">
+                                        <?php echo htmlspecialchars($uLabel); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -2591,9 +2594,12 @@ require_once 'views/partials/header.php';
                             <label class="form-label small fw-bold text-dark">Tech Lead</label>
                             <select class="form-select" id="editEvTechLead" name="tech_lead">
                                 <option value="">-- Select Tech Lead --</option>
-                                <?php foreach ($all_users as $usr): ?>
-                                    <option value="<?php echo htmlspecialchars($usr['full_name']); ?>">
-                                        <?php echo htmlspecialchars($usr['full_name']); ?> (@<?php echo htmlspecialchars($usr['username']); ?>)
+                                <?php foreach ($all_users as $usr): 
+                                    $uDisplay = !empty(trim($usr['full_name'] ?? '')) ? trim($usr['full_name']) : trim($usr['username']);
+                                    $uLabel = !empty(trim($usr['full_name'] ?? '')) ? trim($usr['full_name']) . ' (@' . $usr['username'] . ')' : '@' . $usr['username'];
+                                ?>
+                                    <option value="<?php echo htmlspecialchars($uDisplay); ?>" data-username="<?php echo htmlspecialchars($usr['username']); ?>">
+                                        <?php echo htmlspecialchars($uLabel); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -2601,10 +2607,14 @@ require_once 'views/partials/header.php';
 
                         <div class="col-md-12">
                             <label class="form-label small fw-bold text-dark">Assigned Technicians</label>
-                            <select class="form-select" id="editEvTechnicians" name="technicians[]" multiple style="height: 110px;">
-                                <?php foreach ($all_users as $usr): ?>
-                                    <option value="<?php echo htmlspecialchars($usr['full_name']); ?>">
-                                        <?php echo htmlspecialchars($usr['full_name']); ?> (@<?php echo htmlspecialchars($usr['username']); ?>) - <?php echo ucfirst($usr['department'] ?: $usr['role']); ?>
+                            <select class="form-select" id="editEvTechnicians" name="technicians[]" multiple style="height: 120px;">
+                                <?php foreach ($all_users as $usr): 
+                                    $uDisplay = !empty(trim($usr['full_name'] ?? '')) ? trim($usr['full_name']) : trim($usr['username']);
+                                    $uRoleDept = ucfirst($usr['department'] ?: $usr['role']);
+                                    $uLabel = (!empty(trim($usr['full_name'] ?? '')) ? trim($usr['full_name']) . ' (@' . $usr['username'] . ')' : '@' . $usr['username']) . ' - ' . $uRoleDept;
+                                ?>
+                                    <option value="<?php echo htmlspecialchars($uDisplay); ?>" data-username="<?php echo htmlspecialchars($usr['username']); ?>">
+                                        <?php echo htmlspecialchars($uLabel); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
