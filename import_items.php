@@ -1,5 +1,6 @@
 <?php
 // import_items.php - Main Import Page with AJAX Interface
+ob_start();
 session_start();
 
 // Define root directory
@@ -16,6 +17,9 @@ if (!is_dir($includesDir)) {
 // Include required files
 require_once $rootDir . '/includes/db_connect.php';
 require_once $rootDir . '/includes/functions.php';
+if (file_exists($rootDir . '/includes/zip_polyfill.php')) {
+    require_once $rootDir . '/includes/zip_polyfill.php';
+}
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -49,13 +53,14 @@ try {
             break;
         }
     }
-} catch (Exception $e) {
+} catch (\Throwable $e) {
     $phpspreadsheetError = $e->getMessage();
     $phpspreadsheetLoaded = false;
 }
 
 // Handle initial file upload and preview
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
+    ini_set('display_errors', 0);
     try {
         $file = $_FILES['excel_file'];
 
@@ -108,47 +113,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
         $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tempFile);
         $worksheet = $spreadsheet->getActiveSheet();
 
-        $highestRow = $worksheet->getHighestRow();
-        $highestColumn = $worksheet->getHighestColumn();
+        $highestRow = $worksheet->getHighestDataRow();
+        if ($highestRow < 1) {
+            $highestRow = $worksheet->getHighestRow();
+        }
+        $highestColumn = $worksheet->getHighestDataColumn();
+        if (empty($highestColumn)) {
+            $highestColumn = $worksheet->getHighestColumn();
+        }
         $highestColumnIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColumn);
 
         // Get headers
         $headers = [];
         for ($col = 1; $col <= $highestColumnIndex; ++$col) {
-            $cellValue = $worksheet->getCellByColumnAndRow($col, 1)->getValue();
-            $headers[] = $cellValue ? trim($cellValue) : "Column $col";
+            $colStr = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
+            $cellValue = $worksheet->getCell($colStr . '1')->getValue();
+            if ($cellValue instanceof \PhpOffice\PhpSpreadsheet\RichText\RichText) {
+                $cellValue = $cellValue->getPlainText();
+            }
+            $cellStr = $cellValue !== null ? trim((string)$cellValue) : '';
+            $headers[] = $cellStr !== '' ? $cellStr : "Column $col";
         }
 
         // Store file info in session
         $_SESSION['import_file'] = $tempFile;
         $_SESSION['import_headers'] = $headers;
-        $_SESSION['total_rows'] = $highestRow - 1; // Exclude header
+        $_SESSION['total_rows'] = max(0, $highestRow - 1); // Exclude header
         $_SESSION['import_started'] = false;
 
         // Preview first few rows
         $previewData = [];
-        $previewRows = min(5, $highestRow - 1);
+        $previewRows = min(5, max(0, $highestRow - 1));
 
         for ($row = 2; $row <= $previewRows + 1; ++$row) {
             $rowData = [];
             for ($col = 1; $col <= $highestColumnIndex; ++$col) {
-                $cellValue = $worksheet->getCellByColumnAndRow($col, $row)->getValue();
-                $rowData[] = $cellValue ? trim($cellValue) : '';
+                $colStr = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
+                $cellValue = $worksheet->getCell($colStr . $row)->getValue();
+                if ($cellValue instanceof \PhpOffice\PhpSpreadsheet\RichText\RichText) {
+                    $cellValue = $cellValue->getPlainText();
+                }
+                $rowData[] = $cellValue !== null ? trim((string)$cellValue) : '';
             }
             $previewData[] = $rowData;
         }
 
         // Return JSON for AJAX response
-        header('Content-Type: application/json');
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'success' => true,
             'preview' => $previewData,
             'headers' => $headers,
-            'total_rows' => $highestRow - 1
+            'total_rows' => max(0, $highestRow - 1)
         ]);
         exit();
-    } catch (Exception $e) {
-        header('Content-Type: application/json');
+    } catch (\Throwable $e) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'success' => false,
             'message' => 'Error: ' . $e->getMessage()
@@ -819,7 +845,7 @@ $previewData = $_SESSION['import_preview'] ?? [];
                                 <option value="">-- Select Column --</option>`;
 
                     headers.forEach((header, index) => {
-                        const colLetter = String.fromCharCode(65 + index);
+                        const colLetter = getExcelColumnLetter(index);
                         html += `<option value="${colLetter}">${colLetter}: ${escapeHtml(header)}</option>`;
                     });
 
@@ -834,33 +860,59 @@ $previewData = $_SESSION['import_preview'] ?? [];
                 autoMapColumns(headers);
             }
 
+            function getExcelColumnLetter(index) {
+                let letter = '';
+                let num = index + 1;
+                while (num > 0) {
+                    let mod = (num - 1) % 26;
+                    letter = String.fromCharCode(65 + mod) + letter;
+                    num = Math.floor((num - mod) / 26);
+                }
+                return letter;
+            }
+
             function autoMapColumns(headers) {
                 const columnMappings = {
-                    'item_name': ['item', 'name', 'item name', 'equipment', 'product', 'title'],
-                    'serial_number': ['serial', 'serial number', 'sn', 'serial no', 'serial#', 's/n'],
+                    'item_name': ['item_name', 'item name', 'item', 'name', 'equipment', 'product', 'title'],
+                    'serial_number': ['serial_number', 'serial number', 'serial', 'sn', 'serial no', 'serial#', 's/n'],
                     'category': ['category', 'type', 'classification', 'group', 'class'],
                     'brand': ['brand', 'manufacturer', 'maker', 'company', 'vendor'],
-                    'model': ['model', 'model number', 'version', 'type', 'model no'],
+                    'model': ['model', 'model number', 'version', 'model no'],
                     'department': ['department', 'dept', 'division', 'team', 'section'],
                     'description': ['description', 'desc', 'details', 'info', 'specification'],
-                    'condition': ['condition', 'state', 'status', 'quality', 'grade'],
-                    'stock_location': ['location', 'stock location', 'storage', 'warehouse', 'place'],
+                    'condition': ['condition', 'state', 'quality', 'grade'],
+                    'stock_location': ['stock_location', 'stock location', 'location', 'storage', 'warehouse', 'place'],
                     'quantity': ['quantity', 'qty', 'amount', 'count', 'number', 'total'],
-                    'status': ['status', 'availability', 'state', 'condition'],
-                    'notes': ['notes', 'comments', 'remarks', 'info', 'additional']
+                    'status': ['status', 'availability'],
+                    'notes': ['notes', 'comments', 'remarks', 'additional']
                 };
 
+                // Pass 1: Exact matches against field name or keyword
                 headers.forEach((header, index) => {
-                    const colLetter = String.fromCharCode(65 + index);
+                    const colLetter = getExcelColumnLetter(index);
+                    const headerLower = header.toLowerCase().trim();
+                    const headerNormalized = headerLower.replace(/[\s_-]+/g, '_');
+
+                    Object.entries(columnMappings).forEach(([field, keywords]) => {
+                        const select = document.getElementById(`field_${field}`);
+                        if (!select) return;
+                        if (headerNormalized === field || keywords.includes(headerLower)) {
+                            select.value = colLetter;
+                        }
+                    });
+                });
+
+                // Pass 2: Partial matches only for fields not already mapped
+                headers.forEach((header, index) => {
+                    const colLetter = getExcelColumnLetter(index);
                     const headerLower = header.toLowerCase().trim();
 
                     Object.entries(columnMappings).forEach(([field, keywords]) => {
+                        const select = document.getElementById(`field_${field}`);
+                        if (!select || select.value) return;
                         keywords.forEach(keyword => {
-                            if (headerLower.includes(keyword) || keyword.includes(headerLower)) {
-                                const select = document.getElementById(`field_${field}`);
-                                if (select) {
-                                    select.value = colLetter;
-                                }
+                            if (!select.value && (headerLower.includes(keyword) || keyword.includes(headerLower))) {
+                                select.value = colLetter;
                             }
                         });
                     });
@@ -928,7 +980,10 @@ $previewData = $_SESSION['import_preview'] ?? [];
             }
 
             function pollImportProgress() {
+                let isPolling = false;
                 importInterval = setInterval(() => {
+                    if (isPolling) return;
+                    isPolling = true;
                     fetch('import_process.php?action=get_progress&session_id=' + importSessionId)
                         .then(response => {
                             if (!response.ok) {
@@ -949,8 +1004,11 @@ $previewData = $_SESSION['import_preview'] ?? [];
                         .catch(error => {
                             console.error('Polling error:', error);
                             // Don't stop polling on network errors, just log
+                        })
+                        .finally(() => {
+                            isPolling = false;
                         });
-                }, 2000); // Poll every 2 seconds
+                }, 1500); // Poll every 1.5 seconds
             }
 
             function updateProgress(data) {

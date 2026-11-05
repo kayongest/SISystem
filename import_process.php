@@ -1,5 +1,6 @@
 <?php
 // import_process.php - Background Import Processing
+ob_start();
 session_start();
 
 // Set maximum execution time to 30 minutes
@@ -7,13 +8,25 @@ set_time_limit(1800);
 ini_set('max_execution_time', 1800);
 ini_set('memory_limit', '512M');
 
-// Add error reporting for debugging
+// Suppress HTML error output so JSON responses are never corrupted
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
+
+function sendImportJson($payload) {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload);
+    exit();
+}
 
 // Include required files
 require_once __DIR__ . '/includes/db_connect.php';
 require_once __DIR__ . '/includes/functions.php';
+if (file_exists(__DIR__ . '/includes/zip_polyfill.php')) {
+    require_once __DIR__ . '/includes/zip_polyfill.php';
+}
 
 // Check if PhpSpreadsheet is available
 $phpspreadsheetLoaded = false;
@@ -31,13 +44,12 @@ try {
             break;
         }
     }
-} catch (Exception $e) {
+} catch (\Throwable $e) {
     // Continue without PhpSpreadsheet
 }
 
 if (!$phpspreadsheetLoaded) {
-    echo json_encode(['success' => false, 'message' => 'PhpSpreadsheet library not loaded']);
-    exit();
+    sendImportJson(['success' => false, 'message' => 'PhpSpreadsheet library not loaded']);
 }
 
 // Function to generate QR codes (optimized version)
@@ -54,43 +66,64 @@ function generateQRCodeForItem($item_id, $item_name, $serial_number, $conn, $qrD
         $qrFilename = 'qr_' . $item_id . '.png';
         $qrPath = $qrDir . $qrFilename;
         
-        if (file_exists($qrPath)) {
+        if (file_exists($qrPath) && filesize($qrPath) > 100) {
             return 0; // QR already exists
         }
         
         // QR data - simplified for faster generation
-        $qrData = "ID:$item_id|SN:$serial_number|N:" . substr($item_name, 0, 20);
-        
-        // Use external QR API (faster than local generation)
-        $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?" . http_build_query([
-            'size' => '150x150',
-            'data' => $qrData,
-            'margin' => 5,
-            'format' => 'png'
-        ]);
-        
-        // Download QR with timeout
-        $context = stream_context_create([
-            'http' => ['timeout' => 2]
-        ]);
-        
-        $qrImage = @file_get_contents($qrUrl, false, $context);
+        $qrData = "ID:$item_id|SN:$serial_number|N:" . substr((string)$item_name, 0, 20);
+        $qrImage = null;
+
+        // Try local generation first if available
+        if (class_exists('chillerlan\QRCode\QRCode')) {
+            try {
+                $options = new \chillerlan\QRCode\QROptions([
+                    'version'      => \chillerlan\QRCode\QRCode::VERSION_AUTO,
+                    'outputType'   => \chillerlan\QRCode\QRCode::OUTPUT_IMAGE_PNG,
+                    'eccLevel'     => \chillerlan\QRCode\QRCode::ECC_M,
+                    'scale'        => 6,
+                    'imageBase64'  => false,
+                ]);
+                $qrcode = new \chillerlan\QRCode\QRCode($options);
+                $qrImage = $qrcode->render($qrData);
+            } catch (\Throwable $e) {
+                $qrImage = null;
+            }
+        }
+
+        // Fallback to external QR API if local generation didn't produce an image
+        if (!$qrImage || strlen($qrImage) <= 100) {
+            $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?" . http_build_query([
+                'size' => '150x150',
+                'data' => $qrData,
+                'margin' => 5,
+                'format' => 'png'
+            ]);
+            
+            $context = stream_context_create([
+                'http' => ['timeout' => 1.5]
+            ]);
+            
+            $qrImage = @file_get_contents($qrUrl, false, $context);
+        }
         
         if ($qrImage && strlen($qrImage) > 100) {
-            if (file_put_contents($qrPath, $qrImage)) {
+            if (@file_put_contents($qrPath, $qrImage)) {
                 $qrRelativePath = 'qrcodes/' . $qrFilename;
                 $updateSql = "UPDATE items SET qr_code = ? WHERE id = ?";
                 $updateStmt = $conn->prepare($updateSql);
-                $updateStmt->bind_param('si', $qrRelativePath, $item_id);
-                $updateStmt->execute();
-                $updateStmt->close();
+                if ($updateStmt) {
+                    $updateStmt->bind_param('si', $qrRelativePath, $item_id);
+                    $updateStmt->execute();
+                    $updateStmt->close();
+                }
                 return 1;
             }
         }
         
         // If QR generation fails, just return 0 (don't stop import)
         return 0;
-    } catch (Exception $e) {
+    } catch (\Throwable $e) {
         // Don't throw error, just return 0
         error_log("QR generation error (non-fatal): " . $e->getMessage());
         return 0;
@@ -105,9 +138,6 @@ function processImportBatch($sessionId, $batchSize) {
     try {
         $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($session['file']);
         $worksheet = $spreadsheet->getActiveSheet();
-        
-        $highestColumn = $worksheet->getHighestColumn();
-        $highestColumnIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColumn);
         
         // Database connection
         $db = new Database();
@@ -131,9 +161,11 @@ function processImportBatch($sessionId, $batchSize) {
                 // Map each column
                 foreach ($session['field_mapping'] as $dbField => $excelCol) {
                     if ($excelCol && $excelCol !== 'none') {
-                        $colIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($excelCol);
-                        $cellValue = $worksheet->getCellByColumnAndRow($colIndex, $row)->getValue();
-                        $itemData[$dbField] = $cellValue ? trim($cellValue) : '';
+                        $cellValue = $worksheet->getCell($excelCol . $row)->getValue();
+                        if ($cellValue instanceof \PhpOffice\PhpSpreadsheet\RichText\RichText) {
+                            $cellValue = $cellValue->getPlainText();
+                        }
+                        $itemData[$dbField] = $cellValue !== null ? trim((string)$cellValue) : '';
                     }
                 }
                 
@@ -289,10 +321,12 @@ function processImportBatch($sessionId, $batchSize) {
             $session['final_errors'] = array_slice(array_column($errorLogs, 'message'), 0, 20);
         }
         
-    } catch (Exception $e) {
+    } catch (\Throwable $e) {
         $session['errors']++;
         $session['log'][] = ['type' => 'error', 'message' => "Batch processing error: " . $e->getMessage()];
         $session['current_status'] = 'Error in batch processing';
+        $session['completed'] = true;
+        $session['final_errors'] = ["Batch processing error: " . $e->getMessage()];
     }
 }
 
@@ -302,8 +336,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if (isset($input['action']) && $input['action'] === 'start_import') {
         if (!isset($_SESSION['import_file']) || !file_exists($_SESSION['import_file'])) {
-            echo json_encode(['success' => false, 'message' => 'Uploaded file not found. Please upload again.']);
-            exit();
+            sendImportJson(['success' => false, 'message' => 'Uploaded file not found. Please upload again.']);
         }
 
         // Create unique session ID for this import
@@ -328,35 +361,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'start_time' => time()
         ];
         
-        echo json_encode([
+        sendImportJson([
             'success' => true,
             'session_id' => $sessionId,
             'total_rows' => $_SESSION['total_rows']
         ]);
-        exit();
     }
 }
 
 // Get import progress
 if (isset($_GET['action']) && $_GET['action'] === 'get_progress') {
-    header('Content-Type: application/json');
-    
     if (!isset($_GET['session_id']) || !isset($_SESSION['import_session']) || $_SESSION['import_session']['id'] !== $_GET['session_id']) {
-        echo json_encode(['completed' => true, 'message' => 'Session expired or not found']);
-        exit();
+        sendImportJson([
+            'completed' => true,
+            'message' => 'Session expired or not found',
+            'processed' => 0,
+            'total_rows' => 0,
+            'stats' => [
+                'success' => 0,
+                'updated' => 0,
+                'qr_generated' => 0,
+                'errors' => 0,
+                'skipped' => 0,
+                'total' => 0
+            ],
+            'errors' => []
+        ]);
     }
     
-    $session = $_SESSION['import_session'];
+    $session = &$_SESSION['import_session'];
     
-    // If not completed and not started processing, start processing
+    // If not completed and rows remain, process a batch
     if (!$session['completed'] && $session['processed'] < $session['total_rows']) {
-        // Process a batch of rows (10 rows at a time for smoother progress)
-        $batchSize = min(10, $session['total_rows'] - $session['processed']);
+        // Process a batch of rows (20 rows at a time for fast progress)
+        $batchSize = min(20, $session['total_rows'] - $session['processed']);
         processImportBatch($session['id'], $batchSize);
     }
     
-    // Return current progress
-    echo json_encode([
+    $responsePayload = [
         'completed' => $session['completed'] ?? false,
         'processed' => $session['processed'] ?? 0,
         'total_rows' => $session['total_rows'] ?? 0,
@@ -369,27 +411,22 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_progress') {
             'errors' => $session['errors'] ?? 0,
             'skipped' => $session['skipped'] ?? 0,
             'total' => ($session['success'] ?? 0) + ($session['updated'] ?? 0)
-        ]
-    ]);
+        ],
+        'errors' => $session['final_errors'] ?? []
+    ];
     
-    // If completed, also send final results
+    // If completed, clean up session data before sending response
     if ($session['completed'] ?? false) {
-        // Clean up session data
         unset($_SESSION['import_file']);
         unset($_SESSION['import_headers']);
         unset($_SESSION['total_rows']);
-        
-        // Add final errors to response
-        $_SESSION['import_session']['errors_list'] = $session['final_errors'] ?? [];
     }
     
-    exit();
+    sendImportJson($responsePayload);
 }
 
 // Cancel import
 if (isset($_GET['action']) && $_GET['action'] === 'cancel_import') {
-    header('Content-Type: application/json');
-    
     if (isset($_SESSION['import_session'])) {
         // Clean up temp file
         if (isset($_SESSION['import_file']) && file_exists($_SESSION['import_file'])) {
@@ -403,10 +440,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'cancel_import') {
         unset($_SESSION['import_session']);
     }
     
-    echo json_encode(['success' => true]);
-    exit();
+    sendImportJson(['success' => true]);
 }
 
 // Default response
-header('Content-Type: application/json');
-echo json_encode(['success' => false, 'message' => 'Invalid request']);
+sendImportJson(['success' => false, 'message' => 'Invalid request']);

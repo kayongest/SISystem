@@ -1,5 +1,9 @@
 <?php
 
+if (file_exists(__DIR__ . '/zip_polyfill.php')) {
+    require_once __DIR__ . '/zip_polyfill.php';
+}
+
 /**
  * Common functions for aBility Manager
  * COMPLETE VERSION
