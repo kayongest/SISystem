@@ -58,6 +58,202 @@ try {
     $phpspreadsheetLoaded = false;
 }
 
+// Handle Excel Template Download (all items fields except image & auto-managed system columns)
+if (isset($_GET['action']) && $_GET['action'] === 'download_template' && $phpspreadsheetLoaded) {
+    ini_set('display_errors', 0);
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+
+    $templateColumns = [
+        'item_name',
+        'serial_number',
+        'category',
+        'brand',
+        'model',
+        'department',
+        'description',
+        'specifications',
+        'brand_model',
+        'condition',
+        'stock_location',
+        'storage_location',
+        'notes',
+        'quantity',
+        'status',
+        'tags',
+        'last_scanned',
+        'current_location'
+    ];
+
+    $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+    $sheet = $spreadsheet->getActiveSheet();
+    $sheet->setTitle('Items Import Template');
+
+    // Write headers in Row 1
+    foreach ($templateColumns as $idx => $colName) {
+        $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($idx + 1);
+        $sheet->setCellValue($colLetter . '1', $colName);
+        $sheet->getColumnDimension($colLetter)->setAutoSize(true);
+    }
+
+    // Style header row
+    $lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($templateColumns));
+    $sheet->getStyle('A1:' . $lastColLetter . '1')->applyFromArray([
+        'font' => [
+            'bold' => true,
+            'color' => ['rgb' => 'FFFFFF'],
+        ],
+        'fill' => [
+            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+            'startColor' => ['rgb' => '18527B'],
+        ],
+    ]);
+    $sheet->freezePane('A2');
+
+    $mode = $_GET['mode'] ?? 'live';
+    $rowNum = 2;
+
+    if ($mode === 'live') {
+        $db = new Database();
+        $conn = $db->getConnection();
+        $loadedFromDb = false;
+
+        if ($conn) {
+            $colsSql = '`' . implode('`, `', $templateColumns) . '`';
+            $res = @$conn->query("SELECT $colsSql FROM items ORDER BY id ASC");
+            if ($res && $res->num_rows > 0) {
+                $loadedFromDb = true;
+                while ($dbRow = $res->fetch_assoc()) {
+                    foreach ($templateColumns as $idx => $colName) {
+                        $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($idx + 1);
+                        $val = $dbRow[$colName] ?? '';
+                        if ($colName === 'condition' && ($val === '' || $val === null)) {
+                            $val = 'good';
+                        } elseif ($colName === 'quantity' && ($val === '' || $val === null)) {
+                            $val = 1;
+                        } elseif ($colName === 'status' && ($val === '' || $val === null)) {
+                            $val = 'available';
+                        }
+                        $sheet->setCellValueExplicit(
+                            $colLetter . $rowNum,
+                            (string)$val,
+                            $colName === 'quantity'
+                                ? \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC
+                                : \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+                        );
+                    }
+                    $rowNum++;
+                }
+            }
+        }
+
+        // If DB is empty, fallback to existing docs template rows if available
+        if (!$loadedFromDb) {
+            $existingTemplate = file_exists($rootDir . '/docs/ability_items_import_template.xlsx')
+                ? $rootDir . '/docs/ability_items_import_template.xlsx'
+                : $rootDir . '/docs/ability_app_main_Import_Template.xlsx';
+            if (file_exists($existingTemplate)) {
+                try {
+                    $existingSpread = \PhpOffice\PhpSpreadsheet\IOFactory::load($existingTemplate);
+                    $existingSheet = $existingSpread->getActiveSheet();
+                    $maxR = $existingSheet->getHighestDataRow();
+                    $maxC = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($existingSheet->getHighestDataColumn());
+
+                    $headerMap = [];
+                    for ($c = 1; $c <= $maxC; $c++) {
+                        $cLet = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
+                        $hVal = strtolower(trim((string)$existingSheet->getCell($cLet . '1')->getValue()));
+                        if ($hVal !== '') {
+                            $headerMap[$hVal] = $cLet;
+                        }
+                    }
+
+                    for ($r = 2; $r <= $maxR; $r++) {
+                        $itemNameVal = isset($headerMap['item_name']) ? trim((string)$existingSheet->getCell($headerMap['item_name'] . $r)->getValue()) : '';
+                        $serialVal = isset($headerMap['serial_number']) ? trim((string)$existingSheet->getCell($headerMap['serial_number'] . $r)->getValue()) : '';
+                        if ($itemNameVal === '' && $serialVal === '') {
+                            continue;
+                        }
+                        foreach ($templateColumns as $idx => $colName) {
+                            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($idx + 1);
+                            $val = isset($headerMap[$colName]) ? trim((string)$existingSheet->getCell($headerMap[$colName] . $r)->getValue()) : '';
+                            if ($colName === 'condition' && $val === '') {
+                                $val = 'good';
+                            } elseif ($colName === 'quantity' && $val === '') {
+                                $val = 1;
+                            } elseif ($colName === 'status' && $val === '') {
+                                $val = 'available';
+                            }
+                            $sheet->setCellValueExplicit(
+                                $colLetter . $rowNum,
+                                (string)$val,
+                                $colName === 'quantity'
+                                    ? \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC
+                                    : \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+                            );
+                        }
+                        $rowNum++;
+                    }
+                } catch (\Throwable $e) {
+                    // Ignore fallback errors
+                }
+            }
+        }
+    }
+
+    // If blank mode or no rows were added, add one sample row
+    if ($rowNum === 2) {
+        $sampleRow = [
+            'item_name' => 'Lenovo ThinkPad L14',
+            'serial_number' => 'PF2TRBFJ',
+            'category' => 'CAT-VID',
+            'brand' => 'Lenovo',
+            'model' => 'ThinkPad L14',
+            'department' => 'Video',
+            'description' => '14-inch business laptop',
+            'specifications' => 'Intel i7, 16GB RAM, 512GB SSD',
+            'brand_model' => 'Lenovo ThinkPad L14',
+            'condition' => 'good',
+            'stock_location' => 'Main Warehouse',
+            'storage_location' => 'Rack A - Shelf 2',
+            'notes' => 'Ready for deployment',
+            'quantity' => 1,
+            'status' => 'available',
+            'tags' => 'laptop,video,lenovo',
+            'last_scanned' => '',
+            'current_location' => 'Main Warehouse'
+        ];
+        foreach ($templateColumns as $idx => $colName) {
+            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($idx + 1);
+            $val = $sampleRow[$colName] ?? '';
+            $sheet->setCellValueExplicit(
+                $colLetter . '2',
+                (string)$val,
+                $colName === 'quantity'
+                    ? \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC
+                    : \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+            );
+        }
+    }
+
+    $downloadFilename = $mode === 'blank'
+        ? 'ability_items_blank_template.xlsx'
+        : 'ability_app_main_Import_Template.xlsx';
+
+    $tempOut = tempnam(sys_get_temp_dir(), 'tpl_') . '.xlsx';
+    $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+    $writer->save($tempOut);
+
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="' . $downloadFilename . '"');
+    header('Content-Length: ' . filesize($tempOut));
+    header('Cache-Control: max-age=0');
+    readfile($tempOut);
+    @unlink($tempOut);
+    exit();
+}
+
 // Handle initial file upload and preview
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
     ini_set('display_errors', 0);
@@ -427,12 +623,21 @@ $previewData = $_SESSION['import_preview'] ?? [];
                     </div>
 
                     <div class="alert alert-info">
-                        <h6><i class="fas fa-info-circle me-2"></i>File Requirements:</h6>
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>File Requirements &amp; On-The-Go Template:</h6>
+                            <div class="d-flex flex-wrap gap-2">
+                                <a href="import_items.php?action=download_template&amp;mode=live" class="btn btn-sm btn-success">
+                                    <i class="fas fa-file-excel me-1"></i> Download Template (With Current Items)
+                                </a>
+                                <a href="import_items.php?action=download_template&amp;mode=blank" class="btn btn-sm btn-outline-primary bg-white">
+                                    <i class="fas fa-download me-1"></i> Download Blank Template
+                                </a>
+                            </div>
+                        </div>
                         <ul class="mb-0">
-                            <li>First row must contain column headers</li>
-                            <li>Required fields: <strong>Item Name</strong> and <strong>Serial Number</strong></li>
-                            <li>Optional fields will use default values if missing</li>
-                            <li>Duplicate serial numbers will be updated (not duplicated)</li>
+                            <li>Includes all 18 item fields (excluding <code>image</code> and auto-generated system columns): <code>item_name</code>, <code>serial_number</code>, <code>category</code>, <code>brand</code>, <code>model</code>, <code>department</code>, <code>description</code>, <code>specifications</code>, <code>brand_model</code>, <code>condition</code>, <code>stock_location</code>, <code>storage_location</code>, <code>notes</code>, <code>quantity</code>, <code>status</code>, <code>tags</code>, <code>last_scanned</code>, <code>current_location</code></li>
+                            <li>Required fields: <strong>Item Name</strong> (<code>item_name</code>) and <strong>Serial Number</strong> (<code>serial_number</code>)</li>
+                            <li><strong>Update on the go:</strong> Matching <code>serial_number</code> rows automatically update existing items without duplicating them</li>
                         </ul>
                     </div>
 
@@ -759,7 +964,7 @@ $previewData = $_SESSION['import_preview'] ?? [];
                                         <th>#</th>`;
 
                 headers.forEach((header, index) => {
-                    html += `<th>${escapeHtml(header)} (${String.fromCharCode(65 + index)})</th>`;
+                    html += `<th>${escapeHtml(header)} (${getExcelColumnLetter(index)})</th>`;
                 });
 
                 html += `</tr></thead><tbody>`;
@@ -780,51 +985,75 @@ $previewData = $_SESSION['import_preview'] ?? [];
             function generateMappingFields(headers) {
                 const fieldDefinitions = {
                     'item_name': {
-                        label: 'Item Name',
+                        label: 'Item Name (item_name)',
                         required: true
                     },
                     'serial_number': {
-                        label: 'Serial Number',
+                        label: 'Serial Number (serial_number)',
                         required: true
                     },
                     'category': {
-                        label: 'Category',
+                        label: 'Category (category)',
                         required: false
                     },
                     'brand': {
-                        label: 'Brand',
+                        label: 'Brand (brand)',
                         required: false
                     },
                     'model': {
-                        label: 'Model',
-                        required: false
-                    },
-                    'description': {
-                        label: 'Description',
-                        required: false
-                    },
-                    'quantity': {
-                        label: 'Quantity',
-                        required: false
-                    },
-                    'condition': {
-                        label: 'Condition',
-                        required: false
-                    },
-                    'status': {
-                        label: 'Status',
+                        label: 'Model (model)',
                         required: false
                     },
                     'department': {
-                        label: 'Department',
+                        label: 'Department (department)',
+                        required: false
+                    },
+                    'description': {
+                        label: 'Description (description)',
+                        required: false
+                    },
+                    'specifications': {
+                        label: 'Specifications (specifications)',
+                        required: false
+                    },
+                    'brand_model': {
+                        label: 'Brand & Model (brand_model)',
+                        required: false
+                    },
+                    'condition': {
+                        label: 'Condition (condition)',
                         required: false
                     },
                     'stock_location': {
-                        label: 'Stock Location',
+                        label: 'Stock Location (stock_location)',
+                        required: false
+                    },
+                    'storage_location': {
+                        label: 'Storage Location (storage_location)',
                         required: false
                     },
                     'notes': {
-                        label: 'Notes',
+                        label: 'Notes (notes)',
+                        required: false
+                    },
+                    'quantity': {
+                        label: 'Quantity (quantity)',
+                        required: false
+                    },
+                    'status': {
+                        label: 'Status (status)',
+                        required: false
+                    },
+                    'tags': {
+                        label: 'Tags (tags)',
+                        required: false
+                    },
+                    'last_scanned': {
+                        label: 'Last Scanned (last_scanned)',
+                        required: false
+                    },
+                    'current_location': {
+                        label: 'Current Location (current_location)',
                         required: false
                     }
                 };
@@ -836,7 +1065,7 @@ $previewData = $_SESSION['import_preview'] ?? [];
 
                 Object.entries(fieldDefinitions).forEach(([field, definition]) => {
                     html += `
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label for="field_${field}" class="form-label ${definition.required ? 'required-field' : ''}">
                                 ${definition.label}
                                 ${definition.required ? '<span class="text-danger">*</span>' : ''}
@@ -879,12 +1108,18 @@ $previewData = $_SESSION['import_preview'] ?? [];
                     'brand': ['brand', 'manufacturer', 'maker', 'company', 'vendor'],
                     'model': ['model', 'model number', 'version', 'model no'],
                     'department': ['department', 'dept', 'division', 'team', 'section'],
-                    'description': ['description', 'desc', 'details', 'info', 'specification'],
+                    'description': ['description', 'desc', 'details', 'info'],
+                    'specifications': ['specifications', 'specification', 'specs', 'spec', 'technical specs'],
+                    'brand_model': ['brand_model', 'brand model', 'brand & model', 'make and model'],
                     'condition': ['condition', 'state', 'quality', 'grade'],
-                    'stock_location': ['stock_location', 'stock location', 'location', 'storage', 'warehouse', 'place'],
+                    'stock_location': ['stock_location', 'stock location', 'warehouse'],
+                    'storage_location': ['storage_location', 'storage location', 'storage', 'rack', 'shelf', 'bin'],
+                    'notes': ['notes', 'note', 'comments', 'remarks', 'additional'],
                     'quantity': ['quantity', 'qty', 'amount', 'count', 'number', 'total'],
                     'status': ['status', 'availability'],
-                    'notes': ['notes', 'comments', 'remarks', 'additional']
+                    'tags': ['tags', 'tag', 'keywords', 'labels'],
+                    'last_scanned': ['last_scanned', 'last scanned', 'scanned at', 'scan date'],
+                    'current_location': ['current_location', 'current location', 'present location', 'active location']
                 };
 
                 // Pass 1: Exact matches against field name or keyword

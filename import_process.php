@@ -154,18 +154,55 @@ function processImportBatch($sessionId, $batchSize) {
         $startRow = 2 + $session['processed'];
         $endRow = min($startRow + $batchSize - 1, $session['total_rows'] + 1);
         
+        $allowedFields = [
+            'item_name',
+            'serial_number',
+            'category',
+            'brand',
+            'model',
+            'department',
+            'description',
+            'specifications',
+            'brand_model',
+            'condition',
+            'stock_location',
+            'storage_location',
+            'notes',
+            'quantity',
+            'status',
+            'tags',
+            'last_scanned',
+            'current_location'
+        ];
+
         for ($row = $startRow; $row <= $endRow; $row++) {
             try {
                 $itemData = [];
                 
                 // Map each column
                 foreach ($session['field_mapping'] as $dbField => $excelCol) {
+                    if (!in_array($dbField, $allowedFields, true)) {
+                        continue;
+                    }
                     if ($excelCol && $excelCol !== 'none') {
-                        $cellValue = $worksheet->getCell($excelCol . $row)->getValue();
+                        $cell = $worksheet->getCell($excelCol . $row);
+                        $cellValue = $cell->getValue();
                         if ($cellValue instanceof \PhpOffice\PhpSpreadsheet\RichText\RichText) {
                             $cellValue = $cellValue->getPlainText();
                         }
-                        $itemData[$dbField] = $cellValue !== null ? trim((string)$cellValue) : '';
+                        if ($dbField === 'last_scanned') {
+                            $rawScan = $cellValue !== null ? trim((string)$cellValue) : '';
+                            if ($rawScan === '') {
+                                $itemData['last_scanned'] = null;
+                            } elseif (is_numeric($rawScan) && \PhpOffice\PhpSpreadsheet\Shared\Date::isDateTime($cell)) {
+                                $itemData['last_scanned'] = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float)$rawScan)->format('Y-m-d H:i:s');
+                            } else {
+                                $ts = strtotime($rawScan);
+                                $itemData['last_scanned'] = $ts !== false ? date('Y-m-d H:i:s', $ts) : null;
+                            }
+                        } else {
+                            $itemData[$dbField] = $cellValue !== null ? trim((string)$cellValue) : '';
+                        }
                     }
                 }
                 
@@ -174,6 +211,11 @@ function processImportBatch($sessionId, $batchSize) {
                     $session['skipped']++;
                     $session['log'][] = ['type' => 'warning', 'message' => "Row $row: Skipped - missing required fields"];
                     continue;
+                }
+
+                // Auto-fill brand_model if blank and brand/model are provided
+                if (empty($itemData['brand_model']) && (!empty($itemData['brand']) || !empty($itemData['model']))) {
+                    $itemData['brand_model'] = trim(($itemData['brand'] ?? '') . ' ' . ($itemData['model'] ?? ''));
                 }
                 
                 // Set defaults
@@ -253,8 +295,8 @@ function processImportBatch($sessionId, $batchSize) {
                     $values = array_values($itemData);
                     
                     $types = '';
-                    foreach ($itemData as $value) {
-                        $types .= is_int($value) ? 'i' : 's';
+                    foreach ($itemData as $field => $value) {
+                        $types .= ($field === 'quantity') ? 'i' : 's';
                     }
                     
                     $insertSql = "INSERT INTO items (`" . implode('`,`', $fields) . "`, created_at) VALUES ($placeholders, NOW())";
