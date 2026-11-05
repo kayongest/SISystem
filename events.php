@@ -71,6 +71,15 @@ try {
             padding: 0; 
         }
 
+        /* Protect Font Awesome icons from font-family override */
+        .fa, .fas, .far, .fal, .fab, .fad, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] {
+            font-family: "Font Awesome 6 Free" !important;
+            display: inline-block;
+        }
+        .fab, .fa-brands {
+            font-family: "Font Awesome 6 Brands" !important;
+        }
+
         /* Toolbar */
         .events-toolbar {
             display: flex;

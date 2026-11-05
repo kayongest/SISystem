@@ -160,6 +160,26 @@ if (!isset($_SESSION['user_id'])) {
             font-family: "Marvel", sans-serif;
         }
 
+        /* Protect Font Awesome icons from generic font-family override */
+        .fa,
+        .fas,
+        .far,
+        .fal,
+        .fab,
+        .fad,
+        .fa-solid,
+        .fa-regular,
+        .fa-brands,
+        [class^="fa-"],
+        [class*=" fa-"] {
+            font-family: "Font Awesome 6 Free" !important;
+            display: inline-block;
+        }
+        .fab,
+        .fa-brands {
+            font-family: "Font Awesome 6 Brands" !important;
+        }
+
         .btn-group-sm {
             background-color: #0c3c78;
             border-color: white;

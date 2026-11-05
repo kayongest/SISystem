@@ -517,6 +517,9 @@ require_once 'views/partials/header.php';
 <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
+<!-- Font Awesome 6 -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700&display=swap');
 
@@ -597,12 +600,43 @@ require_once 'views/partials/header.php';
 
     body,
     .profile-page-wrapper,
-    .profile-page-wrapper *,
     #addUserModal,
-    #addUserModal *,
     #previewSigModal,
-    #previewSigModal * {
+    input,
+    button,
+    select,
+    textarea {
         font-family: "Titillium Web", sans-serif !important;
+    }
+
+    /* Protect all Font Awesome icon glyphs from font-family override */
+    .fa,
+    .fas,
+    .far,
+    .fal,
+    .fab,
+    .fad,
+    .fa-solid,
+    .fa-regular,
+    .fa-brands,
+    .fa-light,
+    .fa-thin,
+    .fa-duotone,
+    [class^="fa-"],
+    [class*=" fa-"] {
+        font-family: "Font Awesome 6 Free" !important;
+        font-style: normal !important;
+        font-variant: normal !important;
+        text-rendering: auto !important;
+        line-height: 1 !important;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        display: inline-block;
+    }
+
+    .fab,
+    .fa-brands {
+        font-family: "Font Awesome 6 Brands" !important;
     }
 
     body {
