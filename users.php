@@ -1288,13 +1288,13 @@ require_once 'views/partials/header.php';
                 <!-- TAB 1: ACCOUNT (MAIN VIEW MATCHING ATTACHED IMAGE) -->
                 <div class="tab-pane fade show active" id="pills-account" role="tabpanel">
                     
-                    <!-- Top Card: Projects / Batches List -->
+                    <!-- Top Card: Overview -->
                     <div class="vuexy-card">
                         <div class="vuexy-card-header">
-                            <h5 class="vuexy-card-title">Projects List</h5>
+                            <h5 class="vuexy-card-title">Overview</h5>
                             <div class="d-flex align-items-center gap-2">
                                 <div class="input-group input-group-sm" style="max-width: 220px;">
-                                    <input type="text" id="projectSearchInput" class="form-control" placeholder="Search project" onkeyup="filterProjectsList()">
+                                    <input type="text" id="projectSearchInput" class="form-control" placeholder="Search event..." onkeyup="filterProjectsList()">
                                 </div>
                             </div>
                         </div>
@@ -1304,8 +1304,9 @@ require_once 'views/partials/header.php';
                                 <thead>
                                     <tr>
                                         <th style="width: 40px;"><input class="form-check-input" type="checkbox" id="checkAllProjects"></th>
-                                        <th>Project</th>
-                                        <th>Leader</th>
+                                        <th>Event</th>
+                                        <th>Project Manager</th>
+                                        <th>Tech Lead</th>
                                         <th>Team</th>
                                         <th style="min-width: 140px;">Progress</th>
                                         <th style="width: 50px; text-align: center;">Action</th>
@@ -1313,110 +1314,111 @@ require_once 'views/partials/header.php';
                                 </thead>
                                 <tbody>
                                     <?php 
-                                    // 4 Core Sections: Authentication, Assigned Events, Active Events, Calltime
-                                    $displayProjects = [
-                                        [
-                                            'icon' => 'fas fa-shield-alt', 
-                                            'bg' => '#e0f2fe', 
-                                            'color' => '#0284c7', 
-                                            'title' => 'Authentication', 
-                                            'subtitle' => 'Security Credentials & Access Rights', 
-                                            'leader' => htmlspecialchars($userFullName), 
-                                            'progress' => 100, 
-                                            'bar' => '#0d9488',
-                                            'target_tab' => 'pills-auth-tab'
-                                        ],
-                                        [
-                                            'icon' => 'fas fa-calendar-check', 
-                                            'bg' => '#f0fdf4', 
-                                            'color' => '#16a34a', 
-                                            'title' => 'Assigned Events', 
-                                            'subtitle' => count($assigned_events) . ' Productions & Venues Assigned', 
-                                            'leader' => !empty($assigned_events[0]['project_manager']) ? $assigned_events[0]['project_manager'] : 'Event PM', 
-                                            'progress' => 75, 
-                                            'bar' => '#1e3a5f',
-                                            'target_tab' => 'pills-assigned-events-tab'
-                                        ],
-                                        [
-                                            'icon' => 'fas fa-broadcast-tower', 
-                                            'bg' => '#fff7ed', 
-                                            'color' => '#ea580c', 
-                                            'title' => 'Active Events', 
-                                            'subtitle' => count($active_events) . ' Live Stage Deployments', 
-                                            'leader' => 'Stage Lead', 
-                                            'progress' => 60, 
-                                            'bar' => '#f97316',
-                                            'target_tab' => 'pills-active-events-tab'
-                                        ],
-                                        [
-                                            'icon' => 'fas fa-clock', 
-                                            'bg' => '#fdf2f8', 
-                                            'color' => '#db2777', 
-                                            'title' => 'Calltime', 
-                                            'subtitle' => count($calltime_schedules) . ' Scheduled Call Sheets & Shifts', 
-                                            'leader' => 'Crew Dispatch', 
-                                            'progress' => 85, 
-                                            'bar' => '#ea580c',
-                                            'target_tab' => 'pills-calltime-tab'
-                                        ],
-                                    ];
+                                    $colorPalette = ['#0d9488', '#1e3a5f', '#f97316', '#ea580c', '#6366f1', '#0284c7'];
+                                    $progressList = [85, 70, 55, 90, 45, 60];
 
-                                    foreach ($displayProjects as $p):
+                                    if (!empty($assigned_events)):
+                                        foreach ($assigned_events as $idx => $ev):
+                                            $barColor = $colorPalette[$idx % count($colorPalette)];
+                                            $progress = $progressList[$idx % count($progressList)];
+                                            $evTitle = !empty($ev['title']) ? $ev['title'] : 'Production Event';
+                                            $evLocation = !empty($ev['location']) ? $ev['location'] : 'Kigali Convention Centre';
+                                            $evDate = !empty($ev['date']) ? date('M d, Y', strtotime($ev['date'])) : date('M d, Y');
+                                            $evPM = !empty($ev['project_manager']) ? $ev['project_manager'] : 'Joy (PM)';
+                                            $evLead = !empty($ev['tech_lead']) ? $ev['tech_lead'] : (!empty($ev['assigned_technician']) ? explode(',', $ev['assigned_technician'])[0] : 'Lead Tech');
                                     ?>
                                     <tr class="project-table-row">
-                                        <td><input class="form-check-input" type="checkbox"></td>
+                                        <td><input class="form-check-input event-row-checkbox" type="checkbox"></td>
                                         <td>
                                             <div class="d-flex align-items-center gap-3">
-                                                <div class="project-icon-box" style="background-color: <?php echo $p['bg']; ?>; color: <?php echo $p['color']; ?>;">
-                                                    <i class="<?php echo $p['icon']; ?>"></i>
-                                                </div>
-                                                <div style="cursor: pointer;" onclick="document.getElementById('<?php echo $p['target_tab']; ?>').click();" title="Click to open <?php echo htmlspecialchars($p['title']); ?> tab">
-                                                    <div class="fw-bold text-dark fs-6"><?php echo htmlspecialchars($p['title']); ?></div>
-                                                    <div class="text-muted small"><?php echo htmlspecialchars($p['subtitle']); ?></div>
+                                                <?php if (!empty($ev['event_image'])): ?>
+                                                    <img src="<?php echo htmlspecialchars($ev['event_image']); ?>" style="width: 38px; height: 38px; object-fit: cover; border-radius: 8px; flex-shrink: 0;" onerror="this.outerHTML='<div class=\'project-icon-box bg-primary-subtle text-primary\'><i class=\'fas fa-calendar-alt\'></i></div>'">
+                                                <?php else: ?>
+                                                    <div class="project-icon-box" style="background-color: <?php echo $idx % 2 === 0 ? '#e0f2fe' : '#f0fdf4'; ?>; color: <?php echo $idx % 2 === 0 ? '#0284c7' : '#16a34a'; ?>;">
+                                                        <i class="fas fa-calendar-day"></i>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <div>
+                                                    <a href="events.php" class="fw-bold text-dark text-decoration-none fs-6 d-block" title="View <?php echo htmlspecialchars($evTitle); ?>">
+                                                        <?php echo htmlspecialchars($evTitle); ?>
+                                                    </a>
+                                                    <div class="text-muted small">
+                                                        <i class="fas fa-map-marker-alt text-danger me-1"></i><?php echo htmlspecialchars($evLocation); ?>
+                                                        <span class="mx-1">•</span>
+                                                        <span><?php echo $evDate; ?></span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td>
-                                            <span class="text-muted fw-semibold"><?php echo htmlspecialchars($p['leader']); ?></span>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="rounded-circle bg-light text-primary d-flex align-items-center justify-content-center fw-bold" style="width: 28px; height: 28px; font-size: 0.75rem; border: 1px solid #e2e8f0;">
+                                                    <?php echo strtoupper(substr($evPM, 0, 1)); ?>
+                                                </div>
+                                                <span class="text-dark fw-semibold small"><?php echo htmlspecialchars($evPM); ?></span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <?php if (!empty($ev['tech_lead'])): ?>
+                                                <span class="badge bg-warning-subtle text-dark border border-warning-subtle px-2 py-1">
+                                                    <i class="fas fa-crown text-warning me-1"></i><?php echo htmlspecialchars($ev['tech_lead']); ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-light text-muted border px-2 py-1">
+                                                    <i class="fas fa-user-gear me-1"></i><?php echo htmlspecialchars($evLead); ?>
+                                                </span>
+                                            <?php endif; ?>
                                         </td>
                                         <td>
                                             <div class="avatar-stack">
-                                                <img src="uploads/profiles/profile_2_1789409080.png" onerror="this.src='assets/images/user.png'" class="avatar-stack-item" title="Team Lead">
+                                                <img src="uploads/profiles/profile_2_1789409080.png" onerror="this.src='assets/images/user.png'" class="avatar-stack-item" title="Tech Lead">
                                                 <img src="uploads/profiles/profile_3_1789409415.png" onerror="this.src='assets/images/user.png'" class="avatar-stack-item" title="Technician">
-                                                <span class="avatar-stack-badge">+<?php echo rand(2, 4); ?></span>
+                                                <span class="avatar-stack-badge">+<?php echo rand(2, 5); ?></span>
                                             </div>
                                         </td>
                                         <td>
-                                            <div class="d-flex align-items-center">
-                                                <div class="progress vuexy-progress">
-                                                    <div class="progress-bar" role="progressbar" style="width: <?php echo $p['progress']; ?>%; background-color: <?php echo $p['bar']; ?>;" aria-valuenow="<?php echo $p['progress']; ?>" aria-valuemin="0" aria-valuemax="100"></div>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="progress vuexy-progress flex-grow-1">
+                                                    <div class="progress-bar" role="progressbar" style="width: <?php echo $progress; ?>%; background-color: <?php echo $barColor; ?>;" aria-valuenow="<?php echo $progress; ?>" aria-valuemin="0" aria-valuemax="100"></div>
                                                 </div>
-                                                <span class="text-muted small fw-bold"><?php echo $p['progress']; ?>%</span>
+                                                <span class="text-muted small fw-bold" style="min-width: 32px;"><?php echo $progress; ?>%</span>
                                             </div>
                                         </td>
                                         <td class="text-center">
                                             <div class="dropdown">
-                                                <button class="btn btn-sm btn-link text-muted p-0" type="button" data-bs-toggle="dropdown">
+                                                <button class="btn btn-sm btn-link text-muted p-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                                     <i class="fas fa-ellipsis-v"></i>
                                                 </button>
                                                 <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                                                     <li>
-                                                        <button type="button" class="dropdown-item small" onclick="document.getElementById('<?php echo $p['target_tab']; ?>').click();">
-                                                            <i class="fas fa-external-link-alt me-2 text-primary"></i> View <?php echo htmlspecialchars($p['title']); ?>
-                                                        </button>
+                                                        <a class="dropdown-item small" href="events.php">
+                                                            <i class="fas fa-calendar-alt me-2 text-primary"></i> View Event Details
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item small" href="batch_history.php?search=<?php echo urlencode($evTitle); ?>">
+                                                            <i class="fas fa-truck-loading me-2 text-warning"></i> View Batch Movements
+                                                        </a>
                                                     </li>
                                                 </ul>
                                             </div>
                                         </td>
                                     </tr>
-                                    <?php endforeach; ?>
+                                    <?php 
+                                        endforeach; 
+                                    else: 
+                                    ?>
+                                    <tr>
+                                        <td colspan="7" class="text-center py-4 text-muted">No overview events found.</td>
+                                    </tr>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
 
                         <!-- Pagination Footer -->
                         <div class="d-flex justify-content-between align-items-center mt-3 pt-2 text-muted small">
-                            <span>Showing 1 to <?php echo count($displayProjects); ?> of <?php echo count($displayProjects); ?> entries</span>
+                            <span>Showing 1 to <?php echo count($assigned_events); ?> of <?php echo count($assigned_events); ?> entries</span>
                             <div class="d-flex align-items-center gap-1">
                                 <button class="btn btn-xs btn-outline-secondary px-2 py-1 disabled"><i class="fas fa-chevron-left me-1"></i> Previous</button>
                                 <span class="badge bg-dark px-2 py-1">1</span>
@@ -1424,7 +1426,6 @@ require_once 'views/partials/header.php';
                             </div>
                         </div>
                     </div>
-
                     <!-- Bottom Card: User Activity Timeline -->
                     <div class="vuexy-card">
                         <div class="vuexy-card-header">
@@ -1432,14 +1433,14 @@ require_once 'views/partials/header.php';
                         </div>
 
                         <div class="timeline-container">
-                            <!-- Item 1: Invoice Document -->
+                            <!-- Item 1: Call time to venue -->
                             <div class="timeline-item">
                                 <div class="timeline-point" style="background: #2f3349;"></div>
                                 <div class="timeline-header">
-                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">12 Invoices have been paid</h6>
+                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">Entered Venue - e.g Marriot</h6>
                                     <span class="timeline-time">12 min ago</span>
                                 </div>
-                                <p class="timeline-text" style="color: #6f6b7d;">Invoices have been paid to the company</p>
+                                <p class="timeline-text" style="color: #6f6b7d;">Arrived on time</p>
                                 <div>
                                     <span class="badge border border-danger text-danger bg-transparent px-2 py-1" style="border-radius: 4px; font-weight: 600; cursor: pointer;">
                                         <i class="far fa-file-pdf me-1 text-danger"></i>
@@ -1448,14 +1449,14 @@ require_once 'views/partials/header.php';
                                 </div>
                             </div>
 
-                            <!-- Item 2: Client Meeting -->
+                            <!-- Item 2: Break for Coffee -->
                             <div class="timeline-item">
                                 <div class="timeline-point" style="background: #2f3349;"></div>
                                 <div class="timeline-header">
-                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">Client Meeting</h6>
+                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">Breakfast</h6>
                                     <span class="timeline-time">45 min ago</span>
                                 </div>
-                                <p class="timeline-text" style="color: #6f6b7d;">Project meeting with john @10:15am</p>
+                                <p class="timeline-text" style="color: #6f6b7d;">Coffee served @10:15am</p>
                                 <div>
                                     <div class="client-card-preview" style="background: #f8f7fa; border: 1px solid #dbdade; border-radius: 6px; padding: 6px 12px;">
                                         <img src="uploads/profiles/profile_3_1789409415.png" onerror="this.src='assets/images/user.png'" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover;">
@@ -1467,14 +1468,14 @@ require_once 'views/partials/header.php';
                                 </div>
                             </div>
 
-                            <!-- Item 3: Create a new project for client -->
+                            <!-- Item 3: Logged out from venue -->
                             <div class="timeline-item">
                                 <div class="timeline-point" style="background: #2f3349;"></div>
                                 <div class="timeline-header">
-                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">Create a new project for client</h6>
+                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">Signed out from venuw - Room (Kilimanajaro)</h6>
                                     <span class="timeline-time">2 Day Ago</span>
                                 </div>
-                                <p class="timeline-text" style="color: #6f6b7d;">6 team members in a project</p>
+                                <p class="timeline-text" style="color: #6f6b7d;">6 team members in the event</p>
                                 <div class="avatar-stack mt-2">
                                     <img src="uploads/profiles/profile_2_1789409080.png" onerror="this.src='assets/images/user.png'" class="avatar-stack-item">
                                     <img src="uploads/profiles/profile_6_1793719009.jpg" onerror="this.src='assets/images/user.png'" class="avatar-stack-item">
@@ -2004,6 +2005,10 @@ require_once 'views/partials/header.php';
 ob_start();
 ?>
 <script>
+    $(document).on('change', '#checkAllProjects', function() {
+        $('.event-row-checkbox').prop('checked', $(this).is(':checked'));
+    });
+
     function filterProjectsList() {
         const val = $('#projectSearchInput').val().toLowerCase();
         $('.project-table-row').each(function() {
