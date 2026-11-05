@@ -1303,7 +1303,6 @@ require_once 'views/partials/header.php';
                             <table class="table table-vuexy" id="projectsListTable">
                                 <thead>
                                     <tr>
-                                        <th style="width: 40px;"><input class="form-check-input" type="checkbox" id="checkAllProjects"></th>
                                         <th>Event</th>
                                         <th>Project Manager</th>
                                         <th>Tech Lead</th>
@@ -1326,9 +1325,38 @@ require_once 'views/partials/header.php';
                                             $evDate = !empty($ev['date']) ? date('M d, Y', strtotime($ev['date'])) : date('M d, Y');
                                             $evPM = !empty($ev['project_manager']) ? $ev['project_manager'] : 'Joy (PM)';
                                             $evLead = !empty($ev['tech_lead']) ? $ev['tech_lead'] : (!empty($ev['assigned_technician']) ? explode(',', $ev['assigned_technician'])[0] : 'Lead Tech');
+
+                                            // Build team roster for this specific event to display on hover
+                                            $teamList = [];
+                                            if (!empty($ev['project_manager'])) {
+                                                $teamList[] = htmlspecialchars($ev['project_manager']) . ' <small class="text-muted">(PM)</small>';
+                                            }
+                                            if (!empty($ev['tech_lead'])) {
+                                                $teamList[] = htmlspecialchars($ev['tech_lead']) . ' <small class="text-warning fw-bold">(Tech Lead)</small>';
+                                            }
+                                            if (!empty($ev['assigned_technician'])) {
+                                                $techArr = array_filter(array_map('trim', explode(',', $ev['assigned_technician'])));
+                                                foreach ($techArr as $tName) {
+                                                    if (!empty($tName) && (empty($ev['tech_lead']) || stripos($ev['tech_lead'], $tName) === false)) {
+                                                        $teamList[] = htmlspecialchars($tName) . ' <small class="text-muted">(Technician)</small>';
+                                                    }
+                                                }
+                                            }
+                                            if (empty($teamList)) {
+                                                $teamList = [
+                                                    (!empty($ev['project_manager']) ? htmlspecialchars($ev['project_manager']) : 'Joy') . ' <small class="text-muted">(PM)</small>',
+                                                    (!empty($ev['tech_lead']) ? htmlspecialchars($ev['tech_lead']) : 'Lead Tech') . ' <small class="text-warning fw-bold">(Tech Lead)</small>',
+                                                    'Patrick N <small class="text-muted">(Video Tech)</small>',
+                                                    'Eric H <small class="text-muted">(Audio Tech)</small>',
+                                                    'Appolinaire M <small class="text-muted">(Lighting)</small>'
+                                                ];
+                                            }
+
+                                            $teamHoverHtml = '<div class="text-start py-1"><strong><i class="fas fa-users me-1 text-primary"></i>Event Team Roster:</strong><ul class="mb-0 ps-3 mt-1 small text-start">' . implode('', array_map(function($m) { return '<li>' . $m . '</li>'; }, $teamList)) . '</ul></div>';
+                                            $teamHoverPlain = strip_tags(str_replace('</li>', "\n", implode('', array_map(function($m) { return '• ' . $m . '</li>'; }, $teamList))));
+                                            $extraCrewCount = max(1, count($teamList) - 2);
                                     ?>
                                     <tr class="project-table-row">
-                                        <td><input class="form-check-input event-row-checkbox" type="checkbox"></td>
                                         <td>
                                             <div class="d-flex align-items-center gap-3">
                                                 <?php if (!empty($ev['event_image'])): ?>
@@ -1370,10 +1398,10 @@ require_once 'views/partials/header.php';
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <div class="avatar-stack">
-                                                <img src="uploads/profiles/profile_2_1789409080.png" onerror="this.src='assets/images/user.png'" class="avatar-stack-item" title="Tech Lead">
-                                                <img src="uploads/profiles/profile_3_1789409415.png" onerror="this.src='assets/images/user.png'" class="avatar-stack-item" title="Technician">
-                                                <span class="avatar-stack-badge">+<?php echo rand(2, 5); ?></span>
+                                            <div class="avatar-stack" data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="top" title="<?php echo htmlspecialchars($teamHoverHtml); ?>" style="cursor: pointer;">
+                                                <img src="uploads/profiles/profile_2_1789409080.png" onerror="this.src='assets/images/user.png'" class="avatar-stack-item" title="Tech Lead: <?php echo htmlspecialchars($evLead); ?>">
+                                                <img src="uploads/profiles/profile_3_1789409415.png" onerror="this.src='assets/images/user.png'" class="avatar-stack-item" title="PM: <?php echo htmlspecialchars($evPM); ?>">
+                                                <span class="avatar-stack-badge" title="<?php echo htmlspecialchars($teamHoverPlain); ?>">+<?php echo $extraCrewCount; ?></span>
                                             </div>
                                         </td>
                                         <td>
@@ -1409,7 +1437,7 @@ require_once 'views/partials/header.php';
                                     else: 
                                     ?>
                                     <tr>
-                                        <td colspan="7" class="text-center py-4 text-muted">No overview events found.</td>
+                                        <td colspan="6" class="text-center py-4 text-muted">No overview events found.</td>
                                     </tr>
                                     <?php endif; ?>
                                 </tbody>
@@ -2005,8 +2033,17 @@ require_once 'views/partials/header.php';
 ob_start();
 ?>
 <script>
-    $(document).on('change', '#checkAllProjects', function() {
-        $('.event-row-checkbox').prop('checked', $(this).is(':checked'));
+    // Initialize tooltips with HTML support for team popovers
+    $(function() {
+        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl, {
+                    html: true,
+                    boundary: 'window'
+                });
+            });
+        }
     });
 
     function filterProjectsList() {
