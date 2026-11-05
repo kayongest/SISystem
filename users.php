@@ -516,27 +516,46 @@ if ($selected_user) {
 
     // Fetch Assigned Events for this user (matching technician, project manager, or tech lead)
     $assigned_events = [];
-    $aeStmt = $conn->prepare("
-        SELECT e.*, 
-               (SELECT COUNT(*) FROM stock_movements sm WHERE sm.event_name = e.title) as batch_count
-        FROM events e 
-        WHERE e.assigned_technician LIKE ? OR e.assigned_technician LIKE ? 
-           OR e.project_manager LIKE ? OR e.project_manager LIKE ?
-           OR e.tech_lead LIKE ? OR e.tech_lead LIKE ?
-        ORDER BY COALESCE(e.date, e.created_at) DESC
-        LIMIT 10
-    ");
-    if ($aeStmt) {
-        $likeName = "%" . ($uName ?: '___') . "%";
-        $likeFull = "%" . ($uFullName ?: '___') . "%";
-        $aeStmt->bind_param("ssssss", $likeName, $likeFull, $likeName, $likeFull, $likeName, $likeFull);
-        $aeStmt->execute();
-        $assigned_events = $aeStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        $aeStmt->close();
-    }
-    if (empty($assigned_events)) {
-        $r = $conn->query("SELECT *, 1 as batch_count FROM events ORDER BY created_at DESC LIMIT 5");
-        if ($r) $assigned_events = $r->fetch_all(MYSQLI_ASSOC);
+    $tokens = array_filter(array_unique(array_merge(
+        [$uName, $uFullName],
+        explode(' ', $uFullName)
+    )), function($t) { return strlen(trim($t)) >= 3; });
+
+    if (!empty($tokens)) {
+        $conditions = [];
+        $params = [];
+        $types = "";
+
+        foreach ($tokens as $t) {
+            $like = "%" . trim($t) . "%";
+            $conditions[] = "e.assigned_technician LIKE ?";
+            $params[] = $like;
+            $types .= "s";
+
+            $conditions[] = "e.tech_lead LIKE ?";
+            $params[] = $like;
+            $types .= "s";
+
+            $conditions[] = "e.project_manager LIKE ?";
+            $params[] = $like;
+            $types .= "s";
+        }
+
+        $sql = "
+            SELECT DISTINCT e.*, 
+                   (SELECT COUNT(*) FROM stock_movements sm WHERE sm.event_name = e.title) as batch_count
+            FROM events e 
+            WHERE " . implode(" OR ", $conditions) . "
+            ORDER BY COALESCE(e.date, e.created_at) DESC
+            LIMIT 15
+        ";
+        $aeStmt = $conn->prepare($sql);
+        if ($aeStmt) {
+            $aeStmt->bind_param($types, ...$params);
+            $aeStmt->execute();
+            $assigned_events = $aeStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $aeStmt->close();
+        }
     }
 
     // Fetch Active Events & Movements for this user
@@ -559,13 +578,13 @@ if ($selected_user) {
         $actStmt->close();
     }
 
-    // Generate Structured Calltime Schedule for this user
+    // Generate Structured Calltime Schedule for this user strictly from assigned events
     $calltime_schedules = [];
     $sampleTimes = ['07:30 AM', '09:00 AM', '11:15 AM', '14:00 PM', '17:30 PM'];
     $sampleRoles = ['Lead Audio Tech', 'Lighting Programmer', 'Stage Video Operator', 'Rigging Supervisor', 'Backline Specialist'];
     $venues = ['Kigali Convention Centre - Main Auditorium', 'BK Arena - Main Bowl', 'Intare Conference Arena', 'Serena Hotel - Ballroom'];
     
-    // Combine from events and batches
+    // Combine strictly from real assigned events
     if (!empty($assigned_events)) {
         foreach ($assigned_events as $k => $ev) {
             $cTime = !empty($ev['call_time']) ? trim($ev['call_time']) : $sampleTimes[$k % count($sampleTimes)];
@@ -577,8 +596,8 @@ if ($selected_user) {
             $evRole = $sampleRoles[$k % count($sampleRoles)];
             if (!empty($ev['tech_lead']) && (($uFullName && stripos($ev['tech_lead'], $uFullName) !== false) || ($uName && stripos($ev['tech_lead'], $uName) !== false))) {
                 $evRole = 'Tech Lead';
-            } elseif (!empty($target_user['department'])) {
-                $evRole = ucwords($target_user['department']) . ' Specialist';
+            } elseif (!empty($selected_user['department'])) {
+                $evRole = ucwords($selected_user['department']) . ' Specialist';
             }
 
             $calltime_schedules[] = [
@@ -593,28 +612,7 @@ if ($selected_user) {
             ];
         }
     } else {
-        $calltime_schedules = [
-            [
-                'event_title' => 'MScard Production Gala',
-                'venue' => 'Kigali Convention Centre - Main Auditorium',
-                'date' => date('M d, Y', strtotime('+1 day')),
-                'call_time' => '07:30 AM',
-                'show_time' => '18:00 PM',
-                'role' => 'Lead Audio Tech',
-                'manager' => 'Joy (PM)',
-                'status' => 'Confirmed'
-            ],
-            [
-                'event_title' => 'Demo_1 Stage Deployment',
-                'venue' => 'BK Arena - FOH Stage',
-                'date' => date('M d, Y', strtotime('+3 days')),
-                'call_time' => '09:00 AM',
-                'show_time' => '19:30 PM',
-                'role' => 'Lighting Lead',
-                'manager' => 'Production Lead',
-                'status' => 'Scheduled'
-            ],
-        ];
+        $calltime_schedules = [];
     }
 }
 
@@ -1365,13 +1363,13 @@ require_once 'views/partials/header.php';
                 <div class="stats-boxes-row">
                     <div class="stat-mini-box">
                         <div class="stat-mini-icon"><i class="far fa-check-square"></i></div>
-                        <div class="stat-mini-number"><?php echo max(8, $user_batches_count * 12 + 14); ?></div>
-                        <div class="stat-mini-label">Task Done</div>
+                        <div class="stat-mini-number"><?php echo $user_batches_count; ?></div>
+                        <div class="stat-mini-label">Batches / Tasks</div>
                     </div>
                     <div class="stat-mini-box">
-                        <div class="stat-mini-icon"><i class="fas fa-th-large"></i></div>
-                        <div class="stat-mini-number"><?php echo max(4, $user_items_count + 6); ?></div>
-                        <div class="stat-mini-label">Project Done</div>
+                        <div class="stat-mini-icon"><i class="fas fa-calendar-check text-primary"></i></div>
+                        <div class="stat-mini-number"><?php echo count($assigned_events); ?></div>
+                        <div class="stat-mini-label"><?php echo count($assigned_events) === 1 ? 'Assigned Event' : 'Assigned Events'; ?></div>
                     </div>
                 </div>
 
@@ -1655,7 +1653,16 @@ require_once 'views/partials/header.php';
                                     else: 
                                     ?>
                                     <tr>
-                                        <td colspan="6" class="text-center py-4 text-muted">No overview events found.</td>
+                                        <td colspan="6" class="text-center py-5 text-muted">
+                                            <div class="py-4">
+                                                <i class="fas fa-calendar-times fa-3x text-secondary opacity-50 mb-3 d-block"></i>
+                                                <h6 class="fw-bold text-dark mb-1">No events assigned to '<?php echo htmlspecialchars($userFullName); ?>'</h6>
+                                                <p class="text-muted small mb-3">This user has not been assigned to any events or productions yet.</p>
+                                                <a href="events.php" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-calendar-plus me-1"></i> Assign in Event Center
+                                                </a>
+                                            </div>
+                                        </td>
                                     </tr>
                                     <?php endif; ?>
                                 </tbody>
@@ -1664,7 +1671,7 @@ require_once 'views/partials/header.php';
 
                         <!-- Pagination Footer -->
                         <div class="d-flex justify-content-between align-items-center mt-3 pt-2 text-muted small">
-                            <span>Showing 1 to <?php echo count($assigned_events); ?> of <?php echo count($assigned_events); ?> entries</span>
+                            <span>Showing <?php echo !empty($assigned_events) ? '1 to ' . count($assigned_events) : '0'; ?> of <?php echo count($assigned_events); ?> entries</span>
                             <div class="d-flex align-items-center gap-1">
                                 <button class="btn btn-xs btn-outline-secondary px-2 py-1 disabled"><i class="fas fa-chevron-left me-1"></i> Previous</button>
                                 <span class="badge bg-dark px-2 py-1">1</span>
@@ -1678,15 +1685,19 @@ require_once 'views/partials/header.php';
                             <h5 class="vuexy-card-title">User Activity Timeline</h5>
                         </div>
 
+                        <?php if (!empty($assigned_events)): 
+                            $firstEv = $assigned_events[0];
+                            $firstEvVenue = !empty($firstEv['location']) ? $firstEv['location'] : 'Marriot';
+                        ?>
                         <div class="timeline-container">
                             <!-- Item 1: Call time to venue -->
                             <div class="timeline-item">
                                 <div class="timeline-point" style="background: #2f3349;"></div>
                                 <div class="timeline-header">
-                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">Entered Venue - e.g Marriot</h6>
+                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">Entered Venue - <?php echo htmlspecialchars($firstEvVenue); ?></h6>
                                     <span class="timeline-time">12 min ago</span>
                                 </div>
-                                <p class="timeline-text" style="color: #6f6b7d;">Arrived on time</p>
+                                <p class="timeline-text" style="color: #6f6b7d;">Arrived on time for <?php echo htmlspecialchars($firstEv['title']); ?></p>
                                 <div>
                                     <span class="badge border border-danger text-danger bg-transparent px-2 py-1" style="border-radius: 4px; font-weight: 600; cursor: pointer;">
                                         <i class="far fa-file-pdf me-1 text-danger"></i>
@@ -1718,7 +1729,7 @@ require_once 'views/partials/header.php';
                             <div class="timeline-item">
                                 <div class="timeline-point" style="background: #2f3349;"></div>
                                 <div class="timeline-header">
-                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">Signed out from venuw - Room (Kilimanajaro)</h6>
+                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">Signed out from venue - Room (Kilimanajaro)</h6>
                                     <span class="timeline-time">2 Day Ago</span>
                                 </div>
                                 <p class="timeline-text" style="color: #6f6b7d;">6 team members in the event</p>
@@ -1730,6 +1741,13 @@ require_once 'views/partials/header.php';
                                 </div>
                             </div>
                         </div>
+                        <?php else: ?>
+                        <div class="text-center py-4 text-muted">
+                            <i class="fas fa-history fa-2x mb-2 text-secondary opacity-50 d-block"></i>
+                            <div class="small fw-semibold">No recent activity recorded</div>
+                            <div class="small text-muted">No venue check-ins or event logs found for '<?php echo htmlspecialchars($userFullName); ?>'.</div>
+                        </div>
+                        <?php endif; ?>
                     </div>
 
                 </div>
@@ -1874,7 +1892,16 @@ require_once 'views/partials/header.php';
                                         <?php endforeach; ?>
                                     <?php else: ?>
                                         <tr>
-                                            <td colspan="7" class="text-center py-4 text-muted">No assigned event records found.</td>
+                                            <td colspan="7" class="text-center py-5 text-muted">
+                                                <div class="py-4">
+                                                    <i class="fas fa-calendar-times fa-3x text-secondary opacity-50 mb-3 d-block"></i>
+                                                    <h6 class="fw-bold text-dark mb-1">No events assigned to '<?php echo htmlspecialchars($userFullName); ?>'</h6>
+                                                    <p class="text-muted small mb-3">No upcoming events or production setups assigned to this user.</p>
+                                                    <a href="events.php" class="btn btn-sm btn-primary">
+                                                        <i class="fas fa-plus-circle me-1"></i> Assign to an Event
+                                                    </a>
+                                                </div>
+                                            </td>
                                         </tr>
                                     <?php endif; ?>
                                 </tbody>
@@ -2028,7 +2055,13 @@ require_once 'views/partials/header.php';
                                         <?php endforeach; ?>
                                     <?php else: ?>
                                         <tr>
-                                            <td colspan="8" class="text-center py-4 text-muted">No scheduled calltimes for this user.</td>
+                                            <td colspan="8" class="text-center py-5 text-muted">
+                                                <div class="py-4">
+                                                    <i class="far fa-calendar-times fa-3x text-secondary opacity-50 mb-3 d-block"></i>
+                                                    <h6 class="fw-bold text-dark mb-1">No calltimes scheduled for '<?php echo htmlspecialchars($userFullName); ?>'</h6>
+                                                    <p class="text-muted small mb-0">No active events or reporting shifts assigned to this user.</p>
+                                                </div>
+                                            </td>
                                         </tr>
                                     <?php endif; ?>
                                 </tbody>
