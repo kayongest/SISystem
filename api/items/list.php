@@ -25,8 +25,23 @@ try {
     $offset = ($page - 1) * $limit;
 
     // Allowed sort columns - UPDATED to match your database
-    $allowedSort = ['id', 'item_name', 'category', 'quantity', 'status', 'created_at', 'stock_location'];
-    $sort = in_array($sort, $allowedSort) ? $sort : 'id';
+    $sortMap = [
+        'id' => 'i.id',
+        'item_name' => 'i.item_name',
+        'serial_number' => 'i.serial_number',
+        'category' => 'i.category',
+        'category_name' => 'i.category',
+        'department' => 'i.department',
+        'department_name' => 'i.department',
+        'model' => 'i.model',
+        'brand' => 'i.brand',
+        'quantity' => 'i.quantity',
+        'status' => 'i.status',
+        'condition' => 'i.`condition`',
+        'created_at' => 'i.created_at',
+        'stock_location' => 'i.stock_location'
+    ];
+    $sort = $sortMap[$sort] ?? 'i.id';
     $order = strtoupper($order) === 'ASC' ? 'ASC' : 'DESC';
 
     // Get database connection
@@ -127,9 +142,9 @@ try {
         b.name as brand_name,
         b.code as brand_code
     FROM items i
-    LEFT JOIN categories c ON i.category = c.id
-    LEFT JOIN departments d ON i.department = d.id
-    LEFT JOIN brands b ON i.brand = b.id
+    LEFT JOIN categories c ON (i.category = CAST(c.id AS CHAR) OR LOWER(i.category) = LOWER(c.name) OR LOWER(i.category) = LOWER(c.slug))
+    LEFT JOIN departments d ON (i.department = CAST(d.id AS CHAR) OR LOWER(i.department) = LOWER(d.name) OR LOWER(i.department) = LOWER(d.code))
+    LEFT JOIN brands b ON (i.brand = CAST(b.id AS CHAR) OR LOWER(i.brand) = LOWER(b.name) OR LOWER(i.brand) = LOWER(b.code))
     $whereClause 
     ORDER BY $sort $order 
     LIMIT ? OFFSET ?
@@ -151,17 +166,54 @@ try {
     $stmt->execute();
     $result = $stmt->get_result();
 
+    $categoryCodeMap = [
+        'CAT-VID' => 'Video',
+        'CAT-AUD' => 'Audio',
+        'CAT-LGT' => 'Lighting',
+        'CAT-IT'  => 'IT',
+        'CAT-AV'  => 'AV',
+        'CAT-CAM' => 'Cameras',
+        'CAT-CAB' => 'Cables',
+        'CAT-NET' => 'Networking',
+        'CAT-PWR' => 'Power',
+        'CAT-STG' => 'Staging',
+        'CAT-ACC' => 'Accessories',
+    ];
+
     $items = [];
     while ($row = $result->fetch_assoc()) {
         // Keep original values
-        $row['category_id'] = $row['category'];  // Keep the ID
-        $row['department_id'] = $row['department']; // Keep the ID
-        $row['brand_id'] = $row['brand']; // Keep the brand ID
+        $row['category_id'] = $row['category'];
+        $row['department_id'] = $row['department'];
+        $row['brand_id'] = $row['brand'];
 
-        // Use the joined names with fallbacks
-        $row['category_name'] = $row['category_name'] ?: 'Uncategorized';
-        $row['department_name'] = $row['department_name'] ?: 'Not Set';
-        $row['brand_name'] = $row['brand_name'] ?: ($row['brand'] ? 'Brand ' . $row['brand'] : 'N/A');
+        $rawCategory = trim((string)($row['category'] ?? ''));
+        $mappedCat = $categoryCodeMap[strtoupper($rawCategory)] ?? $rawCategory;
+        $row['category_name'] = !empty($row['category_name'])
+            ? $row['category_name']
+            : ($mappedCat !== '' ? $mappedCat : 'Uncategorized');
+
+        $rawDepartment = trim((string)($row['department'] ?? ''));
+        $row['department_name'] = !empty($row['department_name'])
+            ? $row['department_name']
+            : ($rawDepartment !== '' ? $rawDepartment : 'Not Set');
+
+        $rawBrand = trim((string)($row['brand'] ?? ''));
+        $row['brand_name'] = !empty($row['brand_name'])
+            ? $row['brand_name']
+            : ($rawBrand !== '' ? $rawBrand : 'N/A');
+        if ($rawBrand === '' && !empty($row['brand_name']) && $row['brand_name'] !== 'N/A') {
+            $row['brand'] = $row['brand_name'];
+        }
+
+        // Fallback location if stock_location is blank
+        if (empty($row['stock_location'])) {
+            if (!empty($row['current_location'])) {
+                $row['stock_location'] = $row['current_location'];
+            } elseif (!empty($row['storage_location'])) {
+                $row['stock_location'] = $row['storage_location'];
+            }
+        }
 
         // Clean up "undefined" strings
         $fieldsToCheck = ['description', 'specifications', 'notes', 'model', 'tags'];

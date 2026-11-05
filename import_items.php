@@ -125,6 +125,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'download_template' && $phpspr
             if ($res && $res->num_rows > 0) {
                 $loadedFromDb = true;
                 while ($dbRow = $res->fetch_assoc()) {
+                    if (function_exists('enrichImportedEquipmentRow')) {
+                        $dbRow = enrichImportedEquipmentRow($dbRow);
+                    }
                     foreach ($templateColumns as $idx => $colName) {
                         $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($idx + 1);
                         $val = $dbRow[$colName] ?? '';
@@ -170,21 +173,19 @@ if (isset($_GET['action']) && $_GET['action'] === 'download_template' && $phpspr
                     }
 
                     for ($r = 2; $r <= $maxR; $r++) {
-                        $itemNameVal = isset($headerMap['item_name']) ? trim((string)$existingSheet->getCell($headerMap['item_name'] . $r)->getValue()) : '';
-                        $serialVal = isset($headerMap['serial_number']) ? trim((string)$existingSheet->getCell($headerMap['serial_number'] . $r)->getValue()) : '';
-                        if ($itemNameVal === '' && $serialVal === '') {
+                        $rowMapData = [];
+                        foreach ($templateColumns as $colName) {
+                            $rowMapData[$colName] = isset($headerMap[$colName]) ? trim((string)$existingSheet->getCell($headerMap[$colName] . $r)->getValue()) : '';
+                        }
+                        if ($rowMapData['item_name'] === '' && $rowMapData['serial_number'] === '') {
                             continue;
+                        }
+                        if (function_exists('enrichImportedEquipmentRow')) {
+                            $rowMapData = enrichImportedEquipmentRow($rowMapData);
                         }
                         foreach ($templateColumns as $idx => $colName) {
                             $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($idx + 1);
-                            $val = isset($headerMap[$colName]) ? trim((string)$existingSheet->getCell($headerMap[$colName] . $r)->getValue()) : '';
-                            if ($colName === 'condition' && $val === '') {
-                                $val = 'good';
-                            } elseif ($colName === 'quantity' && $val === '') {
-                                $val = 1;
-                            } elseif ($colName === 'status' && $val === '') {
-                                $val = 'available';
-                            }
+                            $val = $rowMapData[$colName] ?? '';
                             $sheet->setCellValueExplicit(
                                 $colLetter . $rowNum,
                                 (string)$val,

@@ -213,6 +213,11 @@ function processImportBatch($sessionId, $batchSize) {
                     continue;
                 }
 
+                // Enrich blank fields with accurate equipment metadata while preserving user values
+                if (function_exists('enrichImportedEquipmentRow')) {
+                    $itemData = enrichImportedEquipmentRow($itemData);
+                }
+
                 // Auto-fill brand_model if blank and brand/model are provided
                 if (empty($itemData['brand_model']) && (!empty($itemData['brand']) || !empty($itemData['model']))) {
                     $itemData['brand_model'] = trim(($itemData['brand'] ?? '') . ' ' . ($itemData['model'] ?? ''));

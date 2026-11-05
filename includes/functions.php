@@ -1180,13 +1180,13 @@ function getRecentItems($conn, $limit = 10)
     $queries = [
         // Try with joins (Primary approach)
         "SELECT i.*, 
-                c.name as category_name, 
-                d.name as department_name,
+                COALESCE(c.name, NULLIF(i.category, '')) as category_name, 
+                COALESCE(d.name, NULLIF(i.department, '')) as department_name,
                 i.category as category_id,
                 i.department as department_id
          FROM items i
-         LEFT JOIN categories c ON i.category = c.id
-         LEFT JOIN departments d ON i.department = d.id OR i.department = d.code
+         LEFT JOIN categories c ON (i.category = CAST(c.id AS CHAR) OR LOWER(i.category) = LOWER(c.name) OR LOWER(i.category) = LOWER(c.slug))
+         LEFT JOIN departments d ON (i.department = CAST(d.id AS CHAR) OR LOWER(i.department) = LOWER(d.name) OR LOWER(i.department) = LOWER(d.code))
          WHERE 1=1 
          ORDER BY i.created_at DESC 
          LIMIT $limit",
@@ -2263,4 +2263,373 @@ function getTechnicianPerformance($conn, $limit = 5)
         error_log("Error getting technician performance: " . $e->getMessage());
     }
     return $results;
+}
+
+/**
+ * Enrich an imported equipment row so blank cells in Excel templates resolve
+ * to accurate category, department, brand, model, and location defaults while
+ * preserving any explicit values provided by the user.
+ */
+if (!function_exists('enrichImportedEquipmentRow')) {
+    function enrichImportedEquipmentRow(array $row): array
+    {
+        $name = trim((string)($row['item_name'] ?? ''));
+        $nameLower = strtolower($name);
+
+        $catalog = [
+            'lenovo' => [
+                'category' => 'Video',
+                'brand' => 'Lenovo',
+                'model' => 'ThinkPad Series',
+                'department' => 'VIDEO',
+                'description' => 'Production Control Laptop',
+                'specifications' => 'Intel Core i7, 16GB RAM, 512GB NVMe SSD, HDMI/USB-C',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Video Rack A1',
+                'tags' => 'laptop,video,control',
+            ],
+            'omen' => [
+                'category' => 'Video',
+                'brand' => 'HP',
+                'model' => 'Omen 16',
+                'department' => 'VIDEO',
+                'description' => 'High-Performance Graphics & vMix/Resolume Laptop',
+                'specifications' => 'Intel Core i7, RTX Graphics, 32GB RAM, 1TB SSD',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Video Rack A1',
+                'tags' => 'laptop,graphics,video',
+            ],
+            'updowncross hd' => [
+                'category' => 'Video',
+                'brand' => 'Blackmagic Design',
+                'model' => 'Mini Converter UpDownCross HD',
+                'department' => 'VIDEO',
+                'description' => 'SD/HD Format & Frame Rate Standards Converter',
+                'specifications' => '3G-SDI / HDMI Input & Output, Reference In, Multi-Rate',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Converter Case B1',
+                'tags' => 'converter,sdi,hdmi,video',
+            ],
+            'sdi/hdmi cross converter' => [
+                'category' => 'Video',
+                'brand' => 'Blackmagic Design',
+                'model' => 'Micro Converter BiDirectional SDI/HDMI',
+                'department' => 'VIDEO',
+                'description' => 'Bi-Directional SDI to HDMI & HDMI to SDI Converter',
+                'specifications' => '3G-SDI & HDMI I/O, USB-C Powered, 1080p60',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Converter Case B1',
+                'tags' => 'converter,bidirectional,sdi,hdmi',
+            ],
+            'hdmi splitter' => [
+                'category' => 'Video',
+                'brand' => 'ATEN',
+                'model' => 'VS184A 4-Port HDMI Splitter',
+                'department' => 'VIDEO',
+                'description' => '1-in to 4-out HDMI Distribution Amplifier',
+                'specifications' => '4K UHD @ 60Hz, HDCP 2.2, 1x4 HDMI Distribution',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Converter Case B2',
+                'tags' => 'splitter,hdmi,distribution',
+            ],
+            'utap (sdi)' => [
+                'category' => 'Video',
+                'brand' => 'AJA',
+                'model' => 'U-TAP SDI',
+                'department' => 'VIDEO',
+                'description' => 'USB 3.0 3G-SDI Capture Device',
+                'specifications' => '3G-SDI Input & Loop Output, USB 3.0 Bus Powered, 1080p60',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Capture Case C1',
+                'tags' => 'capture,sdi,aja,streaming',
+            ],
+            'utap (hdmi)' => [
+                'category' => 'Video',
+                'brand' => 'AJA',
+                'model' => 'U-TAP HDMI',
+                'department' => 'VIDEO',
+                'description' => 'USB 3.0 HDMI Capture Device',
+                'specifications' => 'HDMI v1.4a Input, USB 3.0 Bus Powered, 1080p60',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Capture Case C1',
+                'tags' => 'capture,hdmi,aja,streaming',
+            ],
+            'mini-converter' => [
+                'category' => 'Video',
+                'brand' => 'Blackmagic Design',
+                'model' => 'Mini Converter SDI to HDMI 6G',
+                'department' => 'VIDEO',
+                'description' => 'Broadcast SDI/HDMI Signal Mini Converter',
+                'specifications' => '6G-SDI / HDMI, Balanced Analog & AES/EBU Audio',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Converter Case B2',
+                'tags' => 'converter,blackmagic,sdi',
+            ],
+            'vx1000' => [
+                'category' => 'Video',
+                'brand' => 'NovaStar',
+                'model' => 'VX1000',
+                'department' => 'VIDEO',
+                'description' => 'All-in-One LED Display Video Controller',
+                'specifications' => '6.5 Million Pixels, 10x Gigabit Ethernet Outputs, HDMI/SDI/DVI',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'LED Processor Rack D1',
+                'tags' => 'novastar,led,processor,vx1000',
+            ],
+            'vx600' => [
+                'category' => 'Video',
+                'brand' => 'NovaStar',
+                'model' => 'VX600',
+                'department' => 'VIDEO',
+                'description' => 'All-in-One LED Video Wall Controller',
+                'specifications' => '3.9 Million Pixels, 6x Gigabit Ethernet Ports, HDMI/SDI',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'LED Processor Rack D1',
+                'tags' => 'novastar,led,processor,vx600',
+            ],
+            'vx16' => [
+                'category' => 'Video',
+                'brand' => 'NovaStar',
+                'model' => 'VX16s',
+                'department' => 'VIDEO',
+                'description' => '16-Port LED Display Controller & Video Splicer',
+                'specifications' => '10.4 Million Pixels, 16x Ethernet Outputs, 3G-SDI/HDMI/DVI',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'LED Processor Rack D1',
+                'tags' => 'novastar,led,processor,vx16s',
+            ],
+            'perfect cue' => [
+                'category' => 'Video',
+                'brand' => 'DSan',
+                'model' => 'PerfectCue System PC-433',
+                'department' => 'VIDEO',
+                'description' => 'Wireless Presentation Cue Light & Clicker System',
+                'specifications' => 'Dual USB Ports, Wireless Actuators, XLR Interconnect',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Control Case C2',
+                'tags' => 'cue,clicker,presentation,dsan',
+            ],
+            'sony pxw' => [
+                'category' => 'Cameras',
+                'brand' => 'Sony',
+                'model' => 'PXW-Z150 4K XDCAM',
+                'department' => 'VIDEO',
+                'description' => 'Professional 4K XDCAM Camcorder',
+                'specifications' => '1.0-type Exmor RS CMOS, 12x Optical Zoom, 3G-SDI & HDMI',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Camera Vault E1',
+                'tags' => 'camera,sony,pxw,4k',
+            ],
+            'canon' => [
+                'category' => 'Cameras',
+                'brand' => 'Canon',
+                'model' => 'EOS 5D Mark IV',
+                'department' => 'VIDEO',
+                'description' => 'Full-Frame DSLR Camera Body',
+                'specifications' => '30.4MP Full-Frame CMOS, Dual Pixel AF, 4K Video',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Camera Vault E1',
+                'tags' => 'camera,canon,dslr',
+            ],
+            'sony hxr' => [
+                'category' => 'Cameras',
+                'brand' => 'Sony',
+                'model' => 'HXR-NX100',
+                'department' => 'VIDEO',
+                'description' => 'Full HD NXCAM Professional Camcorder',
+                'specifications' => '1.0-type Exmor R CMOS, 12x G Lens, Dual Media Slots',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Camera Vault E1',
+                'tags' => 'camera,sony,nxcam',
+            ],
+            'sony a7w' => [
+                'category' => 'Cameras',
+                'brand' => 'Sony',
+                'model' => 'Alpha A7 III',
+                'department' => 'VIDEO',
+                'description' => 'Full-Frame Mirrorless Interchangeable Lens Camera',
+                'specifications' => '24.2MP Exmor R BSI CMOS, 4K HDR Video, 5-Axis Stabilization',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Camera Vault E1',
+                'tags' => 'camera,sony,mirrorless',
+            ],
+            'avonic' => [
+                'category' => 'Cameras',
+                'brand' => 'Avonic',
+                'model' => 'CM70-IP PTZ Camera',
+                'department' => 'VIDEO',
+                'description' => 'Full HD PTZ Broadcast & Conference Camera',
+                'specifications' => '20x Optical Zoom, 3G-SDI, HDMI, USB 2.0, IP Streaming (PoE)',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Camera Vault E2',
+                'tags' => 'ptz,camera,avonic,sdi',
+            ],
+            'sony 24-70' => [
+                'category' => 'Cameras',
+                'brand' => 'Sony',
+                'model' => 'FE 24-70mm f/2.8 GM',
+                'department' => 'VIDEO',
+                'description' => 'G Master Full-Frame Standard Zoom Lens',
+                'specifications' => 'E-Mount Full-Frame, Constant f/2.8 Aperture, Direct Drive SSM',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Lens Cabinet E3',
+                'tags' => 'lens,sony,24-70mm,gmaster',
+            ],
+            'sony 70-200' => [
+                'category' => 'Cameras',
+                'brand' => 'Sony',
+                'model' => 'FE 70-200mm f/2.8 GM OSS',
+                'department' => 'VIDEO',
+                'description' => 'G Master Full-Frame Telephoto Zoom Lens',
+                'specifications' => 'E-Mount Full-Frame, Constant f/2.8 Aperture, Optical SteadyShot',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Lens Cabinet E3',
+                'tags' => 'lens,sony,70-200mm,gmaster',
+            ],
+            'atem television studio pro hd' => [
+                'category' => 'Video',
+                'brand' => 'Blackmagic Design',
+                'model' => 'ATEM Television Studio Pro HD',
+                'department' => 'VIDEO',
+                'description' => '8-Input Broadcast Live Production Switcher with Control Panel',
+                'specifications' => '4x 3G-SDI & 4x HDMI Inputs, Built-in Hardware Panel, Multiview',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Switcher Rack F1',
+                'tags' => 'atem,switcher,blackmagic,video',
+            ],
+            'atem 1 m/e production studio 4k' => [
+                'category' => 'Video',
+                'brand' => 'Blackmagic Design',
+                'model' => 'ATEM 1 M/E Production Studio 4K',
+                'department' => 'VIDEO',
+                'description' => '10-Input 6G-SDI Ultra HD Live Production Switcher',
+                'specifications' => '10x 6G-SDI Inputs, 1x HDMI Input, 4 Keyers, DVE, Ultra HD 4K',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Switcher Rack F1',
+                'tags' => 'atem,switcher,4k,blackmagic',
+            ],
+            'atem 2 m/e production studio 4k' => [
+                'category' => 'Video',
+                'brand' => 'Blackmagic Design',
+                'model' => 'ATEM 2 M/E Production Studio 4K',
+                'department' => 'VIDEO',
+                'description' => '20-Input 6G-SDI Multi-Layer Live Production Switcher',
+                'specifications' => '20x 6G-SDI Inputs, SuperSource, Dual MultiView, Redundant PSU',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Switcher Rack F1',
+                'tags' => 'atem,switcher,2me,4k,blackmagic',
+            ],
+            'atem sdi extreme iso' => [
+                'category' => 'Video',
+                'brand' => 'Blackmagic Design',
+                'model' => 'ATEM SDI Extreme ISO',
+                'department' => 'VIDEO',
+                'description' => '8-Input 3G-SDI Live Production Switcher & 9-Stream ISO Recorder',
+                'specifications' => '8x 3G-SDI Inputs, 4x 3G-SDI Outputs, USB Webcam Out, RTMP Streaming',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Switcher Rack F2',
+                'tags' => 'atem,sdi,iso,streaming',
+            ],
+            'atem 1 m/e panel 10' => [
+                'category' => 'Video',
+                'brand' => 'Blackmagic Design',
+                'model' => 'ATEM 1 M/E Advanced Panel 10',
+                'department' => 'VIDEO',
+                'description' => 'Hardware Broadcast Control Panel for ATEM Switchers',
+                'specifications' => '10 Input Buttons, T-Bar Fader, 3-Axis Joystick, Ethernet PoE',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Switcher Rack F2',
+                'tags' => 'atem,panel,control,blackmagic',
+            ],
+            'sdi cable' => [
+                'category' => 'Cables',
+                'brand' => 'Canare',
+                'model' => 'L-4.5CHD 3G-SDI BNC Drum (50m)',
+                'department' => 'VIDEO',
+                'description' => 'Heavy-Duty 75-Ohm 3G/6G-SDI Coaxial Cable on Reel',
+                'specifications' => 'True 75-Ohm BNC Connectors, Low-Loss Foamed PE Insulation',
+                'stock_location' => 'Main Warehouse',
+                'storage_location' => 'Cable Trunk G1',
+                'tags' => 'cable,sdi,bnc,video',
+            ],
+        ];
+
+        $categoryCodeMap = [
+            'CAT-VID' => 'Video',
+            'CAT-AUD' => 'Audio',
+            'CAT-LGT' => 'Lighting',
+            'CAT-IT'  => 'IT',
+            'CAT-AV'  => 'AV',
+            'CAT-CAM' => 'Cameras',
+            'CAT-CAB' => 'Cables',
+            'CAT-NET' => 'Networking',
+            'CAT-PWR' => 'Power',
+            'CAT-STG' => 'Staging',
+            'CAT-ACC' => 'Accessories',
+        ];
+
+        $defaults = $catalog[$nameLower] ?? [
+            'category' => 'Video',
+            'brand' => $name ?: 'Generic',
+            'model' => $name ?: 'Standard Model',
+            'department' => 'VIDEO',
+            'description' => ($name ?: 'Equipment') . ' Unit',
+            'specifications' => 'Standard broadcast grade specification',
+            'stock_location' => 'Main Warehouse',
+            'storage_location' => 'General Storage',
+            'tags' => 'video,equipment',
+        ];
+
+        $rawCat = trim((string)($row['category'] ?? ''));
+        if ($rawCat === '' || strtolower($rawCat) === 'uncategorized') {
+            $row['category'] = $defaults['category'];
+        } elseif (isset($categoryCodeMap[strtoupper($rawCat)])) {
+            $row['category'] = isset($catalog[$nameLower]) ? $defaults['category'] : $categoryCodeMap[strtoupper($rawCat)];
+        }
+
+        if (empty($row['brand'])) {
+            $row['brand'] = $defaults['brand'];
+        }
+        if (empty($row['model'])) {
+            $row['model'] = $defaults['model'];
+        }
+        if (empty($row['department'])) {
+            $row['department'] = $defaults['department'];
+        }
+        if (empty($row['description'])) {
+            $row['description'] = $defaults['description'];
+        }
+        if (empty($row['specifications'])) {
+            $row['specifications'] = $defaults['specifications'];
+        }
+        if (empty($row['brand_model'])) {
+            $row['brand_model'] = trim($row['brand'] . ' ' . $row['model']);
+        }
+        if (empty($row['condition'])) {
+            $row['condition'] = 'good';
+        }
+        if (empty($row['stock_location'])) {
+            $row['stock_location'] = $defaults['stock_location'];
+        }
+        if (empty($row['storage_location'])) {
+            $row['storage_location'] = $defaults['storage_location'];
+        }
+        if (empty($row['notes'])) {
+            $row['notes'] = 'Verified in inventory';
+        }
+        if (empty($row['quantity']) || intval($row['quantity']) < 1) {
+            $row['quantity'] = 1;
+        }
+        if (empty($row['status'])) {
+            $row['status'] = 'available';
+        }
+        if (empty($row['tags'])) {
+            $row['tags'] = $defaults['tags'];
+        }
+        if (empty($row['current_location'])) {
+            $row['current_location'] = $row['stock_location'];
+        }
+
+        return $row;
+    }
 }

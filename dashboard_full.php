@@ -922,9 +922,13 @@ require_once 'assets/css/chart.css';
                                                     <td>
                                                         <?php
                                                         $category = $item['category_name'] ?? $item['category'] ?? 'Uncategorized';
+                                                        if ($category === 'Uncategorized' && !empty($item['category'])) {
+                                                            $category = $item['category'];
+                                                        }
                                                         echo '<span class="badge bg-secondary">' . htmlspecialchars($category) . '</span>';
                                                         ?>
                                                     </td>
+                                                    <td><?php echo !empty($item['department_name']) && $item['department_name'] !== 'Not Set' ? htmlspecialchars($item['department_name']) : (!empty($item['department']) ? htmlspecialchars($item['department']) : '<span class="text-muted">Not Set</span>'); ?></td>
                                                     <td>
                                                         <?php
                                                         if (isset($item['id'])) {
@@ -945,10 +949,9 @@ require_once 'assets/css/chart.css';
                                                         }
                                                         ?>
                                                     </td>
-                                                    <td><?php echo !empty($item['brand']) ? htmlspecialchars($item['brand']) : '<span class="text-muted">N/A</span>'; ?></td>
                                                     <td><?php echo !empty($item['model']) ? htmlspecialchars($item['model']) : '<span class="text-muted">N/A</span>'; ?></td>
-                                                    <td><?php echo !empty($item['department_name']) ? htmlspecialchars($item['department_name']) : (!empty($item['department']) ? htmlspecialchars($item['department']) : '<span class="text-muted">N/A</span>'); ?></td>
-                                                    <td><?php echo !empty($item['stock_location']) ? htmlspecialchars($item['stock_location']) : '<span class="text-muted">N/A</span>'; ?></td>
+                                                    <td><?php echo !empty($item['brand']) ? htmlspecialchars($item['brand']) : (!empty($item['brand_name']) && $item['brand_name'] !== 'N/A' ? htmlspecialchars($item['brand_name']) : '<span class="text-muted">N/A</span>'); ?></td>
+                                                    <td><?php echo !empty($item['stock_location']) ? htmlspecialchars($item['stock_location']) : (!empty($item['current_location']) ? htmlspecialchars($item['current_location']) : (!empty($item['storage_location']) ? htmlspecialchars($item['storage_location']) : '<span class="text-muted">N/A</span>')); ?></td>
                                                     <td>
                                                         <?php
                                                         $condition = $item['condition'] ?? 'good';
@@ -2859,11 +2862,11 @@ require_once 'assets/css/chart.css';
                             },
                             {
                                 data: 'category_name',
-                                render: d => '<span class="badge bg-" style="background: #3a6487">' + escapeHtml(d || 'Uncategorized') + '</span>'
+                                render: (d, t, row) => '<span class="badge bg-" style="background: #3a6487">' + escapeHtml((d && d !== 'Uncategorized' ? d : row.category) || 'Uncategorized') + '</span>'
                             },
                             {
                                 data: 'department_name',
-                                render: d => escapeHtml(d || 'N/A')
+                                render: (d, t, row) => escapeHtml((d && d !== 'Not Set' ? d : row.department) || 'Not Set')
                             },
                             {
                                 data: 'accessories',
@@ -2871,15 +2874,15 @@ require_once 'assets/css/chart.css';
                             },
                             {
                                 data: 'model',
-                                render: d => escapeHtml(d || 'N/A')
+                                render: (d, t, row) => escapeHtml(d || row.brand_model || 'N/A')
                             },
                             {
                                 data: 'brand',
-                                render: d => escapeHtml(d || 'N/A')
+                                render: (d, t, row) => escapeHtml(d || (row.brand_name && row.brand_name !== 'N/A' ? row.brand_name : '') || 'N/A')
                             },
                             {
                                 data: 'stock_location',
-                                render: d => escapeHtml(d || 'N/A')
+                                render: (d, t, row) => escapeHtml(d || row.current_location || row.storage_location || 'N/A')
                             },
                             {
                                 data: 'condition',
