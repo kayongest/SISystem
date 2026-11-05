@@ -113,6 +113,116 @@ if (isset($_GET['activate']) && is_numeric($_GET['activate'])) {
 // Handle Form Submission (Add / Edit)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+    $is_ajax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') || !empty($_POST['ajax']);
+
+    // Handle Add Role
+    if ($action === 'add_role') {
+        $role_name = trim($_POST['role_name'] ?? '');
+        $role_key = trim($_POST['role_key'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+
+        if (empty($role_key) && !empty($role_name)) {
+            $role_key = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '_', trim($role_name)));
+            $role_key = trim($role_key, '_');
+        }
+
+        if (empty($role_name) || empty($role_key)) {
+            if ($is_ajax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Role name and system key are required']);
+                exit();
+            }
+            $_SESSION['toast_message'] = 'Role name and system key are required';
+            $_SESSION['toast_type'] = 'error';
+        } else {
+            try {
+                $stmt = $conn->prepare("INSERT INTO `roles` (`role_key`, `role_name`, `description`, `is_active`) VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE `role_name` = VALUES(`role_name`), `description` = VALUES(`description`), `is_active` = 1");
+                $stmt->bind_param("sss", $role_key, $role_name, $description);
+                if ($stmt->execute()) {
+                    if ($is_ajax) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['success' => true, 'message' => "Role '{$role_name}' added successfully!", 'role_key' => $role_key, 'role_name' => $role_name]);
+                        exit();
+                    }
+                    $_SESSION['toast_message'] = "Role '{$role_name}' added successfully!";
+                    $_SESSION['toast_type'] = 'success';
+                } else {
+                    if ($is_ajax) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['success' => false, 'message' => 'Error saving role: ' . $stmt->error]);
+                        exit();
+                    }
+                    $_SESSION['toast_message'] = 'Error saving role: ' . $stmt->error;
+                    $_SESSION['toast_type'] = 'error';
+                }
+                $stmt->close();
+            } catch (Exception $e) {
+                if ($is_ajax) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+                    exit();
+                }
+                $_SESSION['toast_message'] = 'Error: ' . $e->getMessage();
+                $_SESSION['toast_type'] = 'error';
+            }
+        }
+        header('Location: users.php' . (isset($_GET['id']) ? '?id=' . (int)$_GET['id'] : ''));
+        exit();
+    }
+
+    // Handle Add Department
+    if ($action === 'add_department') {
+        $dept_name = trim($_POST['dept_name'] ?? '');
+        $dept_code = strtoupper(trim($_POST['dept_code'] ?? ''));
+        $description = trim($_POST['description'] ?? '');
+
+        if (empty($dept_code) && !empty($dept_name)) {
+            $dept_code = strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $dept_name), 0, 5));
+        }
+
+        if (empty($dept_name) || empty($dept_code)) {
+            if ($is_ajax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Department name and code are required']);
+                exit();
+            }
+            $_SESSION['toast_message'] = 'Department name and code are required';
+            $_SESSION['toast_type'] = 'error';
+        } else {
+            try {
+                $stmt = $conn->prepare("INSERT INTO `departments` (`code`, `name`, `description`, `is_active`) VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `description` = VALUES(`description`), `is_active` = 1");
+                $stmt->bind_param("sss", $dept_code, $dept_name, $description);
+                if ($stmt->execute()) {
+                    if ($is_ajax) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['success' => true, 'message' => "Department '{$dept_name}' added successfully!", 'dept_key' => strtolower($dept_code), 'dept_name' => $dept_name]);
+                        exit();
+                    }
+                    $_SESSION['toast_message'] = "Department '{$dept_name}' added successfully!";
+                    $_SESSION['toast_type'] = 'success';
+                } else {
+                    if ($is_ajax) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['success' => false, 'message' => 'Error saving department: ' . $stmt->error]);
+                        exit();
+                    }
+                    $_SESSION['toast_message'] = 'Error saving department: ' . $stmt->error;
+                    $_SESSION['toast_type'] = 'error';
+                }
+                $stmt->close();
+            } catch (Exception $e) {
+                if ($is_ajax) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+                    exit();
+                }
+                $_SESSION['toast_message'] = 'Error: ' . $e->getMessage();
+                $_SESSION['toast_type'] = 'error';
+            }
+        }
+        header('Location: users.php' . (isset($_GET['id']) ? '?id=' . (int)$_GET['id'] : ''));
+        exit();
+    }
 
     if ($action === 'add_user' || $action === 'edit_user') {
         $user_id = !empty($_POST['user_id']) ? (int)$_POST['user_id'] : null;
@@ -312,6 +422,18 @@ $roles = [
     'technician' => 'Technician',
     'driver' => 'Driver'
 ];
+$roleListDetails = [];
+try {
+    $rRes = $conn->query("SELECT id, role_key, role_name, description FROM roles WHERE is_active = 1 ORDER BY id ASC");
+    if ($rRes) {
+        while ($rRow = $rRes->fetch_assoc()) {
+            $roles[$rRow['role_key']] = $rRow['role_name'];
+            $roleListDetails[] = $rRow;
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error loading roles: " . $e->getMessage());
+}
 
 $departments = [
     'audio' => 'Audio',
@@ -326,6 +448,21 @@ $departments = [
     'transport' => 'Transport',
     'admin' => 'Administration'
 ];
+$deptListDetails = [];
+try {
+    $dRes = $conn->query("SELECT id, code, name, description FROM departments WHERE is_active = 1 ORDER BY name ASC");
+    if ($dRes) {
+        while ($dRow = $dRes->fetch_assoc()) {
+            $dKey = strtolower($dRow['code']);
+            $dName = ucwords(strtolower($dRow['name']));
+            $departments[$dKey] = $dName;
+            $departments[strtolower($dRow['name'])] = $dName;
+            $deptListDetails[] = $dRow;
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error loading departments: " . $e->getMessage());
+}
 
 // Calculate metrics for selected user
 $user_batches_count = 0;
@@ -1087,17 +1224,90 @@ require_once 'views/partials/header.php';
         align-items: center;
         gap: 10px;
     }
+
+    /* User Live Search Dropdown */
+    .user-live-search-wrapper {
+        min-width: 250px;
+        position: relative;
+    }
+    .user-search-dropdown {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        width: 340px;
+        max-height: 400px;
+        overflow-y: auto;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        z-index: 1060;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    }
+    .user-search-item {
+        padding: 9px 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background 0.15s ease;
+        text-decoration: none;
+        color: inherit;
+    }
+    .user-search-item:hover, .user-search-item.active {
+        background: #f8fafc;
+        color: inherit;
+    }
+    .user-search-item:last-child {
+        border-bottom: none;
+    }
+    .user-search-avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+    }
+    .user-search-avatar-fallback {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: #e2e8f0;
+        color: #1e293b;
+        font-weight: 700;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
 </style>
 
 <div class="profile-page-wrapper">
     <!-- Top Selector Bar -->
     <div class="top-action-bar d-flex flex-wrap justify-content-between align-items-center gap-3">
-        <div class="d-flex align-items-center gap-3">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
             <h5 class="fw-bold mb-0 text-dark"><i class="fas fa-users-cog me-2 text-primary"></i>User Management</h5>
             <div class="vr mx-1 d-none d-sm-block" style="height: 24px;"></div>
+
+            <!-- Live User Search Apart from Filter Dropdown -->
+            <div class="user-live-search-wrapper">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white border-end-0 text-muted" style="border-radius: 8px 0 0 8px;">
+                        <i class="fas fa-search text-muted"></i>
+                    </span>
+                    <input type="text" id="userLiveSearchInput" class="form-control form-control-sm border-start-0 ps-1" placeholder="🔍 Quick search user..." autocomplete="off" style="border-radius: 0 8px 8px 0; font-size: 0.82rem; font-weight: 500;">
+                    <button type="button" id="clearUserSearchBtn" class="btn btn-sm btn-link text-muted position-absolute end-0 top-50 translate-middle-y me-1 p-0" style="display: none; z-index: 5;" onclick="clearUserSearch()">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+                <!-- Autocomplete Dropdown -->
+                <div id="userSearchResultsDropdown" class="user-search-dropdown shadow-lg rounded-3" style="display: none;"></div>
+            </div>
+
+            <!-- Viewing User Filter -->
             <div class="d-flex align-items-center gap-2">
-                <span class="small text-muted d-none d-md-inline fw-semibold">Viewing User:</span>
-                <select class="form-select form-select-sm" style="min-width: 200px; border-radius: 8px; font-weight: 600;" onchange="window.location.href='users.php?id=' + this.value">
+                <span class="small text-muted d-none d-lg-inline fw-semibold">Filter:</span>
+                <select class="form-select form-select-sm" style="min-width: 190px; border-radius: 8px; font-weight: 600;" onchange="window.location.href='users.php?id=' + this.value">
                     <?php foreach ($all_users as $uItem): ?>
                         <option value="<?php echo $uItem['id']; ?>" <?php echo $uItem['id'] == $selected_user_id ? 'selected' : ''; ?>>
                             <?php echo htmlspecialchars($uItem['full_name'] ?: $uItem['username']); ?> (<?php echo htmlspecialchars($roles[$uItem['role']] ?? $uItem['role']); ?>)
@@ -1108,6 +1318,9 @@ require_once 'views/partials/header.php';
         </div>
 
         <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-dark" onclick="openRolesDeptModal()" title="Manage Roles and Departments">
+                <i class="fas fa-tags me-1 text-primary"></i> Roles &amp; Depts
+            </button>
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('pills-all-users-tab').click();" title="View all users in a table">
                 <i class="fas fa-table me-1"></i> All Users Table
             </button>
@@ -1951,7 +2164,12 @@ require_once 'views/partials/header.php';
                             <input type="tel" class="form-control form-control-sm" id="phone" name="phone">
                         </div>
                         <div class="col-md-6">
-                            <label for="role" class="form-label fw-bold small">Role <span class="text-danger">*</span></label>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="role" class="form-label fw-bold small mb-0">Role <span class="text-danger">*</span></label>
+                                <a href="javascript:void(0)" onclick="openQuickAddRole()" class="text-primary text-decoration-none small fw-semibold" style="font-size: 0.75rem;">
+                                    <i class="fas fa-plus-circle me-1"></i>New Role
+                                </a>
+                            </div>
                             <select class="form-select form-select-sm" id="role" name="role" required>
                                 <?php foreach ($roles as $r_key => $r_label): ?>
                                     <option value="<?php echo $r_key; ?>"><?php echo $r_label; ?></option>
@@ -1959,10 +2177,20 @@ require_once 'views/partials/header.php';
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label for="department" class="form-label fw-bold small">Department</label>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="department" class="form-label fw-bold small mb-0">Department</label>
+                                <a href="javascript:void(0)" onclick="openQuickAddDept()" class="text-primary text-decoration-none small fw-semibold" style="font-size: 0.75rem;">
+                                    <i class="fas fa-plus-circle me-1"></i>New Dept
+                                </a>
+                            </div>
                             <select class="form-select form-select-sm" id="department" name="department">
                                 <option value="">Select Department</option>
-                                <?php foreach ($departments as $d_key => $d_label): ?>
+                                <?php 
+                                $renderedDepts = [];
+                                foreach ($departments as $d_key => $d_label): 
+                                    if (in_array(strtolower($d_label), $renderedDepts)) continue;
+                                    $renderedDepts[] = strtolower($d_label);
+                                ?>
                                     <option value="<?php echo $d_key; ?>"><?php echo $d_label; ?></option>
                                 <?php endforeach; ?>
                             </select>
@@ -2012,6 +2240,244 @@ require_once 'views/partials/header.php';
                     <button type="submit" class="btn btn-sm btn-primary" id="saveUserBtn">
                         <i class="fas fa-save me-1"></i> Save User
                     </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== MANAGE ROLES & DEPARTMENTS MODAL ==================== -->
+<div class="modal fade" id="rolesDeptModal" tabindex="-1" aria-labelledby="rolesDeptModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white py-3">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="fas fa-tags text-warning fs-5"></i>
+                    <div>
+                        <h5 class="modal-title fw-bold mb-0" id="rolesDeptModalLabel">Manage Roles &amp; Departments</h5>
+                        <div class="small text-white-50" style="font-size: 0.75rem;">Create, configure, and inspect organizational staff roles &amp; departments</div>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body p-0">
+                <!-- Nav tabs -->
+                <ul class="nav nav-tabs nav-fill bg-light px-3 pt-2 border-bottom" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-bold text-dark" id="modal-dept-tab" data-bs-toggle="tab" data-bs-target="#modal-dept-pane" type="button" role="tab">
+                            <i class="fas fa-building me-2 text-primary"></i>Departments (<?php echo count($deptListDetails); ?>)
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold text-dark" id="modal-roles-tab" data-bs-toggle="tab" data-bs-target="#modal-roles-pane" type="button" role="tab">
+                            <i class="fas fa-user-tag me-2 text-success"></i>Roles &amp; Positions (<?php echo count($roleListDetails); ?>)
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content p-4">
+                    <!-- TAB 1: DEPARTMENTS -->
+                    <div class="tab-pane fade show active" id="modal-dept-pane" role="tabpanel">
+                        <!-- Add Dept Card -->
+                        <div class="card border mb-4 shadow-none bg-light">
+                            <div class="card-body p-3">
+                                <h6 class="fw-bold text-dark mb-2"><i class="fas fa-plus-circle text-primary me-1"></i> Add New Department</h6>
+                                <form id="formAddDepartmentModal" onsubmit="submitDepartmentForm(event, this)">
+                                    <input type="hidden" name="action" value="add_department">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-5">
+                                            <label class="form-label small fw-bold mb-1">Department Name <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control form-control-sm" name="dept_name" id="modalDeptName" required placeholder="e.g. Staging & Rigging">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small fw-bold mb-1">Code <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control form-control-sm text-uppercase" name="dept_code" id="modalDeptCode" required placeholder="e.g. STG" maxlength="10">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-bold mb-1">Description</label>
+                                            <input type="text" class="form-control form-control-sm" name="description" placeholder="Brief function...">
+                                        </div>
+                                        <div class="col-12 text-end mt-2">
+                                            <button type="submit" class="btn btn-sm btn-primary px-3">
+                                                <i class="fas fa-save me-1"></i> Save Department
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Existing Departments Table -->
+                        <h6 class="fw-bold text-dark mb-2">Existing Departments</h6>
+                        <div class="table-responsive border rounded">
+                            <table class="table table-sm table-hover mb-0 align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 80px;">Code</th>
+                                        <th>Department Name</th>
+                                        <th>Description</th>
+                                        <th style="width: 80px;" class="text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (!empty($deptListDetails)): ?>
+                                        <?php foreach ($deptListDetails as $dItem): ?>
+                                            <tr>
+                                                <td><span class="badge bg-primary-subtle text-primary border font-monospace"><?php echo htmlspecialchars($dItem['code']); ?></span></td>
+                                                <td class="fw-bold text-dark"><?php echo htmlspecialchars($dItem['name']); ?></td>
+                                                <td class="text-muted small"><?php echo htmlspecialchars($dItem['description'] ?: '—'); ?></td>
+                                                <td class="text-center"><span class="badge bg-success-subtle text-success">Active</span></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <tr><td colspan="4" class="text-center py-3 text-muted">No department records found.</td></tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-end mt-2">
+                            <a href="departments.php" class="small text-decoration-none text-primary fw-semibold">
+                                Open Full Department Management Page <i class="fas fa-arrow-right ms-1"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: ROLES -->
+                    <div class="tab-pane fade" id="modal-roles-pane" role="tabpanel">
+                        <!-- Add Role Card -->
+                        <div class="card border mb-4 shadow-none bg-light">
+                            <div class="card-body p-3">
+                                <h6 class="fw-bold text-dark mb-2"><i class="fas fa-plus-circle text-success me-1"></i> Add New Role / Position</h6>
+                                <form id="formAddRoleModal" onsubmit="submitRoleForm(event, this)">
+                                    <input type="hidden" name="action" value="add_role">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-5">
+                                            <label class="form-label small fw-bold mb-1">Role Title <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control form-control-sm" name="role_name" id="modalRoleName" required placeholder="e.g. Audio Engineer">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small fw-bold mb-1">System Key <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control form-control-sm text-lowercase" name="role_key" id="modalRoleKey" required placeholder="e.g. audio_engineer">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-bold mb-1">Description</label>
+                                            <input type="text" class="form-control form-control-sm" name="description" placeholder="Responsibilities...">
+                                        </div>
+                                        <div class="col-12 text-end mt-2">
+                                            <button type="submit" class="btn btn-sm btn-success px-3">
+                                                <i class="fas fa-save me-1"></i> Save Role
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Existing Roles Table -->
+                        <h6 class="fw-bold text-dark mb-2">Registered System Roles</h6>
+                        <div class="table-responsive border rounded">
+                            <table class="table table-sm table-hover mb-0 align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 140px;">System Key</th>
+                                        <th>Role Title</th>
+                                        <th>Description</th>
+                                        <th style="width: 80px;" class="text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (!empty($roleListDetails)): ?>
+                                        <?php foreach ($roleListDetails as $rItem): ?>
+                                            <tr>
+                                                <td><span class="badge bg-secondary-subtle text-dark border font-monospace"><?php echo htmlspecialchars($rItem['role_key']); ?></span></td>
+                                                <td class="fw-bold text-dark"><?php echo htmlspecialchars($rItem['role_name']); ?></td>
+                                                <td class="text-muted small"><?php echo htmlspecialchars($rItem['description'] ?: '—'); ?></td>
+                                                <td class="text-center"><span class="badge bg-success-subtle text-success">Active</span></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <tr><td colspan="4" class="text-center py-3 text-muted">No role records found.</td></tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-end mt-2">
+                            <a href="role_access_matrix.php" class="small text-decoration-none text-success fw-semibold">
+                                Configure Role Permissions Matrix <i class="fas fa-arrow-right ms-1"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== QUICK ADD ROLE MODAL ==================== -->
+<div class="modal fade" id="quickAddRoleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white py-2">
+                <h6 class="modal-title fw-bold"><i class="fas fa-user-tag text-success me-2"></i>Add New Role</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="quickRoleForm" onsubmit="submitRoleForm(event, this, true)">
+                <input type="hidden" name="action" value="add_role">
+                <div class="modal-body p-3">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Role Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm" name="role_name" id="quickRoleName" required placeholder="e.g. Video Switcher">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">System Key <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm text-lowercase" name="role_key" id="quickRoleKey" required placeholder="e.g. video_switcher">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Description</label>
+                        <input type="text" class="form-control form-control-sm" name="description" placeholder="Brief duty details...">
+                    </div>
+                </div>
+                <div class="modal-footer bg-light py-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success"><i class="fas fa-save me-1"></i> Save &amp; Select</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== QUICK ADD DEPARTMENT MODAL ==================== -->
+<div class="modal fade" id="quickAddDeptModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white py-2">
+                <h6 class="modal-title fw-bold"><i class="fas fa-building text-primary me-2"></i>Add New Department</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="quickDeptForm" onsubmit="submitDepartmentForm(event, this, true)">
+                <input type="hidden" name="action" value="add_department">
+                <div class="modal-body p-3">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Department Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm" name="dept_name" id="quickDeptName" required placeholder="e.g. Broadcast & Streaming">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Department Code <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm text-uppercase" name="dept_code" id="quickDeptCode" required placeholder="e.g. BRD" maxlength="10">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Description</label>
+                        <input type="text" class="form-control form-control-sm" name="description" placeholder="Brief department description...">
+                    </div>
+                </div>
+                <div class="modal-footer bg-light py-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save me-1"></i> Save &amp; Select</button>
                 </div>
             </form>
         </div>
@@ -2367,6 +2833,319 @@ ob_start();
             }
         });
     };
+
+    // ==================== LIVE USER SEARCH APART FROM FILTER ====================
+    const usersDirectory = <?php echo json_encode(array_map(function($u) use ($roles, $departments) {
+        return [
+            'id' => (int)$u['id'],
+            'username' => $u['username'] ?? '',
+            'full_name' => $u['full_name'] ?: ($u['username'] ?? ''),
+            'email' => $u['email'] ?? '',
+            'phone' => $u['phone'] ?? '',
+            'role' => $roles[$u['role']] ?? ucfirst($u['role'] ?? 'User'),
+            'role_key' => $u['role'] ?? 'user',
+            'department' => $departments[$u['department']] ?? ($u['department'] ? ucfirst($u['department']) : 'General'),
+            'profile_image' => $u['profile_image'] ?? '',
+            'is_active' => (int)($u['is_active'] ?? 1)
+        ];
+    }, $all_users)); ?>;
+
+    let activeUserSearchIdx = -1;
+
+    function renderUserSearchResults(results, query) {
+        const $dropdown = $('#userSearchResultsDropdown');
+        if (!results || results.length === 0) {
+            $dropdown.html(`
+                <div class="p-3 text-center text-muted small">
+                    <i class="fas fa-user-slash fa-2x mb-2 text-secondary opacity-50 d-block"></i>
+                    <div>No users found for "<strong>${escapeHtml(query)}</strong>"</div>
+                    <button type="button" class="btn btn-xs btn-outline-primary mt-2" onclick="openAddUser(); $('#userSearchResultsDropdown').hide();">
+                        <i class="fas fa-user-plus me-1"></i> Add New User
+                    </button>
+                </div>
+            `).show();
+            return;
+        }
+
+        let html = `<div class="p-2 border-bottom bg-light d-flex justify-content-between align-items-center">
+            <span class="small fw-bold text-dark text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.5px;">Users Found (${results.length})</span>
+            <span class="badge bg-secondary-subtle text-secondary" style="font-size: 0.65rem;">Press Enter to view</span>
+        </div>`;
+
+        results.forEach((u, idx) => {
+            const initial = (u.username || 'U').charAt(0).toUpperCase();
+            const avatarHtml = u.profile_image 
+                ? `<img src="${escapeHtml(u.profile_image)}" class="user-search-avatar" onerror="this.outerHTML='<div class=\\'user-search-avatar-fallback\\'>${initial}</div>'">`
+                : `<div class="user-search-avatar-fallback">${initial}</div>`;
+            
+            const statusBadge = u.is_active 
+                ? `<span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.65rem;">Active</span>`
+                : `<span class="badge bg-warning-subtle text-warning border border-warning-subtle" style="font-size: 0.65rem;">Pending</span>`;
+
+            html += `
+                <a href="users.php?id=${u.id}" class="user-search-item ${idx === 0 ? 'active' : ''}" data-index="${idx}">
+                    ${avatarHtml}
+                    <div class="user-search-info flex-grow-1 text-truncate">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="user-search-name fw-bold text-dark text-truncate">${escapeHtml(u.full_name)}</span>
+                            ${statusBadge}
+                        </div>
+                        <div class="d-flex align-items-center gap-1 small text-muted" style="font-size: 0.72rem;">
+                            <span>@${escapeHtml(u.username)}</span>
+                            <span>•</span>
+                            <span class="text-primary fw-semibold">${escapeHtml(u.role)}</span>
+                            <span>•</span>
+                            <span>${escapeHtml(u.department)}</span>
+                        </div>
+                    </div>
+                </a>
+            `;
+        });
+
+        html += `<div class="p-2 text-center bg-light border-top small text-muted" style="font-size: 0.72rem;">
+            Click to open profile or navigate with <kbd class="bg-white text-dark border">↑</kbd> <kbd class="bg-white text-dark border">↓</kbd> + <kbd class="bg-white text-dark border">Enter</kbd>
+        </div>`;
+
+        $dropdown.html(html).show();
+        activeUserSearchIdx = 0;
+    }
+
+    function clearUserSearch() {
+        $('#userLiveSearchInput').val('');
+        $('#clearUserSearchBtn').hide();
+        $('#userSearchResultsDropdown').hide().empty();
+        activeUserSearchIdx = -1;
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    $(document).on('input', '#userLiveSearchInput', function() {
+        const q = $(this).val().toLowerCase().trim();
+        if (!q) {
+            clearUserSearch();
+            return;
+        }
+        $('#clearUserSearchBtn').show();
+        const matched = usersDirectory.filter(u => {
+            return (u.full_name && u.full_name.toLowerCase().includes(q)) ||
+                   (u.username && u.username.toLowerCase().includes(q)) ||
+                   (u.email && u.email.toLowerCase().includes(q)) ||
+                   (u.phone && u.phone.toLowerCase().includes(q)) ||
+                   (u.role && u.role.toLowerCase().includes(q)) ||
+                   (u.department && u.department.toLowerCase().includes(q));
+        });
+        renderUserSearchResults(matched.slice(0, 8), q);
+    });
+
+    $(document).on('keydown', '#userLiveSearchInput', function(e) {
+        const $items = $('#userSearchResultsDropdown .user-search-item');
+        if (!$items.length || !$('#userSearchResultsDropdown').is(':visible')) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeUserSearchIdx = (activeUserSearchIdx + 1) % $items.length;
+            $items.removeClass('active').eq(activeUserSearchIdx).addClass('active');
+            $items.eq(activeUserSearchIdx)[0].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeUserSearchIdx = (activeUserSearchIdx - 1 + $items.length) % $items.length;
+            $items.removeClass('active').eq(activeUserSearchIdx).addClass('active');
+            $items.eq(activeUserSearchIdx)[0].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const $target = $items.eq(activeUserSearchIdx >= 0 ? activeUserSearchIdx : 0);
+            if ($target.length && $target.attr('href')) {
+                window.location.href = $target.attr('href');
+            }
+        } else if (e.key === 'Escape') {
+            clearUserSearch();
+        }
+    });
+
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('.user-live-search-wrapper').length) {
+            $('#userSearchResultsDropdown').hide();
+        }
+    });
+
+    // ==================== ROLES & DEPARTMENTS MANAGEMENT ====================
+    function openRolesDeptModal() {
+        new bootstrap.Modal(document.getElementById('rolesDeptModal')).show();
+    }
+
+    function openQuickAddRole() {
+        new bootstrap.Modal(document.getElementById('quickAddRoleModal')).show();
+    }
+
+    function openQuickAddDept() {
+        new bootstrap.Modal(document.getElementById('quickAddDeptModal')).show();
+    }
+
+    // Auto-slugify role name to system key
+    $(document).on('input', '#modalRoleName, #quickRoleName', function() {
+        const val = $(this).val();
+        const slug = val.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        if ($(this).attr('id') === 'modalRoleName') {
+            $('#modalRoleKey').val(slug);
+        } else {
+            $('#quickRoleKey').val(slug);
+        }
+    });
+
+    // Auto-generate department code from name
+    $(document).on('input', '#modalDeptName, #quickDeptName', function() {
+        const val = $(this).val();
+        const code = val.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toUpperCase();
+        if ($(this).attr('id') === 'modalDeptName') {
+            $('#modalDeptCode').val(code);
+        } else {
+            $('#quickDeptCode').val(code);
+        }
+    });
+
+    // Submit Role Form
+    function submitRoleForm(e, form, isQuick = false) {
+        e.preventDefault();
+        const formData = new FormData(form);
+        formData.append('ajax', '1');
+
+        const btn = $(form).find('button[type="submit"]');
+        const originalBtnHtml = btn.html();
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i> Saving...');
+
+        $.ajax({
+            url: 'users.php',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: 'json',
+            success: function(resp) {
+                btn.prop('disabled', false).html(originalBtnHtml);
+                if (resp && resp.success) {
+                    const roleKey = resp.role_key;
+                    const roleName = resp.role_name;
+
+                    // Append to all #role dropdowns if not existing
+                    $('select#role').each(function() {
+                        if (!$(this).find(`option[value="${roleKey}"]`).length) {
+                            $(this).append(new Option(roleName, roleKey));
+                        }
+                        if (isQuick) {
+                            $(this).val(roleKey);
+                        }
+                    });
+
+                    // Hide modals
+                    if (isQuick) {
+                        const quickModalEl = document.getElementById('quickAddRoleModal');
+                        if (quickModalEl) {
+                            const qm = bootstrap.Modal.getInstance(quickModalEl) || new bootstrap.Modal(quickModalEl);
+                            qm.hide();
+                        }
+                    } else {
+                        const mainModalEl = document.getElementById('rolesDeptModal');
+                        if (mainModalEl) {
+                            const mm = bootstrap.Modal.getInstance(mainModalEl) || new bootstrap.Modal(mainModalEl);
+                            mm.hide();
+                        }
+                    }
+
+                    form.reset();
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Role Added',
+                        text: resp.message || `Role "${roleName}" added successfully!`,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire('Error', resp.message || 'Failed to add role', 'error');
+                }
+            },
+            error: function() {
+                btn.prop('disabled', false).html(originalBtnHtml);
+                Swal.fire('Error', 'Server connection failure while adding role', 'error');
+            }
+        });
+    }
+
+    // Submit Department Form
+    function submitDepartmentForm(e, form, isQuick = false) {
+        e.preventDefault();
+        const formData = new FormData(form);
+        formData.append('ajax', '1');
+
+        const btn = $(form).find('button[type="submit"]');
+        const originalBtnHtml = btn.html();
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i> Saving...');
+
+        $.ajax({
+            url: 'users.php',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: 'json',
+            success: function(resp) {
+                btn.prop('disabled', false).html(originalBtnHtml);
+                if (resp && resp.success) {
+                    const deptKey = resp.dept_key;
+                    const deptName = resp.dept_name;
+
+                    // Append to all #department dropdowns if not existing
+                    $('select#department').each(function() {
+                        if (!$(this).find(`option[value="${deptKey}"]`).length) {
+                            $(this).append(new Option(deptName, deptKey));
+                        }
+                        if (isQuick) {
+                            $(this).val(deptKey);
+                        }
+                    });
+
+                    // Hide modals
+                    if (isQuick) {
+                        const quickModalEl = document.getElementById('quickAddDeptModal');
+                        if (quickModalEl) {
+                            const qm = bootstrap.Modal.getInstance(quickModalEl) || new bootstrap.Modal(quickModalEl);
+                            qm.hide();
+                        }
+                    } else {
+                        const mainModalEl = document.getElementById('rolesDeptModal');
+                        if (mainModalEl) {
+                            const mm = bootstrap.Modal.getInstance(mainModalEl) || new bootstrap.Modal(mainModalEl);
+                            mm.hide();
+                        }
+                    }
+
+                    form.reset();
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Department Added',
+                        text: resp.message || `Department "${deptName}" added successfully!`,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire('Error', resp.message || 'Failed to add department', 'error');
+                }
+            },
+            error: function() {
+                btn.prop('disabled', false).html(originalBtnHtml);
+                Swal.fire('Error', 'Server connection failure while adding department', 'error');
+            }
+        });
+    }
 
     $(document).ready(function() {
         // Initialize All Users DataTable
