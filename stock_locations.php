@@ -8,6 +8,21 @@ if (!isLoggedIn()) {
 }
 
 require_once 'includes/functions.php';
+require_once __DIR__ . '/includes/badge_attendance_helper.php';
+
+if (!function_exists('normalizeEventNumericId')) {
+    function normalizeEventNumericId($rawId): int
+    {
+        $str = trim((string)$rawId);
+        if ($str === '') {
+            return 0;
+        }
+        if (ctype_digit($str)) {
+            return (int)$str;
+        }
+        return (abs(crc32($str)) % 900000) + 10000;
+    }
+}
 
 // Get database connection (PDO)
 function getDBConnection()
