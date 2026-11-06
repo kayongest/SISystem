@@ -1610,8 +1610,8 @@ require_once 'views/partials/header.php';
                                         </td>
                                         <td>
                                             <div class="avatar-stack" data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="top" title="<?php echo htmlspecialchars($teamHoverHtml); ?>" style="cursor: pointer;">
-                                                <img src="uploads/profiles/profile_2_1789409080.png" onerror="this.src='assets/images/user.png'" class="avatar-stack-item" title="Tech Lead: <?php echo htmlspecialchars($evLead); ?>">
-                                                <img src="uploads/profiles/profile_3_1789409415.png" onerror="this.src='assets/images/user.png'" class="avatar-stack-item" title="PM: <?php echo htmlspecialchars($evPM); ?>">
+                                                <img src="uploads/profiles/profile_2_1789409080.png" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 fill=%22%23e2e8f0%22/><circle cx=%2220%22 cy=%2215%22 r=%227%22 fill=%22%2364748b%22/><path d=%22M8 36c0-6.6 5.4-12 12-12s12 5.4 12 12%22 fill=%22%2364748b%22/></svg>';" class="avatar-stack-item" title="Tech Lead: <?php echo htmlspecialchars($evLead); ?>">
+                                                <img src="uploads/profiles/profile_3_1789409415.png" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 fill=%22%23e2e8f0%22/><circle cx=%2220%22 cy=%2215%22 r=%227%22 fill=%22%2364748b%22/><path d=%22M8 36c0-6.6 5.4-12 12-12s12 5.4 12 12%22 fill=%22%2364748b%22/></svg>';" class="avatar-stack-item" title="PM: <?php echo htmlspecialchars($evPM); ?>">
                                                 <span class="avatar-stack-badge" title="<?php echo htmlspecialchars($teamHoverPlain); ?>">+<?php echo $extraCrewCount; ?></span>
                                             </div>
                                         </td>
@@ -1716,7 +1716,7 @@ require_once 'views/partials/header.php';
                                 <p class="timeline-text" style="color: #6f6b7d;">Coffee served @10:15am</p>
                                 <div>
                                     <div class="client-card-preview" style="background: #f8f7fa; border: 1px solid #dbdade; border-radius: 6px; padding: 6px 12px;">
-                                        <img src="uploads/profiles/profile_3_1789409415.png" onerror="this.src='assets/images/user.png'" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover;">
+                                        <img src="uploads/profiles/profile_3_1789409415.png" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 fill=%22%23e2e8f0%22/><circle cx=%2220%22 cy=%2215%22 r=%227%22 fill=%22%2364748b%22/><path d=%22M8 36c0-6.6 5.4-12 12-12s12 5.4 12 12%22 fill=%22%2364748b%22/></svg>';" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover;">
                                         <div>
                                             <div class="fw-bold small text-dark leading-tight">Lester McCarthy (Client)</div>
                                             <div class="text-muted" style="font-size: 0.72rem;">CEO of Pixinvent</div>
@@ -1734,9 +1734,9 @@ require_once 'views/partials/header.php';
                                 </div>
                                 <p class="timeline-text" style="color: #6f6b7d;">6 team members in the event</p>
                                 <div class="avatar-stack mt-2">
-                                    <img src="uploads/profiles/profile_2_1789409080.png" onerror="this.src='assets/images/user.png'" class="avatar-stack-item">
-                                    <img src="uploads/profiles/profile_6_1793719009.jpg" onerror="this.src='assets/images/user.png'" class="avatar-stack-item">
-                                    <img src="uploads/profiles/profile_3_1789409415.png" onerror="this.src='assets/images/user.png'" class="avatar-stack-item">
+                                    <img src="uploads/profiles/profile_2_1789409080.png" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 fill=%22%23e2e8f0%22/><circle cx=%2220%22 cy=%2215%22 r=%227%22 fill=%22%2364748b%22/><path d=%22M8 36c0-6.6 5.4-12 12-12s12 5.4 12 12%22 fill=%22%2364748b%22/></svg>';" class="avatar-stack-item">
+                                    <img src="uploads/profiles/profile_6_1793873223_6ddd8c4c.jpeg" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 fill=%22%23e2e8f0%22/><circle cx=%2220%22 cy=%2215%22 r=%227%22 fill=%22%2364748b%22/><path d=%22M8 36c0-6.6 5.4-12 12-12s12 5.4 12 12%22 fill=%22%2364748b%22/></svg>';" class="avatar-stack-item">
+                                    <img src="uploads/profiles/profile_3_1789409415.png" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 fill=%22%23e2e8f0%22/><circle cx=%2220%22 cy=%2215%22 r=%227%22 fill=%22%2364748b%22/><path d=%22M8 36c0-6.6 5.4-12 12-12s12 5.4 12 12%22 fill=%22%2364748b%22/></svg>';" class="avatar-stack-item">
                                     <span class="avatar-stack-badge">+3</span>
                                 </div>
                             </div>
