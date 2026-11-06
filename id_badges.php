@@ -800,6 +800,9 @@ require_once 'views/partials/header.php';
             </div>
             <div class="col-lg-5 text-lg-end">
                 <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+                    <a href="venue_scanner.php" target="_blank" class="btn btn-info fw-bold btn-sm px-3 py-2 text-dark">
+                        <i class="fas fa-camera me-1"></i>Shareable Venue Camera Scanner
+                    </a>
                     <button type="button" class="btn btn-light fw-bold btn-sm px-3 py-2" onclick="syncRoleDefaults()">
                         <i class="fas fa-wand-magic-sparkles text-primary me-1"></i>Sync Access by Role
                     </button>
