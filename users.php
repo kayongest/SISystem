@@ -644,13 +644,46 @@ if (empty($user_timeline)) {
     }
 }
 
+// Initialize ID Badges & Attendance data for selected user
+require_once 'includes/badge_attendance_helper.php';
+ensureBadgesAndAttendanceTables($conn);
+$clearanceMetaMap = getClearanceLevelsMeta();
+$selected_user_badge = null;
+$selected_user_attendance = [];
+$userStockLocations = [];
+$userStockMap = [];
+$stLocRes = @$conn->query("SELECT id, name, code FROM stock_locations ORDER BY name ASC");
+if ($stLocRes) {
+    while ($slRow = $stLocRes->fetch_assoc()) {
+        $userStockLocations[] = $slRow;
+        $userStockMap[(int)$slRow['id']] = $slRow;
+    }
+}
+if ($selected_user) {
+    $bStmt = $conn->prepare("SELECT * FROM user_badges WHERE user_id = ? LIMIT 1");
+    if ($bStmt) {
+        $bStmt->bind_param("i", $selected_user['id']);
+        $bStmt->execute();
+        $selected_user_badge = $bStmt->get_result()->fetch_assoc();
+        $bStmt->close();
+    }
+    $attStmt = $conn->prepare("SELECT * FROM attendance_logs WHERE user_id = ? ORDER BY scanned_at DESC, id DESC LIMIT 15");
+    if ($attStmt) {
+        $attStmt->bind_param("i", $selected_user['id']);
+        $attStmt->execute();
+        $selected_user_attendance = $attStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $attStmt->close();
+    }
+}
+
 require_once 'views/partials/header.php';
 ?>
 
-<!-- DataTables Bootstrap 5 & SweetAlert2 CSS -->
+<!-- DataTables Bootstrap 5, SweetAlert2 & QRCodeJS -->
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <!-- Font Awesome 6 -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
@@ -1316,6 +1349,9 @@ require_once 'views/partials/header.php';
         </div>
 
         <div class="d-flex align-items-center gap-2">
+            <a href="id_badges.php?user_id=<?php echo (int)$selected_user_id; ?>" class="btn btn-sm btn-outline-success fw-semibold" title="Manage ID Badges, Stock & Venue Access and Attendance">
+                <i class="fas fa-id-card-clip me-1"></i> ID Badges &amp; Attendance
+            </a>
             <button type="button" class="btn btn-sm btn-outline-dark" onclick="openRolesDeptModal()" title="Manage Roles and Departments">
                 <i class="fas fa-tags me-1 text-primary"></i> Roles &amp; Depts
             </button>
@@ -1337,6 +1373,9 @@ require_once 'views/partials/header.php';
         $hasProfilePhoto = !empty($selected_user['profile_image']) && file_exists(__DIR__ . '/' . $selected_user['profile_image']);
         $hasSignaturePhoto = !empty($selected_user['signature_image']) && file_exists(__DIR__ . '/' . $selected_user['signature_image']);
         $staffCode = 'TAX-' . str_pad($selected_user['id'], 4, '0', STR_PAD_LEFT);
+        $badgeCode = $selected_user_badge['badge_code'] ?? ('ABL-BDG-' . str_pad($selected_user['id'], 4, '0', STR_PAD_LEFT));
+        $userClearanceKey = $selected_user_badge['clearance_level'] ?? 'L1_VENUE_BASIC';
+        $userClearanceMeta = $clearanceMetaMap[$userClearanceKey] ?? $clearanceMetaMap['L1_VENUE_BASIC'];
     ?>
     <div class="row g-4">
         <!-- ==================== LEFT COLUMN: USER DETAILS CARD ==================== -->
@@ -1357,6 +1396,11 @@ require_once 'views/partials/header.php';
                 <h4 class="user-name-title"><?php echo htmlspecialchars($userFullName); ?></h4>
                 <div class="text-center mb-3">
                     <span class="role-badge-pill"><?php echo htmlspecialchars($userRoleTitle); ?></span>
+                    <div class="mt-2">
+                        <span class="badge rounded-pill px-2 py-1" style="background: <?php echo $userClearanceMeta['color']; ?>; font-size: 0.7rem; cursor: pointer;" onclick="document.getElementById('pills-id-badge-tab').click();" title="Click to view ID Badge & Access Level">
+                            <i class="fas <?php echo $userClearanceMeta['icon']; ?> me-1"></i><?php echo htmlspecialchars($userClearanceMeta['code'] . ' • ' . $badgeCode); ?>
+                        </span>
+                    </div>
                 </div>
 
                 <!-- 2 Metric Stat Boxes -->
@@ -1461,6 +1505,11 @@ require_once 'views/partials/header.php';
                         </a>
                     <?php endif; ?>
                 </div>
+                <div class="mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-success w-100 fw-bold" onclick="document.getElementById('pills-id-badge-tab').click();">
+                        <i class="fas fa-id-card-clip me-1"></i> View ID Badge &amp; Stock/Venue Access
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1491,6 +1540,11 @@ require_once 'views/partials/header.php';
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="pills-calltime-tab" data-bs-toggle="pill" data-bs-target="#pills-calltime" type="button" role="tab" aria-selected="false">
                         Calltime
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="pills-id-badge-tab" data-bs-toggle="pill" data-bs-target="#pills-id-badge" type="button" role="tab" aria-selected="false">
+                        <i class="fas fa-id-badge me-1 text-success"></i>ID Badge &amp; Access
                     </button>
                 </li>
             </ul>
@@ -2066,6 +2120,224 @@ require_once 'views/partials/header.php';
                                     <?php endif; ?>
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: ID BADGE, STOCK & VENUE ACCESS & ATTENDANCE -->
+                <div class="tab-pane fade" id="pills-id-badge" role="tabpanel">
+                    <?php
+                        $ubRow = $selected_user_badge ?: [];
+                        $ubCode = $ubRow['badge_code'] ?? ('ABL-BDG-' . str_pad($selected_user['id'], 4, '0', STR_PAD_LEFT));
+                        $ubRfid = $ubRow['rfid_uid'] ?? ('RFID-88' . str_pad($selected_user['id'], 2, '0', STR_PAD_LEFT));
+                        $ubClearance = $ubRow['clearance_level'] ?? 'L1_VENUE_BASIC';
+                        $ubClearanceInfo = $clearanceMetaMap[$ubClearance] ?? $clearanceMetaMap['L1_VENUE_BASIC'];
+                        $ubRoleAccent = getRoleAccentMeta($userRoleKey);
+                        $ubStockMode = $ubRow['stock_access_mode'] ?? 'none';
+                        $ubAllowedStocks = json_decode($ubRow['allowed_stock_ids'] ?? '[]', true);
+                        if (!is_array($ubAllowedStocks)) $ubAllowedStocks = [];
+                        $ubAllowedStocks = array_map('intval', $ubAllowedStocks);
+                        $ubVenueMode = $ubRow['venue_access_mode'] ?? 'assigned_only';
+                        $ubStatus = $ubRow['badge_status'] ?? 'active';
+                        $ubQrText = $ubCode . '|' . $staffCode . '|' . $selected_user['username'] . '|' . $ubClearanceInfo['code'];
+                    ?>
+                    <div class="row g-4">
+                        <!-- Left: Interactive CR80 ID Card Preview -->
+                        <div class="col-xl-5">
+                            <div class="vuexy-card h-100">
+                                <div class="vuexy-card-header">
+                                    <h5 class="vuexy-card-title"><i class="fas fa-id-badge text-success me-2"></i>Staff CR80 ID Badge</h5>
+                                    <div class="d-flex gap-1">
+                                        <a href="id_badges.php?user_id=<?php echo (int)$selected_user['id']; ?>" class="btn btn-xs btn-outline-dark fw-semibold">
+                                            <i class="fas fa-print me-1"></i>Print / Flip
+                                        </a>
+                                        <a href="id_badges.php?tab=kiosk&amp;user_id=<?php echo (int)$selected_user['id']; ?>" class="btn btn-xs btn-success fw-semibold">
+                                            <i class="fas fa-qrcode me-1"></i>Gate Kiosk
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="p-4 d-flex flex-column align-items-center">
+                                    <div style="width: 285px; border-radius: 16px; border: 1px solid #cbd5e1; overflow: hidden; box-shadow: 0 10px 24px rgba(15,23,42,0.1); background: #fff;">
+                                        <div style="background: <?php echo $ubRoleAccent['header']; ?>; padding: 10px 16px 36px; color: #fff; text-align: center;">
+                                            <div style="width: 50px; height: 7px; background: rgba(255,255,255,0.35); border-radius: 8px; margin: 0 auto 6px;"></div>
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="fw-bold"><i class="fas fa-cubes-stacked text-warning me-1"></i>aBility</span>
+                                                <span class="badge bg-light text-dark font-monospace" style="font-size: 0.7rem;"><?php echo htmlspecialchars($ubClearanceInfo['code']); ?> ACCESS</span>
+                                            </div>
+                                        </div>
+                                        <div style="width: 82px; height: 82px; margin: -32px auto 8px; border-radius: 50%; background: #fff; padding: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+                                            <?php if ($hasProfilePhoto): ?>
+                                                <img src="<?php echo htmlspecialchars($selected_user['profile_image']); ?>" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">
+                                            <?php else: ?>
+                                                <div style="width:100%;height:100%;border-radius:50%;background:<?php echo $ubRoleAccent['color']; ?>;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:800;">
+                                                    <?php echo strtoupper(substr($userFullName, 0, 1)); ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="text-center px-3">
+                                            <div class="fw-bold fs-5 text-dark text-truncate"><?php echo htmlspecialchars($userFullName); ?></div>
+                                            <span class="badge rounded-pill text-white px-3 py-1 my-1" style="background: <?php echo $ubRoleAccent['color']; ?>; font-size: 0.68rem;">
+                                                <?php echo htmlspecialchars($ubRoleAccent['label']); ?>
+                                            </span>
+                                            <div class="small text-muted fw-semibold"><?php echo htmlspecialchars($userDeptTitle); ?></div>
+                                        </div>
+                                        <div class="mx-3 my-2 p-2 rounded-3 bg-light border small">
+                                            <div class="d-flex justify-content-between">
+                                                <span class="text-muted">Clearance:</span>
+                                                <strong style="color: <?php echo $ubClearanceInfo['color']; ?>;"><?php echo htmlspecialchars($ubClearanceInfo['short']); ?></strong>
+                                            </div>
+                                            <div class="d-flex justify-content-between mt-1">
+                                                <span class="text-muted">Stock Mode:</span>
+                                                <strong class="text-dark"><?php echo strtoupper($ubStockMode); ?></strong>
+                                            </div>
+                                            <div class="d-flex justify-content-between mt-1">
+                                                <span class="text-muted">Venue Mode:</span>
+                                                <strong class="text-dark"><?php echo strtoupper(str_replace('_', ' ', $ubVenueMode)); ?></strong>
+                                            </div>
+                                        </div>
+                                        <div class="mx-3 mb-3 p-2 rounded-3 border d-flex align-items-center justify-content-between gap-2">
+                                            <div id="userProfileBadgeQr" data-qr="<?php echo htmlspecialchars($ubQrText); ?>" style="width: 68px; height: 68px;"></div>
+                                            <div class="text-start flex-grow-1">
+                                                <div class="text-muted" style="font-size: 0.62rem; font-weight: 700;">BADGE ID</div>
+                                                <div class="fw-bold text-dark font-monospace" style="font-size: 0.82rem;"><?php echo htmlspecialchars($ubCode); ?></div>
+                                                <div class="text-muted mt-1" style="font-size: 0.62rem; font-weight: 700;">STAFF CODE</div>
+                                                <div class="fw-semibold text-secondary font-monospace" style="font-size: 0.74rem;"><?php echo htmlspecialchars($staffCode); ?></div>
+                                            </div>
+                                        </div>
+                                        <div class="px-3 py-2 text-white d-flex justify-content-between small fw-bold" style="background: <?php echo $ubClearanceInfo['badge_bg']; ?>; font-size: 0.7rem;">
+                                            <span><?php echo htmlspecialchars($ubRfid); ?></span>
+                                            <span><?php echo strtoupper($ubStatus); ?></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Quick Access Level Config + User Attendance Logs -->
+                        <div class="col-xl-7">
+                            <div class="vuexy-card mb-4">
+                                <div class="vuexy-card-header">
+                                    <h5 class="vuexy-card-title"><i class="fas fa-sliders text-primary me-2"></i>Stock &amp; Venue Access Level Configuration</h5>
+                                </div>
+                                <div class="p-4">
+                                    <form onsubmit="saveUserProfileBadgeAccess(event, this)">
+                                        <input type="hidden" name="ajax_action" value="save_badge_config">
+                                        <input type="hidden" name="user_id" value="<?php echo (int)$selected_user['id']; ?>">
+                                        <input type="hidden" name="rfid_uid" value="<?php echo htmlspecialchars($ubRfid); ?>">
+                                        <input type="hidden" name="emergency_contact" value="<?php echo htmlspecialchars($ubRow['emergency_contact'] ?? '+250 788 000 112'); ?>">
+                                        <input type="hidden" name="blood_group" value="<?php echo htmlspecialchars($ubRow['blood_group'] ?? 'O+'); ?>">
+                                        <input type="hidden" name="expires_at" value="<?php echo htmlspecialchars($ubRow['expires_at'] ?? date('Y-12-31', strtotime('+1 year'))); ?>">
+
+                                        <div class="row g-3">
+                                            <div class="col-md-7">
+                                                <label class="form-label small fw-bold">Access Clearance Level</label>
+                                                <select name="clearance_level" class="form-select form-select-sm">
+                                                    <?php foreach ($clearanceMetaMap as $cKey => $cm): ?>
+                                                        <option value="<?php echo $cKey; ?>" <?php echo ($ubClearance === $cKey) ? 'selected' : ''; ?>>
+                                                            <?php echo htmlspecialchars($cm['title']); ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-5">
+                                                <label class="form-label small fw-bold">Badge Status</label>
+                                                <select name="badge_status" class="form-select form-select-sm">
+                                                    <option value="active" <?php echo ($ubStatus === 'active') ? 'selected' : ''; ?>>Active</option>
+                                                    <option value="suspended" <?php echo ($ubStatus === 'suspended') ? 'selected' : ''; ?>>Suspended</option>
+                                                    <option value="revoked" <?php echo ($ubStatus === 'revoked') ? 'selected' : ''; ?>>Revoked</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label small fw-bold text-success"><i class="fas fa-warehouse me-1"></i>Stock Warehouse Access</label>
+                                                <select name="stock_access_mode" class="form-select form-select-sm mb-2">
+                                                    <option value="all" <?php echo ($ubStockMode === 'all') ? 'selected' : ''; ?>>All Stock Warehouses</option>
+                                                    <option value="selected" <?php echo ($ubStockMode === 'selected') ? 'selected' : ''; ?>>Selected Stock Locations</option>
+                                                    <option value="none" <?php echo ($ubStockMode === 'none') ? 'selected' : ''; ?>>No Stock Warehouse Access</option>
+                                                </select>
+                                                <div class="border rounded p-2 bg-light overflow-auto" style="max-height: 95px;">
+                                                    <?php foreach ($userStockLocations as $sl): ?>
+                                                        <div class="form-check small">
+                                                            <input class="form-check-input" type="checkbox" name="allowed_stock_ids[]" value="<?php echo (int)$sl['id']; ?>" <?php echo in_array((int)$sl['id'], $ubAllowedStocks, true) ? 'checked' : ''; ?>>
+                                                            <label class="form-check-label"><?php echo htmlspecialchars($sl['name']); ?></label>
+                                                        </div>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label small fw-bold text-primary"><i class="fas fa-location-dot me-1"></i>Event Venue Access</label>
+                                                <select name="venue_access_mode" class="form-select form-select-sm mb-2">
+                                                    <option value="all" <?php echo ($ubVenueMode === 'all') ? 'selected' : ''; ?>>All Event Venues &amp; Stages</option>
+                                                    <option value="assigned_only" <?php echo ($ubVenueMode === 'assigned_only') ? 'selected' : ''; ?>>Assigned Event Venues Only</option>
+                                                    <option value="selected" <?php echo ($ubVenueMode === 'selected') ? 'selected' : ''; ?>>Selected Venues</option>
+                                                    <option value="none" <?php echo ($ubVenueMode === 'none') ? 'selected' : ''; ?>>No Venue Access</option>
+                                                </select>
+                                                <div class="small text-muted p-2 border rounded bg-light">
+                                                    Controls gate verification when scanning <strong><?php echo htmlspecialchars($ubCode); ?></strong> at Event Venues and Calltimes.
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3 text-end">
+                                            <button type="submit" class="btn btn-sm btn-primary fw-bold px-3">
+                                                <i class="fas fa-save me-1"></i>Update Access Clearance
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <!-- Recent Stock & Venue Attendance History for this user -->
+                            <div class="vuexy-card">
+                                <div class="vuexy-card-header">
+                                    <h5 class="vuexy-card-title"><i class="fas fa-clock-rotate-left text-info me-2"></i>Stock &amp; Venue Attendance Logs</h5>
+                                    <a href="id_badges.php?tab=kiosk" class="btn btn-xs btn-outline-primary">Record Gate Scan</a>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-vuexy mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Time</th>
+                                                <th>Checkpoint (Stock / Venue)</th>
+                                                <th>Action</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php if (!empty($selected_user_attendance)): ?>
+                                                <?php foreach ($selected_user_attendance as $att): ?>
+                                                    <tr>
+                                                        <td class="small">
+                                                            <div class="fw-bold text-dark"><?php echo date('M d, Y', strtotime($att['scanned_at'])); ?></div>
+                                                            <div class="text-muted"><?php echo date('h:i A', strtotime($att['scanned_at'])); ?></div>
+                                                        </td>
+                                                        <td>
+                                                            <?php if ($att['checkpoint_type'] === 'stock_warehouse'): ?>
+                                                                <span class="badge bg-success-subtle text-success me-1">Stock</span>
+                                                            <?php else: ?>
+                                                                <span class="badge bg-primary-subtle text-primary me-1">Venue</span>
+                                                            <?php endif; ?>
+                                                            <span class="fw-semibold"><?php echo htmlspecialchars($att['checkpoint_name']); ?></span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge bg-light text-dark border"><?php echo strtoupper(str_replace('_', ' ', $att['scan_action'])); ?></span>
+                                                        </td>
+                                                        <td>
+                                                            <?php if ($att['access_status'] === 'granted'): ?>
+                                                                <span class="badge bg-success">Granted</span>
+                                                            <?php else: ?>
+                                                                <span class="badge bg-danger">Denied</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php else: ?>
+                                                <tr>
+                                                    <td colspan="4" class="text-center py-3 text-muted small">No badge scans recorded yet for this user.</td>
+                                                </tr>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -3190,6 +3462,29 @@ ob_start();
         });
     }
 
+    function saveUserProfileBadgeAccess(e, form) {
+        e.preventDefault();
+        const fd = new FormData(form);
+        fetch('id_badges.php', {
+            method: 'POST',
+            body: fd
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Access Level Updated',
+                    text: data.message,
+                    timer: 1400,
+                    showConfirmButton: false
+                }).then(() => window.location.reload());
+            } else {
+                Swal.fire('Error', data.message || 'Could not update badge access.', 'error');
+            }
+        });
+    }
+
     $(document).ready(function() {
         // Initialize All Users DataTable
         if ($('#allUsersDataTable').length) {
@@ -3205,6 +3500,20 @@ ob_start();
         $('#checkAllProjects').on('change', function() {
             $('#projectsListTable tbody input[type="checkbox"]').prop('checked', $(this).prop('checked'));
         });
+
+        // Render User Profile ID Badge QR Code
+        const qrContainer = document.getElementById('userProfileBadgeQr');
+        if (qrContainer && typeof QRCode !== 'undefined') {
+            qrContainer.innerHTML = '';
+            new QRCode(qrContainer, {
+                text: qrContainer.getAttribute('data-qr') || 'ABL-BDG',
+                width: 68,
+                height: 68,
+                colorDark: '#0f172a',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
 
         // Flash toast notification
         <?php if (isset($_SESSION['toast_message'])): ?>

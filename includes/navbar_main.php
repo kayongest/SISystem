@@ -341,7 +341,7 @@ try {
                 <!-- Setup Dropdown (Multi-role Config) -->
                 <?php if (!in_array($user_role, ['driver', 'user', 'technician'])): ?>
                 <div class="dropdown dropdown-compact">
-                    <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['stock_locations.php', 'categories.php', 'departments.php', 'locations.php', 'events.php', 'mobile_app.php', 'reports.php', 'hr_center.php', 'drivers.php', 'users.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
+                    <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['stock_locations.php', 'categories.php', 'departments.php', 'locations.php', 'events.php', 'mobile_app.php', 'reports.php', 'hr_center.php', 'drivers.php', 'users.php', 'id_badges.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
                         <i class="fas fa-cog"></i> Setup
                     </a>
                     <ul class="dropdown-menu shadow">
@@ -367,6 +367,7 @@ try {
                                 <hr class="dropdown-divider">
                             </li>
                             <li><a class="dropdown-item <?php echo ($current_page == 'users.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>users.php"><i class="fas fa-users-cog me-2 text-warning"></i> Users</a></li>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'id_badges.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>id_badges.php"><i class="fas fa-id-card-clip me-2 text-success"></i> ID Badges &amp; Attendance</a></li>
                             <li><a class="dropdown-item <?php echo ($current_page == 'stock_locations.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>stock_locations.php"><i class="fas fa-warehouse me-2"></i> Stock Locations</a></li>
                             <li><a class="dropdown-item <?php echo ($current_page == 'categories.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>categories.php"><i class="fas fa-list me-2"></i> Categories</a></li>
                             <li><a class="dropdown-item <?php echo ($current_page == 'departments.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>departments.php"><i class="fas fa-building me-2"></i> Departments</a></li>

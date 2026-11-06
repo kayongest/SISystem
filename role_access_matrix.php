@@ -63,6 +63,7 @@ function getSystemPermissionsCatalog()
         ['name' => 'view_accessories', 'display_name' => 'View Accessories', 'description' => 'View and manage equipment accessories and stock alerts'],
         ['name' => 'manage_users', 'display_name' => 'Manage Users', 'description' => 'Create, edit, activate, or suspend system user accounts'],
         ['name' => 'view_users', 'display_name' => 'View Users', 'description' => 'View user directory, profiles, and role assignments'],
+        ['name' => 'manage_id_badges', 'display_name' => 'Manage ID Badges & Attendance', 'description' => 'Generate staff ID badges, configure Stock/Venue clearance, and scan attendance'],
         ['name' => 'manage_permissions', 'display_name' => 'Manage Permissions', 'description' => 'Configure the role access matrix and system permissions'],
         ['name' => 'manage_settings', 'display_name' => 'Manage Settings', 'description' => 'Configure system settings, categories, and departments']
     ];
@@ -90,7 +91,8 @@ function getDefaultRolePermissionsMap()
             'manage_technicians',
             'view_batch_history',
             'view_accessories',
-            'view_users'
+            'view_users',
+            'manage_id_badges'
         ],
         'stock_manager' => [
             'view_dashboard',
