@@ -478,7 +478,7 @@ require_once 'views/partials/header.php';
             <p class="text-muted small mb-0">Manage warehouses, stock facilities, controllers, and working schedules.</p>
         </div>
 
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-2">
             <form method="GET" action="stock_locations.php" class="d-flex align-items-center gap-2">
                 <div class="input-group input-group-sm" style="max-width: 250px;">
                     <input type="text" name="search" class="form-control" placeholder="Search locations..." value="<?php echo htmlspecialchars($search); ?>">
@@ -488,6 +488,16 @@ require_once 'views/partials/header.php';
                     <button class="btn btn-outline-primary" type="submit"><i class="fas fa-search"></i></button>
                 </div>
             </form>
+
+            <a href="id_badges.php?tab=kiosk" class="btn btn-sm btn-outline-dark d-flex align-items-center gap-1" title="Open Attendance & Gate Terminal">
+                <i class="fas fa-id-badge"></i>
+                <span class="d-none d-md-inline">Gate Terminal</span>
+            </a>
+
+            <a href="venue_scanner.php?type=stock_warehouse" class="btn btn-sm btn-outline-info text-dark d-flex align-items-center gap-1" title="Open Live Scanner Kiosk">
+                <i class="fas fa-camera"></i>
+                <span class="d-none d-md-inline">Scanner Kiosk</span>
+            </a>
 
             <button type="button" class="btn btn-sm btn-success d-flex align-items-center gap-2" onclick="openAddLocation()">
                 <i class="fas fa-plus"></i>
@@ -615,17 +625,31 @@ require_once 'views/partials/header.php';
                                     </div>
 
                                     <!-- Action Buttons -->
-                                    <div class="mt-3 pt-2 border-top d-flex justify-content-end gap-2">
-                                        <button type="button" class="btn btn-sm btn-outline-primary btn-action-icon"
-                                                onclick="openEditLocation(<?php echo $location['id']; ?>)"
-                                                title="Edit Location">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-danger btn-action-icon"
-                                                onclick="openDeleteLocation(<?php echo $location['id']; ?>, '<?php echo htmlspecialchars(addslashes($location['name'])); ?>')"
-                                                title="Delete Location">
-                                            <i class="fas fa-trash-alt"></i>
-                                        </button>
+                                    <div class="mt-3 pt-2 border-top d-flex justify-content-between align-items-center">
+                                        <div class="d-flex gap-1">
+                                            <a href="venue_scanner.php?type=stock_warehouse&id=<?php echo $location['id']; ?>"
+                                               class="btn btn-sm btn-outline-success btn-action-icon"
+                                               title="Open Gate Scanner for <?php echo htmlspecialchars($location['name']); ?>">
+                                                <i class="fas fa-barcode"></i>
+                                            </a>
+                                            <a href="id_badges.php?tab=kiosk&checkpoint_type=stock_warehouse&checkpoint_id=<?php echo $location['id']; ?>"
+                                               class="btn btn-sm btn-outline-dark btn-action-icon"
+                                               title="Open Attendance Terminal for <?php echo htmlspecialchars($location['name']); ?>">
+                                                <i class="fas fa-id-badge"></i>
+                                            </a>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-sm btn-outline-primary btn-action-icon"
+                                                    onclick="openEditLocation(<?php echo $location['id']; ?>)"
+                                                    title="Edit Location">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger btn-action-icon"
+                                                    onclick="openDeleteLocation(<?php echo $location['id']; ?>, '<?php echo htmlspecialchars(addslashes($location['name'])); ?>')"
+                                                    title="Delete Location">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

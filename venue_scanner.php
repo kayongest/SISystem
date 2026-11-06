@@ -18,10 +18,15 @@ ensureBadgesAndAttendanceTables($conn);
 $clearanceMeta = getClearanceLevelsMeta();
 $operatorId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
 
-// Load Stock Locations
+// Load Stock Locations directly from stock_locations table (matching the warehouse floor)
 $stockLocations = [];
 $stockMap = [];
-$stRes = @$conn->query("SELECT id, name, code, location, open_time, close_time FROM stock_locations WHERE is_active = 1 ORDER BY name ASC");
+$stRes = @$conn->query("
+    SELECT id, name, code, location, open_time, close_time
+    FROM stock_locations
+    WHERE is_active = 1
+    ORDER BY id ASC
+");
 if ($stRes) {
     while ($r = $stRes->fetch_assoc()) {
         $sid = (int)$r['id'];
@@ -30,25 +35,39 @@ if ($stRes) {
     }
 }
 if (empty($stockLocations)) {
-    $stockLocations[] = ['id' => 1, 'name' => 'Main Central Warehouse', 'code' => 'WH-MAIN', 'location' => 'Kigali', 'open_time' => '08:00:00', 'close_time' => '18:00:00'];
-    $stockMap[1] = $stockLocations[0];
+    $stockLocations[] = ['id' => 1, 'name' => 'Ndera Warehouse', 'code' => 'NDR-STK', 'location' => 'Ndera Central Warehouse', 'open_time' => '07:00:00', 'close_time' => '22:00:00'];
+    $stockLocations[] = ['id' => 2, 'name' => 'BK Arena Stock', 'code' => 'BKA-STK', 'location' => 'BK Arena Stock Room', 'open_time' => '07:00:00', 'close_time' => '22:00:00'];
+    $stockLocations[] = ['id' => 3, 'name' => 'KCC Stock', 'code' => 'KCC-STK', 'location' => 'Kigali Convention Centre Stock', 'open_time' => '07:00:00', 'close_time' => '22:00:00'];
+    foreach ($stockLocations as $sl) {
+        $stockMap[(int)$sl['id']] = $sl;
+    }
 }
+$stockNames = array_map(function($s) { return $s['name']; }, $stockLocations);
+$stockLabelSummary = !empty($stockNames) ? implode(', ', array_slice($stockNames, 0, 3)) . (count($stockNames) > 3 ? '..' : '') : 'Stock Warehouses';
 
 // Load Event Venues
 $eventsList = [];
 $eventMap = [];
-$evRes = @$conn->query("SELECT id, title, location, date, call_time, project_manager, tech_lead, assigned_technician FROM events ORDER BY date DESC, id DESC LIMIT 30");
+$evRes = @$conn->query("
+    SELECT id, title, location, date, call_time, project_manager, tech_lead, assigned_technician
+    FROM events
+    ORDER BY date DESC, id DESC
+    LIMIT 30
+");
 if ($evRes) {
     while ($r = $evRes->fetch_assoc()) {
-        $eid = (int)$r['id'];
+        $eid = normalizeEventNumericId($r['id']);
+        $r['id'] = $eid;
         $eventsList[] = $r;
         $eventMap[$eid] = $r;
     }
 }
 if (empty($eventsList)) {
-    $eventsList[] = ['id' => 1, 'title' => 'Main Production Venue', 'location' => 'BK Arena, Kigali', 'date' => date('Y-m-d'), 'call_time' => '08:00', 'project_manager' => '', 'tech_lead' => '', 'assigned_technician' => ''];
+    $eventsList[] = ['id' => 1, 'title' => 'Marriot Hotel', 'location' => 'Kigali Marriott Hotel, KN 3 Ave', 'date' => date('Y-m-d'), 'call_time' => '08:00', 'project_manager' => '', 'tech_lead' => '', 'assigned_technician' => ''];
     $eventMap[1] = $eventsList[0];
 }
+$eventTitles = array_map(function($e) { return $e['title']; }, $eventsList);
+$venueLabelSummary = !empty($eventTitles) ? implode(', ', array_slice($eventTitles, 0, 3)) . (count($eventTitles) > 3 ? '..' : '') : 'Event Venues';
 
 // ==================== AJAX HANDLER FOR CAMERA / NAME SCAN ====================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'process_venue_scan') {
@@ -241,7 +260,7 @@ if ($uRes) {
 $defaultType = isset($_GET['type']) && in_array($_GET['type'], ['event_venue', 'stock_warehouse'], true)
     ? $_GET['type']
     : 'event_venue';
-$defaultId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$defaultId = isset($_GET['id']) ? (int)$_GET['id'] : (isset($_GET['location_id']) ? (int)$_GET['location_id'] : 0);
 
 // Build today's attendance state map per checkpoint: key = "{checkpoint_type}_{checkpoint_id}_{user_id}" => 'checked_in' | 'checked_out'
 $todayCheckpointStates = [];
@@ -266,9 +285,10 @@ if ($stateQ) {
 // Recent scans for initial feed
 $recentScans = [];
 $recQ = $conn->query("
-    SELECT l.*, u.full_name, u.username, u.role
+    SELECT l.*, u.full_name, u.username, u.role, u.profile_image, b.clearance_level
     FROM attendance_logs l
     LEFT JOIN users u ON l.user_id = u.id
+    LEFT JOIN user_badges b ON l.user_id = b.user_id
     ORDER BY l.scanned_at DESC, l.id DESC
     LIMIT 12
 ");
@@ -423,25 +443,25 @@ if ($recQ) {
     <!-- Active Venue / Stock Checkpoint Selector Strip -->
     <div class="kiosk-card p-3 mb-4">
         <div class="row g-3 align-items-center">
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <label class="form-label small text-info fw-bold text-uppercase mb-1">
-                    <i class="fas fa-Broadcast-tower me-1"></i>1. Checkpoint Type
+                    <i class="fas fa-tower-broadcast me-1"></i>1. Toggle Checkpoint Type (Stock &amp; Venue)
                 </label>
                 <div class="btn-group w-100" role="group">
-                    <input type="radio" class="btn-check" name="kiosk_cp_type" id="type_venue" value="event_venue" <?php echo ($defaultType === 'event_venue') ? 'checked' : ''; ?> onchange="switchCheckpointType()">
-                    <label class="btn btn-outline-info fw-bold btn-sm py-2" for="type_venue">
-                        <i class="fas fa-location-dot me-1"></i>Event Venue
-                    </label>
                     <input type="radio" class="btn-check" name="kiosk_cp_type" id="type_stock" value="stock_warehouse" <?php echo ($defaultType === 'stock_warehouse') ? 'checked' : ''; ?> onchange="switchCheckpointType()">
                     <label class="btn btn-outline-success fw-bold btn-sm py-2" for="type_stock">
-                        <i class="fas fa-warehouse me-1"></i>Stock Warehouse
+                        <i class="fas fa-warehouse me-1"></i>Stock (<?php echo htmlspecialchars($stockLabelSummary); ?>)
+                    </label>
+                    <input type="radio" class="btn-check" name="kiosk_cp_type" id="type_venue" value="event_venue" <?php echo ($defaultType === 'event_venue') ? 'checked' : ''; ?> onchange="switchCheckpointType()">
+                    <label class="btn btn-outline-info fw-bold btn-sm py-2" for="type_venue">
+                        <i class="fas fa-location-dot me-1"></i>Venue (<?php echo htmlspecialchars($venueLabelSummary); ?>)
                     </label>
                 </div>
             </div>
 
-            <div class="col-md-5">
+            <div class="col-md-4">
                 <div id="venueSelectBox" class="<?php echo ($defaultType === 'event_venue') ? '' : 'd-none'; ?>">
-                    <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">2. Active Event Venue</label>
+                    <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">2. Active Venue (<?php echo htmlspecialchars($venueLabelSummary); ?>)</label>
                     <select id="active_venue_id" class="form-select bg-dark text-white border-secondary fw-semibold" onchange="syncAllStaffButtonStates()">
                         <?php foreach ($eventsList as $ev): ?>
                             <option value="<?php echo (int)$ev['id']; ?>" <?php echo ($defaultId === (int)$ev['id']) ? 'selected' : ''; ?>>
@@ -452,7 +472,7 @@ if ($recQ) {
                 </div>
 
                 <div id="stockSelectBox" class="<?php echo ($defaultType === 'stock_warehouse') ? '' : 'd-none'; ?>">
-                    <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">2. Active Stock Warehouse</label>
+                    <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">2. Active Stock (<?php echo htmlspecialchars($stockLabelSummary); ?>)</label>
                     <select id="active_stock_id" class="form-select bg-dark text-white border-secondary fw-semibold" onchange="syncAllStaffButtonStates()">
                         <?php foreach ($stockLocations as $sl): ?>
                             <option value="<?php echo (int)$sl['id']; ?>" <?php echo ($defaultId === (int)$sl['id']) ? 'selected' : ''; ?>>
@@ -476,76 +496,13 @@ if ($recQ) {
     </div>
 
     <div class="row g-4">
-        <!-- ==================== LEFT: LOGITECH CAMERA & HARDWARE SCANNER ==================== -->
-        <div class="col-lg-5">
-            <div class="kiosk-card p-4 h-100">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        <h5 class="fw-bold mb-0 text-white">
-                            <i class="fas fa-camera text-warning me-2"></i>Option A: Scan Badge with Camera / Scanner
-                        </h5>
-                        <div class="small text-white-50">Hold ID badge QR code in front of the Logitech camera or scan with USB gun</div>
-                    </div>
-                    <button type="button" class="btn btn-xs btn-outline-light" onclick="toggleMirrorCamera()" title="Flip / Mirror Camera">
-                        <i class="fas fa-arrows-left-right"></i> Mirror
-                    </button>
-                </div>
-
-                <!-- Camera Device Dropdown + Start/Stop Buttons -->
-                <div class="row g-2 mb-3">
-                    <div class="col-sm-7">
-                        <select id="cameraDeviceSelect" class="form-select form-select-sm bg-dark text-white border-secondary" onchange="restartWithSelectedCamera()">
-                            <option value="">Detecting Logitech / USB Cameras...</option>
-                        </select>
-                    </div>
-                    <div class="col-sm-5 d-flex gap-2">
-                        <button type="button" id="btnStartCam" class="btn btn-sm btn-success fw-bold flex-grow-1" onclick="startLogitechCamera()">
-                            <i class="fas fa-play me-1"></i>Start Camera
-                        </button>
-                        <button type="button" id="btnStopCam" class="btn btn-sm btn-outline-danger fw-bold d-none" onclick="stopLogitechCamera()">
-                            <i class="fas fa-stop me-1"></i>Stop
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Live Camera Viewport -->
-                <div class="camera-stage-wrap camera-mirror mb-3" id="cameraStageWrap">
-                    <div class="scan-laser-line d-none" id="scanLaserLine"></div>
-                    <div id="logitechCameraReader"></div>
-                    <div id="cameraPlaceholderMsg" class="text-center p-4">
-                        <i class="fas fa-video fa-3x text-info mb-3 opacity-75"></i>
-                        <h6 class="fw-bold text-white mb-1">Logitech Camera Ready</h6>
-                        <p class="small text-white-50 mb-3">Click <strong>Start Camera</strong> above to activate live QR scanning on your Logitech webcam.</p>
-                        <button type="button" class="btn btn-sm btn-info fw-bold text-dark px-3" onclick="startLogitechCamera()">
-                            <i class="fas fa-camera me-1"></i>Activate Logitech Camera
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Hardware USB Barcode / QR Scanner Input Box -->
-                <div class="p-3 rounded-3" style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.1);">
-                    <label class="form-label small fw-bold text-warning mb-1">
-                        <i class="fas fa-barcode me-1"></i>USB / Handheld Scanner Input (Auto-Submit on Scan)
-                    </label>
-                    <form onsubmit="handleManualBarcodeSubmit(event)">
-                        <div class="input-group">
-                            <input type="text" id="hardwareScannerInput" class="form-control bg-dark text-white border-secondary font-monospace fw-bold" placeholder="Click here &amp; scan badge (ABL-BDG-0001)..." autocomplete="off">
-                            <button type="submit" class="btn btn-warning fw-bold text-dark">
-                                <i class="fas fa-bolt me-1"></i>Scan
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
         <!-- ==================== MIDDLE: SEARCH BY STAFF NAME ==================== -->
-        <div class="col-lg-4">
+        <div class="col-lg-5">
             <div class="kiosk-card p-4 h-100">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
                         <h5 class="fw-bold mb-0 text-white">
-                            <i class="fas fa-magnifying-glass text-info me-2"></i>Option B: Search Staff by Name
+                            <i class="fas fa-magnifying-glass text-info me-2"></i>Search Staff by Name &amp; Badge
                         </h5>
                         <div class="small text-white-50">Type name &rarr; Find &rarr; Click <strong>Checkin</strong> then <strong>Checkout</strong></div>
                     </div>
@@ -556,7 +513,7 @@ if ($recQ) {
                 <form onsubmit="event.preventDefault();filterStaffByName();" class="mb-3">
                     <div class="input-group">
                         <span class="input-group-text bg-dark border-secondary text-info"><i class="fas fa-search"></i></span>
-                        <input type="text" id="staffNameSearchInput" class="form-control bg-dark text-white border-secondary fw-semibold" placeholder="Type staff name to find..." oninput="filterStaffByName()" autocomplete="off">
+                        <input type="text" id="staffNameSearchInput" class="form-control bg-dark text-white border-secondary fw-semibold" placeholder="Type staff name or scan badge (ABL-BDG-0001)..." oninput="filterStaffByName()" autocomplete="off">
                         <button type="submit" class="btn btn-info fw-bold text-dark px-3">
                             Find
                         </button>
@@ -567,25 +524,33 @@ if ($recQ) {
                 </form>
 
                 <!-- Filtered Staff List -->
-                <div class="name-search-results" id="staffNameResultsList">
+                <div class="name-search-results" id="staffNameResultsList" style="max-height: 440px;">
                     <?php foreach ($staffDirectory as $st):
                         $uid = (int)$st['id'];
+                        $stInitials = getUserInitials($st['full_name']);
                     ?>
                         <div class="staff-result-item"
                              id="staff-row-<?php echo $uid; ?>"
                              data-uid="<?php echo $uid; ?>"
                              data-badge="<?php echo htmlspecialchars($st['badge_code']); ?>"
-                             data-search="<?php echo strtolower(htmlspecialchars($st['full_name'] . ' ' . $st['username'] . ' ' . $st['badge_code'] . ' ' . $st['staff_code'] . ' ' . $st['role'] . ' ' . $st['department'])); ?>">
+                             data-search="<?php echo strtolower(htmlspecialchars($st['full_name'] . ' ' . $st['username'] . ' ' . $st['badge_code'] . ' ' . $st['staff_code'] . ' ' . $st['role'] . ' ' . $st['department'])); ?>"
+                             style="cursor: pointer; transition: all 0.2s;"
+                             onclick="handleStaffRowClick(event, <?php echo $uid; ?>, '<?php echo htmlspecialchars($st['badge_code']); ?>')">
                             <div class="d-flex justify-content-between align-items-center gap-2">
                                 <div class="d-flex align-items-center gap-2 overflow-hidden">
                                     <?php if (!empty($st['profile_image'])): ?>
                                         <img src="<?php echo htmlspecialchars($st['profile_image']); ?>"
-                                             style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; flex-shrink: 0;"
-                                             onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2242%22 height=%2242%22 viewBox=%220 0 42 42%22><rect width=%2242%22 height=%2242%22 fill=%22%23334155%22/><circle cx=%2221%22 cy=%2216%22 r=%227%22 fill=%22%2394a3b8%22/><path d=%22M8 38c0-7 6-13 13-13s13 6 13 13%22 fill=%22%2394a3b8%22/></svg>';">
+                                             alt="<?php echo htmlspecialchars($st['full_name']); ?>"
+                                             style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 2px solid <?php echo $st['clearance_color']; ?>;"
+                                             onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.classList.remove('d-none');">
+                                        <div class="rounded-circle d-none d-flex align-items-center justify-content-center fw-bold text-white"
+                                             style="width: 42px; height: 42px; background: <?php echo $st['clearance_color']; ?>; flex-shrink: 0; font-size: 0.85rem; letter-spacing: 0.5px;">
+                                            <?php echo htmlspecialchars($stInitials); ?>
+                                        </div>
                                     <?php else: ?>
                                         <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white"
-                                             style="width: 42px; height: 42px; background: <?php echo $st['clearance_color']; ?>; flex-shrink: 0;">
-                                            <?php echo strtoupper(substr($st['full_name'], 0, 1)); ?>
+                                             style="width: 42px; height: 42px; background: <?php echo $st['clearance_color']; ?>; flex-shrink: 0; font-size: 0.85rem; letter-spacing: 0.5px;">
+                                            <?php echo htmlspecialchars($stInitials); ?>
                                         </div>
                                     <?php endif; ?>
                                     <div class="text-truncate">
@@ -630,7 +595,7 @@ if ($recQ) {
         </div>
 
         <!-- ==================== RIGHT: LIVE SCAN VERIFICATION & FEED ==================== -->
-        <div class="col-lg-3">
+        <div class="col-lg-7">
             <div class="kiosk-card p-4 h-100 d-flex flex-column justify-content-between">
                 <div>
                     <h5 class="fw-bold mb-3 text-white">
@@ -638,30 +603,54 @@ if ($recQ) {
                     </h5>
 
                     <!-- Verification Result Box -->
-                    <div id="liveScanDecisionBox" class="p-3 rounded-4 text-center mb-3" style="background: rgba(15, 23, 42, 0.75); border: 1px dashed #475569;">
+                    <div id="liveScanDecisionBox" class="p-4 rounded-4 text-center mb-4" style="background: rgba(15, 23, 42, 0.75); border: 1px dashed #475569;">
                         <i class="fas fa-id-badge fa-2x text-white-50 mb-2"></i>
-                        <div class="fw-bold text-white">Waiting for Badge Scan...</div>
-                        <div class="small text-white-50">Scan via Logitech camera, USB scanner, or click a name</div>
+                        <div class="fw-bold text-white">Waiting for Staff Checkin / Checkout...</div>
+                        <div class="small text-white-50">Search by staff name on the left and click Checkin or Checkout</div>
                     </div>
 
                     <!-- Recent Scans Feed -->
                     <h6 class="fw-bold text-uppercase small text-white-50 mb-2">
                         <i class="fas fa-clock-rotate-left me-1"></i>Recent Gate Scans
                     </h6>
-                    <div id="recentVenueScansFeed" class="overflow-auto" style="max-height: 250px;">
-                        <?php foreach ($recentScans as $rs): ?>
+                    <div id="recentVenueScansFeed" class="overflow-auto" style="max-height: 310px;">
+                        <?php foreach ($recentScans as $rs):
+                            $rsName = $rs['full_name'] ?: ($rs['username'] ?: 'Staff');
+                            $rsInitials = getUserInitials($rsName);
+                            $rsHasImg = !empty($rs['profile_image']) && file_exists(__DIR__ . '/' . $rs['profile_image']);
+                            $rsColor = $clearanceMeta[$rs['clearance_level'] ?? '']['color'] ?? '#3b82f6';
+                        ?>
                             <div class="p-2 rounded-3 mb-2 small" style="background: rgba(15, 23, 42, 0.6); border-left: 3px solid <?php echo ($rs['access_status'] === 'granted') ? '#10b981' : '#ef4444'; ?>;">
-                                <div class="d-flex justify-content-between">
-                                    <strong class="text-white"><?php echo htmlspecialchars($rs['full_name'] ?: $rs['username']); ?></strong>
-                                    <span class="text-white-50" style="font-size: 0.7rem;"><?php echo date('h:i A', strtotime($rs['scanned_at'])); ?></span>
-                                </div>
-                                <div class="d-flex justify-content-between align-items-center mt-1">
-                                    <span class="text-white-50 text-truncate" style="max-width: 150px; font-size: 0.72rem;"><?php echo htmlspecialchars($rs['checkpoint_name']); ?></span>
-                                    <?php if ($rs['access_status'] === 'granted'): ?>
-                                        <span class="badge bg-success" style="font-size: 0.65rem;"><?php echo strtoupper(str_replace('_', ' ', $rs['scan_action'])); ?></span>
+                                <div class="d-flex align-items-center gap-2">
+                                    <?php if ($rsHasImg): ?>
+                                        <img src="<?php echo htmlspecialchars($rs['profile_image']); ?>"
+                                             alt="<?php echo htmlspecialchars($rsName); ?>"
+                                             style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1.5px solid <?php echo $rsColor; ?>;"
+                                             onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.classList.remove('d-none');">
+                                        <div class="rounded-circle d-none d-flex align-items-center justify-content-center fw-bold text-white"
+                                             style="width: 34px; height: 34px; background: <?php echo $rsColor; ?>; flex-shrink: 0; font-size: 0.72rem;">
+                                            <?php echo htmlspecialchars($rsInitials); ?>
+                                        </div>
                                     <?php else: ?>
-                                        <span class="badge bg-danger" style="font-size: 0.65rem;">DENIED</span>
+                                        <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white"
+                                             style="width: 34px; height: 34px; background: <?php echo $rsColor; ?>; flex-shrink: 0; font-size: 0.72rem;">
+                                            <?php echo htmlspecialchars($rsInitials); ?>
+                                        </div>
                                     <?php endif; ?>
+                                    <div class="flex-grow-1 overflow-hidden">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <strong class="text-white text-truncate"><?php echo htmlspecialchars($rsName); ?></strong>
+                                            <span class="text-white-50 ms-2 flex-shrink-0" style="font-size: 0.7rem;"><?php echo date('h:i A', strtotime($rs['scanned_at'])); ?></span>
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center mt-1">
+                                            <span class="text-white-50 text-truncate" style="max-width: 170px; font-size: 0.72rem;"><?php echo htmlspecialchars($rs['checkpoint_name']); ?></span>
+                                            <?php if ($rs['access_status'] === 'granted'): ?>
+                                                <span class="badge bg-success" style="font-size: 0.65rem;"><?php echo strtoupper(str_replace('_', ' ', $rs['scan_action'])); ?></span>
+                                            <?php else: ?>
+                                                <span class="badge bg-danger" style="font-size: 0.65rem;">DENIED</span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -751,6 +740,18 @@ if ($recQ) {
         });
     }
 
+    function handleStaffRowClick(event, uid, badgeCode) {
+        if (event.target.closest('button')) {
+            return;
+        }
+        document.querySelectorAll('.staff-result-item').forEach(el => el.classList.remove('border-info', 'shadow-sm'));
+        const row = document.getElementById('staff-row-' + uid);
+        if (row) {
+            row.classList.add('border-info');
+        }
+        triggerVenueScan(badgeCode, 'verify_only', 'Staff Selection', uid);
+    }
+
     function handleStaffButtonAction(uid, badgeCode, action) {
         const btnIn = document.getElementById('btn-checkin-' + uid);
         const btnOut = document.getElementById('btn-checkout-' + uid);
@@ -816,12 +817,14 @@ if ($recQ) {
         document.getElementById('cameraStageWrap').classList.toggle('camera-mirror');
     }
 
-    // Enumerate cameras and prioritize Logitech webcams if connected
     document.addEventListener('DOMContentLoaded', function() {
         syncAllStaffButtonStates();
-        if (typeof Html5Qrcode !== 'undefined') {
+        const searchBox = document.getElementById('staffNameSearchInput');
+        if (searchBox) searchBox.focus();
+
+        const select = document.getElementById('cameraDeviceSelect');
+        if (select && typeof Html5Qrcode !== 'undefined') {
             Html5Qrcode.getCameras().then(function(devices) {
-                const select = document.getElementById('cameraDeviceSelect');
                 select.innerHTML = '';
                 if (!devices || devices.length === 0) {
                     select.innerHTML = '<option value="">No webcam detected (Plug in Logitech camera)</option>';
@@ -840,7 +843,7 @@ if ($recQ) {
                 });
                 select.selectedIndex = preferredIdx;
             }).catch(function() {
-                document.getElementById('cameraDeviceSelect').innerHTML = '<option value="">Click Start Camera to grant webcam permission</option>';
+                select.innerHTML = '<option value="">Click Start Camera to grant webcam permission</option>';
             });
         }
     });
@@ -918,6 +921,41 @@ if ($recQ) {
         triggerVenueScan(code, null, 'USB Barcode/QR Scanner');
     }
 
+    function getUserInitialsJs(name) {
+        const clean = (name || '').toString().trim();
+        if (!clean) return 'ST';
+        const parts = clean.split(/[\s_\-]+/).filter(Boolean);
+        if (parts.length >= 2) {
+            return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+        }
+        return parts[0].substring(0, 2).toUpperCase();
+    }
+
+    function renderUserAvatarHtml(profileImg, fullName, bgColor, sizePx, fontSize, extraClasses) {
+        const initials = getUserInitialsJs(fullName);
+        const color = bgColor || '#3b82f6';
+        const cls = extraClasses || '';
+        if (profileImg && profileImg.trim() !== '') {
+            return `
+                <img src="${profileImg}"
+                     alt="${fullName}"
+                     class="${cls}"
+                     style="width: ${sizePx}px; height: ${sizePx}px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 2px solid ${color};"
+                     onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.classList.remove('d-none');">
+                <div class="rounded-circle d-none d-inline-flex align-items-center justify-content-center fw-bold text-white ${cls}"
+                     style="width: ${sizePx}px; height: ${sizePx}px; background: ${color}; flex-shrink: 0; font-size: ${fontSize}; letter-spacing: 0.5px; border: 2px solid rgba(255,255,255,0.2);">
+                    ${initials}
+                </div>
+            `;
+        }
+        return `
+            <div class="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold text-white ${cls}"
+                 style="width: ${sizePx}px; height: ${sizePx}px; background: ${color}; flex-shrink: 0; font-size: ${fontSize}; letter-spacing: 0.5px; border: 2px solid rgba(255,255,255,0.2);">
+                ${initials}
+            </div>
+        `;
+    }
+
     function triggerVenueScan(scanInput, overrideMode, sourceLabel, fallbackUid) {
         const isVenue = document.getElementById('type_venue').checked;
         const cpType = isVenue ? 'event_venue' : 'stock_warehouse';
@@ -970,19 +1008,125 @@ if ($recQ) {
                 const actionBadge = data.scan_action === 'check_in' ? 'CHECKED IN' :
                                    (data.scan_action === 'check_out' ? 'CHECKED OUT' : 'VERIFIED');
 
+                const initials = getUserInitialsJs(u.full_name);
+                const uColor = u.clearance_color || '#17487a';
+                const hasProfileImg = u.profile_image && u.profile_image.trim() !== '';
+                const smallAvatarHtml = renderUserAvatarHtml(u.profile_image, u.full_name, u.clearance_color, 34, '0.72rem', '');
+                const roleDeptTag = (u.role ? u.role.replace(/_/g, ' ').toUpperCase() : 'CREW') + (u.department ? ' - ' + u.department.toUpperCase() : '');
+                const timeActionText = data.scan_action === 'check_in' ? 'Arrived at' : (data.scan_action === 'check_out' ? 'Departed at' : 'Scanned at');
+
+                box.className = 'rounded-4 overflow-hidden mb-3 shadow-lg border-0 text-start';
+                box.style.background = '#ffffff';
+
                 box.innerHTML = `
-                    <span class="badge ${granted ? 'bg-success' : 'bg-danger'} fs-6 px-3 py-2 mb-2">
-                        <i class="fas ${granted ? 'fa-circle-check' : 'fa-triangle-exclamation'} me-1"></i>
-                        ${granted ? 'ACCESS GRANTED • ' + actionBadge : 'ACCESS DENIED'}
-                    </span>
-                    <h5 class="fw-bold text-white mb-1">${u.full_name}</h5>
-                    <div class="mb-2">
-                        <span class="badge bg-dark border border-secondary font-monospace me-1">${u.badge_code}</span>
-                        <span class="badge" style="background: ${u.clearance_color};">${u.clearance_code}</span>
+                    <div class="row g-0">
+                        <!-- Left: Portrait Photo with Role Pill at Bottom -->
+                        <div class="col-md-5 position-relative" style="background: #e2e8f0; min-height: 290px;">
+                            ${hasProfileImg ? `
+                                <img src="${u.profile_image}"
+                                     alt="${u.full_name}"
+                                     style="width: 100%; height: 100%; min-height: 290px; max-height: 330px; object-fit: cover; object-position: center top; display: block;"
+                                     onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.classList.remove('d-none');">
+                            ` : ''}
+                            <div class="${hasProfileImg ? 'd-none' : ''} d-flex flex-column align-items-center justify-content-center w-100 h-100"
+                                 style="min-height: 290px; background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);">
+                                <div class="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold text-white shadow"
+                                     style="width: 96px; height: 96px; background: rgba(255,255,255,0.18); border: 3px solid rgba(255,255,255,0.4); font-size: 2.3rem; letter-spacing: 1px;">
+                                    ${initials}
+                                </div>
+                            </div>
+                            <!-- Bottom Cyan Role Pill -->
+                            <div class="position-absolute bottom-0 start-50 translate-middle-x mb-3 text-nowrap px-2" style="z-index: 3; max-width: 90%;">
+                                <span class="badge shadow text-truncate d-inline-block"
+                                      style="background: #2998d8; color: #ffffff; font-weight: 800; font-size: 0.82rem; padding: 7px 18px; border-radius: 20px; letter-spacing: 0.8px; max-width: 100%;">
+                                    ${roleDeptTag}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Right: Blue Header with Name, Status Circle, Big Pill, Timestamp & Footer -->
+                        <div class="col-md-7 d-flex flex-column justify-content-between" style="background: #ffffff;">
+                            <!-- Top Navy Blue Name Header -->
+                            <div class="px-4 py-3" style="background: #17487a;">
+                                <h3 class="fw-bold mb-0 text-white" style="letter-spacing: 0.5px; font-size: 1.65rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                                    ${u.full_name}
+                                </h3>
+                            </div>
+
+                            <!-- Middle Section: Clearance Pill + Circle Icon + ACCESS GRANTED + Timestamp -->
+                            <div class="p-3 px-4 position-relative d-flex flex-column align-items-center justify-content-center flex-grow-1">
+                                <!-- Top-Right Clearance Tag -->
+                                <div class="position-absolute top-0 end-0 p-3">
+                                    <span class="badge" style="background: #e2e8f0; color: #334155; font-size: 0.78rem; font-weight: 700; border-radius: 8px; padding: 5px 12px;">
+                                        ${u.clearance_title || 'Technical & Stage'}
+                                    </span>
+                                </div>
+
+                                <!-- Big Status Ring Icon -->
+                                <div class="mt-2 mb-2">
+                                    ${granted ? `
+                                        <div class="rounded-circle d-flex align-items-center justify-content-center shadow-sm"
+                                             style="width: 74px; height: 74px; border: 4.5px solid #22c55e; background: #ffffff;">
+                                            <i class="fas fa-check" style="font-size: 2.2rem; color: #22c55e;"></i>
+                                        </div>
+                                    ` : `
+                                        <div class="rounded-circle d-flex align-items-center justify-content-center shadow-sm"
+                                             style="width: 74px; height: 74px; border: 4.5px solid #ef4444; background: #ffffff;">
+                                            <i class="fas fa-times" style="font-size: 2.2rem; color: #ef4444;"></i>
+                                        </div>
+                                    `}
+                                </div>
+
+                                <!-- Big Status Action Button / Pill -->
+                                <div class="my-2">
+                                    <span class="badge shadow-sm"
+                                          style="background: ${granted ? '#16a34a' : '#dc2626'}; color: #ffffff; font-size: 1.18rem; font-weight: 800; border-radius: 10px; padding: 9px 26px; letter-spacing: 0.8px;">
+                                        ${granted ? 'ACCESS GRANTED' : 'ACCESS DENIED'}
+                                    </span>
+                                </div>
+
+                                <!-- Timestamp / Denial Reason -->
+                                <div class="mt-2 text-center">
+                                    <span class="fw-bold" style="color: #0f2e5a; font-size: 0.95rem;">
+                                        ${timeActionText} - ${data.scanned_at}.
+                                    </span>
+                                    ${!granted ? `<div class="small text-danger fw-semibold mt-1">${data.reason}</div>` : ''}
+                                </div>
+                            </div>
+
+                            <!-- Bottom Footer Bar: Badge #, Location & Quick Function Buttons -->
+                            <div class="px-3 py-2 d-flex flex-wrap justify-content-between align-items-center border-top"
+                                 style="background: #edf2f7; border-color: #e2e8f0 !important; font-size: 0.88rem;">
+                                <div>
+                                    <strong style="color: #0f2e5a; font-family: monospace; letter-spacing: 0.5px; font-size: 0.92rem;">
+                                        BADGE #: ${u.badge_code}
+                                    </strong>
+                                </div>
+                                <div class="d-flex align-items-center gap-1">
+                                    <i class="fas fa-map-marker-alt" style="color: #b45309;"></i>
+                                    <span class="fst-italic text-secondary" style="font-size: 0.82rem;">
+                                        ${data.checkpoint_name} ${granted ? 'Clearance - Verified.' : '— Denied.'}
+                                    </span>
+                                </div>
+                                <div class="d-flex gap-1">
+                                    <button type="button"
+                                            class="btn btn-xs ${granted && data.scan_action === 'check_in' ? 'btn-success' : 'btn-outline-success'} fw-bold px-2 py-1"
+                                            style="font-size: 0.72rem; border-radius: 6px;"
+                                            onclick="handleStaffButtonAction(${u.id}, '${u.badge_code}', 'check_in')"
+                                            title="Check In">
+                                        <i class="fas fa-sign-in-alt me-1"></i>Checkin
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-xs ${granted && data.scan_action === 'check_out' ? 'btn-warning text-dark' : 'btn-outline-warning text-dark'} fw-bold px-2 py-1"
+                                            style="font-size: 0.72rem; border-radius: 6px;"
+                                            onclick="handleStaffButtonAction(${u.id}, '${u.badge_code}', 'check_out')"
+                                            title="Check Out">
+                                        <i class="fas fa-sign-out-alt me-1"></i>Checkout
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="small text-white-50 mb-1">${u.role} • ${u.department}</div>
-                    <div class="small fw-semibold ${granted ? 'text-success' : 'text-danger'}">${data.reason}</div>
-                    <div class="text-white-50 mt-1" style="font-size: 0.7rem;">${data.checkpoint_name} • ${data.scanned_at}</div>
                 `;
 
                 // Prepend to recent feed
@@ -992,15 +1136,20 @@ if ($recQ) {
                 item.style.background = 'rgba(15, 23, 42, 0.85)';
                 item.style.borderLeft = '3px solid ' + (granted ? '#10b981' : '#ef4444');
                 item.innerHTML = `
-                    <div class="d-flex justify-content-between">
-                        <strong class="text-white">${u.full_name}</strong>
-                        <span class="text-white-50" style="font-size: 0.7rem;">${data.scanned_at}</span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mt-1">
-                        <span class="text-white-50 text-truncate" style="max-width: 150px; font-size: 0.72rem;">${data.checkpoint_name}</span>
-                        <span class="badge ${granted ? 'bg-success' : 'bg-danger'}" style="font-size: 0.65rem;">
-                            ${granted ? actionBadge : 'DENIED'}
-                        </span>
+                    <div class="d-flex align-items-center gap-2">
+                        ${smallAvatarHtml}
+                        <div class="flex-grow-1 overflow-hidden">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong class="text-white text-truncate">${u.full_name}</strong>
+                                <span class="text-white-50 ms-2 flex-shrink-0" style="font-size: 0.7rem;">${data.scanned_at}</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mt-1">
+                                <span class="text-white-50 text-truncate" style="max-width: 170px; font-size: 0.72rem;">${data.checkpoint_name}</span>
+                                <span class="badge ${granted ? 'bg-success' : 'bg-danger'}" style="font-size: 0.65rem;">
+                                    ${granted ? actionBadge : 'DENIED'}
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 `;
                 feed.prepend(item);

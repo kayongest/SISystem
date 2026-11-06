@@ -16,10 +16,15 @@ ensureBadgesAndAttendanceTables($conn);
 $clearanceMeta = getClearanceLevelsMeta();
 $currentUserId = (int)($_SESSION['user_id'] ?? 0);
 
-// Load Stock Locations
+// Load Stock Locations directly from stock_locations table (matching the warehouse floor)
 $stockLocations = [];
 $stockMap = [];
-$stRes = @$conn->query("SELECT id, name, code, location_code, location, open_time, close_time, is_active FROM stock_locations ORDER BY name ASC");
+$stRes = @$conn->query("
+    SELECT id, name, code, location_code, location, open_time, close_time, is_active
+    FROM stock_locations
+    WHERE is_active = 1
+    ORDER BY id ASC
+");
 if ($stRes) {
     while ($row = $stRes->fetch_assoc()) {
         $sid = (int)$row['id'];
@@ -28,44 +33,47 @@ if ($stRes) {
     }
 }
 if (empty($stockLocations)) {
-    // Fallback default stock location if table empty
-    $stockLocations[] = [
-        'id' => 1,
-        'name' => 'Main Central Warehouse',
-        'code' => 'WH-MAIN',
-        'location_code' => 'WH-01',
-        'location' => 'Kigali Industrial Zone',
-        'open_time' => '08:00:00',
-        'close_time' => '18:00:00',
-        'is_active' => 1
+    $stockLocations = [
+        ['id' => 1, 'name' => 'Ndera Warehouse', 'code' => 'NDR-STK', 'location_code' => 'NDR', 'location' => 'Ndera Central Warehouse', 'open_time' => '08:00:00', 'close_time' => '18:00:00', 'is_active' => 1],
+        ['id' => 2, 'name' => 'BK Arena Stock', 'code' => 'BKA-STK', 'location_code' => 'BKA', 'location' => 'BK Arena Stock Room', 'open_time' => '08:00:00', 'close_time' => '18:00:00', 'is_active' => 1],
+        ['id' => 3, 'name' => 'KCC Stock', 'code' => 'KCC-STK', 'location_code' => 'KCC', 'location' => 'Kigali Convention Centre Stock', 'open_time' => '08:00:00', 'close_time' => '18:00:00', 'is_active' => 1]
     ];
-    $stockMap[1] = $stockLocations[0];
+    foreach ($stockLocations as $sl) {
+        $stockMap[(int)$sl['id']] = $sl;
+    }
 }
+$stockNames = array_map(function($s) { return $s['name']; }, $stockLocations);
+$stockLabelSummary = !empty($stockNames) ? implode(', ', array_slice($stockNames, 0, 3)) . (count($stockNames) > 3 ? '..' : '') : 'Stock Warehouses';
 
 // Load Event Venues
 $eventsList = [];
 $eventMap = [];
-$evRes = @$conn->query("SELECT id, title, location, date, call_time, project_manager, tech_lead, assigned_technician FROM events ORDER BY date DESC, id DESC LIMIT 30");
+$evRes = @$conn->query("
+    SELECT id, title, location, date, call_time, project_manager, tech_lead, assigned_technician
+    FROM events
+    ORDER BY date DESC, id DESC
+    LIMIT 30
+");
 if ($evRes) {
     while ($row = $evRes->fetch_assoc()) {
-        $eid = (int)$row['id'];
+        $eid = normalizeEventNumericId($row['id']);
+        $row['id'] = $eid;
         $eventsList[] = $row;
         $eventMap[$eid] = $row;
     }
 }
 if (empty($eventsList)) {
-    $eventsList[] = [
-        'id' => 1,
-        'title' => 'Main Arena Production',
-        'location' => 'BK Arena, Kigali',
-        'date' => date('Y-m-d'),
-        'call_time' => '09:00',
-        'project_manager' => 'Operations PM',
-        'tech_lead' => 'Tech Lead',
-        'assigned_technician' => ''
+    $eventsList = [
+        ['id' => 1, 'title' => 'Marriot Hotel', 'location' => 'Kigali Marriott Hotel', 'date' => date('Y-m-d'), 'call_time' => '08:00', 'project_manager' => 'Operations PM', 'tech_lead' => 'Tech Lead', 'assigned_technician' => ''],
+        ['id' => 2, 'title' => 'FourPoint Hotel', 'location' => 'Four Points by Sheraton', 'date' => date('Y-m-d'), 'call_time' => '08:30', 'project_manager' => 'Operations PM', 'tech_lead' => 'Tech Lead', 'assigned_technician' => ''],
+        ['id' => 3, 'title' => 'MovenPick Hotel', 'location' => 'Mövenpick Hotel Kigali', 'date' => date('Y-m-d'), 'call_time' => '09:00', 'project_manager' => 'Operations PM', 'tech_lead' => 'Tech Lead', 'assigned_technician' => '']
     ];
-    $eventMap[1] = $eventsList[0];
+    foreach ($eventsList as $ev) {
+        $eventMap[(int)$ev['id']] = $ev;
+    }
 }
+$eventTitles = array_map(function($e) { return $e['title']; }, $eventsList);
+$venueLabelSummary = !empty($eventTitles) ? implode(', ', array_slice($eventTitles, 0, 3)) . (count($eventTitles) > 3 ? '..' : '') : 'Event Venues';
 
 // ==================== AJAX & FORM POST HANDLERS ====================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
@@ -446,10 +454,11 @@ foreach ($attendanceLogs as $log) {
     }
 }
 
-// KPI Counters
+// KPI Counters & Today's Checkpoint States
 $totalBadges = count($usersWithBadges);
 $activeBadgesCount = 0;
 $stockAuthorizedCount = 0;
+$venueAuthorizedCount = 0;
 foreach ($usersWithBadges as $ub) {
     if (($ub['badge_status'] ?? 'active') === 'active' && (int)$ub['is_active'] === 1) {
         $activeBadgesCount++;
@@ -457,12 +466,35 @@ foreach ($usersWithBadges as $ub) {
     if (($ub['clearance_level'] ?? '') === 'L4_ALL_ACCESS' || ($ub['stock_access_mode'] ?? 'none') !== 'none') {
         $stockAuthorizedCount++;
     }
+    if (($ub['clearance_level'] ?? '') === 'L4_ALL_ACCESS' || ($ub['venue_access_mode'] ?? 'assigned_only') !== 'none') {
+        $venueAuthorizedCount++;
+    }
 }
 $onSiteCount = count($onSiteRoster);
 $deniedTodayCount = 0;
 foreach ($attendanceLogs as $al) {
     if ($al['access_status'] === 'denied') {
         $deniedTodayCount++;
+    }
+}
+
+// Build today's attendance state map per checkpoint: "{checkpoint_type}_{checkpoint_id}_{user_id}" => ['state' => 'checked_in'|'checked_out', 'time' => 'HH:MM AM']
+$todayCheckpointStates = [];
+$stateQ = $conn->query("
+    SELECT user_id, checkpoint_type, checkpoint_id, scan_action, DATE_FORMAT(scanned_at, '%h:%i %p') as scan_time
+    FROM attendance_logs
+    WHERE access_status = 'granted'
+      AND DATE(scanned_at) = CURDATE()
+      AND scan_action IN ('check_in', 'check_out')
+    ORDER BY scanned_at ASC, id ASC
+");
+if ($stateQ) {
+    while ($sr = $stateQ->fetch_assoc()) {
+        $sKey = $sr['checkpoint_type'] . '_' . (int)$sr['checkpoint_id'] . '_' . (int)$sr['user_id'];
+        $todayCheckpointStates[$sKey] = [
+            'state' => ($sr['scan_action'] === 'check_in') ? 'checked_in' : 'checked_out',
+            'time' => $sr['scan_time']
+        ];
     }
 }
 
@@ -836,10 +868,19 @@ require_once 'views/partials/header.php';
                 <div class="kpi-icon-circle bg-success-subtle text-success">
                     <i class="fas fa-warehouse"></i>
                 </div>
-                <div>
-                    <div class="text-muted small fw-semibold">Stock Warehouse Cleared</div>
-                    <div class="fs-4 fw-bold text-dark"><?php echo $stockAuthorizedCount; ?> <span class="fs-6 text-muted fw-normal">Staff</span></div>
-                    <div class="small text-muted"><?php echo count($stockLocations); ?> Stock Locations Active</div>
+                <div class="flex-grow-1 overflow-hidden">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-muted small fw-semibold">Stock &amp; Venue Cleared</span>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.65rem;"><?php echo $stockAuthorizedCount; ?> Stock / <?php echo $venueAuthorizedCount; ?> Venue</span>
+                    </div>
+                    <div class="mt-1" style="font-size: 0.76rem; line-height: 1.35;">
+                        <div class="text-truncate" title="Stock (<?php echo htmlspecialchars($stockLabelSummary); ?>)" style="cursor: pointer;" onclick="openTerminalWithToggle('stock_warehouse')">
+                            <i class="fas fa-warehouse text-success me-1"></i><strong>Stock:</strong> <span class="text-dark fw-semibold"><?php echo htmlspecialchars($stockLabelSummary); ?></span>
+                        </div>
+                        <div class="text-truncate mt-1" title="Venue (<?php echo htmlspecialchars($venueLabelSummary); ?>)" style="cursor: pointer;" onclick="openTerminalWithToggle('event_venue')">
+                            <i class="fas fa-hotel text-primary me-1"></i><strong>Venue:</strong> <span class="text-dark fw-semibold"><?php echo htmlspecialchars($venueLabelSummary); ?></span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -879,7 +920,7 @@ require_once 'views/partials/header.php';
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link <?php echo ($initialTab === 'kiosk') ? 'active' : ''; ?>" id="tab-kiosk-btn" data-bs-toggle="pill" data-bs-target="#pane-kiosk" type="button" role="tab">
-                    <i class="fas fa-qrcode me-2 text-warning"></i>2. Gate Scanner &amp; Check-In Kiosk
+                    <i class="fas fa-qrcode me-2 text-warning"></i>2. Attendance &amp; Gate Access Terminal
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -961,10 +1002,10 @@ require_once 'views/partials/header.php';
                     $badgeStatus = $u['badge_status'] ?: 'active';
                     $isActiveBadge = ($badgeStatus === 'active' && (int)$u['is_active'] === 1);
 
-                    // Compute authorized Stock names summary
+                    // Compute authorized Stock names summary (BKAr, KCC)
                     $stockSummary = 'No Warehouse Access';
                     if ($cKey === 'L4_ALL_ACCESS' || $u['stock_access_mode'] === 'all') {
-                        $stockSummary = 'All Stock Warehouses (' . count($stockLocations) . ')';
+                        $stockSummary = 'BKAr, KCC (All Stock)';
                     } elseif ($u['stock_access_mode'] === 'selected' && !empty($u['allowed_stock_array'])) {
                         $sNames = [];
                         foreach ($u['allowed_stock_array'] as $sid) {
@@ -972,13 +1013,13 @@ require_once 'views/partials/header.php';
                                 $sNames[] = $stockMap[$sid]['name'];
                             }
                         }
-                        $stockSummary = !empty($sNames) ? implode(', ', array_slice($sNames, 0, 2)) : 'Selected Stock Only';
+                        $stockSummary = !empty($sNames) ? implode(', ', array_slice($sNames, 0, 2)) : 'BKAr, KCC';
                     }
 
-                    // Compute authorized Venue summary
-                    $venueSummary = 'Assigned Event Venues';
+                    // Compute authorized Venue summary (Marriot Hotel, FourPoint Hotel, MovenPick Hotel..)
+                    $venueSummary = 'Marriot, FourPoint, MovenPick..';
                     if ($cKey === 'L4_ALL_ACCESS' || $u['venue_access_mode'] === 'all') {
-                        $venueSummary = 'All Event Venues & Backstage';
+                        $venueSummary = 'Marriot, FourPoint, MovenPick (All)';
                     } elseif ($u['venue_access_mode'] === 'selected' && !empty($u['allowed_event_array'])) {
                         $eNames = [];
                         foreach ($u['allowed_event_array'] as $eid) {
@@ -986,7 +1027,7 @@ require_once 'views/partials/header.php';
                                 $eNames[] = $eventMap[$eid]['title'];
                             }
                         }
-                        $venueSummary = !empty($eNames) ? implode(', ', array_slice($eNames, 0, 2)) : 'Selected Venues';
+                        $venueSummary = !empty($eNames) ? implode(', ', array_slice($eNames, 0, 2)) : 'Marriot, FourPoint..';
                     } elseif ($u['venue_access_mode'] === 'none') {
                         $venueSummary = 'Restricted / Office Only';
                     }
@@ -1123,11 +1164,12 @@ require_once 'views/partials/header.php';
                                     <!-- Stock Warehouses Authorized -->
                                     <div class="mb-2">
                                         <div class="fw-bold text-uppercase text-muted mb-1" style="font-size: 0.65rem;">
-                                            <i class="fas fa-warehouse text-success me-1"></i>Authorized Stock Locations
+                                            <i class="fas fa-warehouse text-success me-1"></i>Stock (BKAr, KCC)
                                         </div>
                                         <div class="p-2 rounded bg-light border">
                                             <?php if ($cKey === 'L4_ALL_ACCESS' || $u['stock_access_mode'] === 'all'): ?>
-                                                <span class="badge bg-success-subtle text-success border border-success-subtle">All Stock Warehouses &amp; Vaults</span>
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle me-1">BKAr</span>
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle">KCC</span>
                                             <?php elseif ($u['stock_access_mode'] === 'selected' && !empty($u['allowed_stock_array'])): ?>
                                                 <?php foreach ($u['allowed_stock_array'] as $sid):
                                                     if (!isset($stockMap[$sid])) continue;
@@ -1143,13 +1185,13 @@ require_once 'views/partials/header.php';
                                     <!-- Event Venues Authorized -->
                                     <div class="mb-2">
                                         <div class="fw-bold text-uppercase text-muted mb-1" style="font-size: 0.65rem;">
-                                            <i class="fas fa-location-dot text-primary me-1"></i>Authorized Event Venues
+                                            <i class="fas fa-location-dot text-primary me-1"></i>Venue (Marriot, FourPoint, MovenPick..)
                                         </div>
                                         <div class="p-2 rounded bg-light border">
-                                            <?php if ($cKey === 'L4_ALL_ACCESS' || $u['venue_access_mode'] === 'all'): ?>
-                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">All Production Venues &amp; Backstage</span>
-                                            <?php elseif ($u['venue_access_mode'] === 'assigned_only'): ?>
-                                                <span class="badge bg-info-subtle text-info border border-info-subtle">Assigned Event Venues &amp; Calltimes</span>
+                                            <?php if ($cKey === 'L4_ALL_ACCESS' || $u['venue_access_mode'] === 'all' || $u['venue_access_mode'] === 'assigned_only'): ?>
+                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1 mb-1">Marriot Hotel</span>
+                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1 mb-1">FourPoint Hotel</span>
+                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle mb-1">MovenPick Hotel..</span>
                                             <?php elseif ($u['venue_access_mode'] === 'selected' && !empty($u['allowed_event_array'])): ?>
                                                 <?php foreach (array_slice($u['allowed_event_array'], 0, 3) as $eid):
                                                     if (!isset($eventMap[$eid])) continue;
@@ -1227,119 +1269,280 @@ require_once 'views/partials/header.php';
             </div>
         </div>
 
-        <!-- ==================== TAB 2: GATE SCANNER & CHECK-IN KIOSK ==================== -->
+        <!-- ==================== TAB 2: ATTENDANCE & GATE ACCESS TERMINAL ==================== -->
         <div class="tab-pane fade <?php echo ($initialTab === 'kiosk') ? 'show active' : ''; ?> no-print" id="pane-kiosk" role="tabpanel">
-            <div class="row g-4">
-                <!-- Left Column: Kiosk Checkpoint & Scanner Input -->
-                <div class="col-lg-5">
-                    <div class="card border-0 shadow-sm rounded-4">
-                        <div class="card-header bg-dark text-white py-3 rounded-top-4">
-                            <h5 class="mb-0 fw-bold"><i class="fas fa-qrcode text-warning me-2"></i>Attendance &amp; Gate Access Terminal</h5>
-                            <div class="small text-white-50">Verify badge clearance &amp; record attendance at Stock or Venues</div>
+            <!-- Top Terminal Control Card with 2 Toggles: Stock & Venue -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
+                <div class="card-header bg-dark text-white py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div>
+                        <h5 class="mb-0 fw-bold"><i class="fas fa-qrcode text-warning me-2"></i>Attendance &amp; Gate Access Terminal</h5>
+                        <div class="small text-white-50">Toggle between <strong>Stock (<?php echo htmlspecialchars($stockLabelSummary); ?>)</strong> and <strong>Venue (<?php echo htmlspecialchars($venueLabelSummary); ?>)</strong></div>
+                    </div>
+
+                    <!-- 2 Main Toggles: Stock & Venue -->
+                    <div class="btn-group" role="group" aria-label="Stock and Venue Toggle">
+                        <input type="radio" class="btn-check" name="checkpoint_type" id="cp_type_stock" value="stock_warehouse" checked onchange="toggleCheckpointDropdown()">
+                        <label class="btn btn-outline-success fw-bold px-4 py-2" for="cp_type_stock">
+                            <i class="fas fa-warehouse me-2"></i>Stock (<?php echo htmlspecialchars($stockLabelSummary); ?>)
+                        </label>
+
+                        <input type="radio" class="btn-check" name="checkpoint_type" id="cp_type_venue" value="event_venue" onchange="toggleCheckpointDropdown()">
+                        <label class="btn btn-outline-info fw-bold px-4 py-2" for="cp_type_venue">
+                            <i class="fas fa-hotel me-2"></i>Venue (<?php echo htmlspecialchars($venueLabelSummary); ?>)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="card-body p-3 bg-light border-top">
+                    <!-- Stock Location Selector Wrap (Shown when Stock Toggle is active) -->
+                    <div id="stockCheckpointSelectWrap" class="row g-3 align-items-center">
+                        <div class="col-lg-5">
+                            <label class="form-label fw-bold small text-success mb-1">
+                                <i class="fas fa-warehouse me-1"></i>Active Stock Warehouse Gate (<?php echo htmlspecialchars($stockLabelSummary); ?>)
+                            </label>
+                            <select class="form-select fw-bold border-success" id="kiosk_stock_id" onchange="syncKioskStaffButtonStates()">
+                                <?php foreach ($stockLocations as $sl): ?>
+                                    <option value="<?php echo (int)$sl['id']; ?>">
+                                        <?php echo htmlspecialchars($sl['name'] . (!empty($sl['code']) ? ' (' . $sl['code'] . ')' : '') . (!empty($sl['location']) ? ' — ' . $sl['location'] : '')); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
-                        <div class="card-body p-4">
-                            <form id="gateKioskForm" onsubmit="submitGateScan(event)">
-                                <!-- Step 1: Select Checkpoint Type -->
-                                <label class="form-label fw-bold small text-uppercase text-muted">1. Select Checkpoint Category</label>
-                                <div class="row g-2 mb-3">
-                                    <div class="col-6">
-                                        <input type="radio" class="btn-check" name="checkpoint_type" id="cp_type_stock" value="stock_warehouse" checked onchange="toggleCheckpointDropdown()">
-                                        <label class="btn btn-outline-success w-100 fw-bold py-2" for="cp_type_stock">
-                                            <i class="fas fa-warehouse d-block fs-4 mb-1"></i>Stock Warehouse
-                                        </label>
+                        <div class="col-lg-7">
+                            <div class="small text-muted fw-semibold mb-1">Quick Select Stock Gate:</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <?php foreach ($stockLocations as $idx => $sl): ?>
+                                    <button type="button"
+                                            class="btn btn-sm <?php echo $idx === 0 ? 'btn-success' : 'btn-outline-success'; ?> fw-bold stock-quick-pill"
+                                            data-stock-id="<?php echo (int)$sl['id']; ?>"
+                                            onclick="selectQuickStockGate(<?php echo (int)$sl['id']; ?>, this)">
+                                        <i class="fas fa-warehouse me-1"></i><?php echo htmlspecialchars($sl['name']); ?>
+                                    </button>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Event Venue Selector Wrap (Shown when Venue Toggle is active) -->
+                    <div id="venueCheckpointSelectWrap" class="row g-3 align-items-center d-none">
+                        <div class="col-lg-5">
+                            <label class="form-label fw-bold small text-primary mb-1">
+                                <i class="fas fa-hotel me-1"></i>Active Event Venue (<?php echo htmlspecialchars($venueLabelSummary); ?>)
+                            </label>
+                            <select class="form-select fw-bold border-primary" id="kiosk_event_id" onchange="syncKioskStaffButtonStates()">
+                                <?php foreach ($eventsList as $ev): ?>
+                                    <option value="<?php echo (int)$ev['id']; ?>">
+                                        <?php echo htmlspecialchars($ev['title'] . (!empty($ev['location']) ? ' — ' . $ev['location'] : '') . ' (Calltime: ' . ($ev['call_time'] ?: '08:00') . ')'); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-lg-7">
+                            <div class="small text-muted fw-semibold mb-1">Quick Select Hotel / Event Venue:</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <?php foreach (array_slice($eventsList, 0, 6) as $idx => $ev): ?>
+                                    <button type="button"
+                                            class="btn btn-sm <?php echo $idx === 0 ? 'btn-primary' : 'btn-outline-primary'; ?> fw-bold venue-quick-pill"
+                                            data-event-id="<?php echo (int)$ev['id']; ?>"
+                                            onclick="selectQuickVenueGate(<?php echo (int)$ev['id']; ?>, this)">
+                                        <i class="fas fa-location-dot me-1"></i><?php echo htmlspecialchars($ev['title']); ?>
+                                    </button>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Two Columns: Left (col-lg-5) = Search Staff (Checkin -> Checkout) & Badge Scan | Right (col-lg-7) = Live Gate Decision & Feed -->
+            <div class="row g-4">
+                <!-- Left Column (col-lg-5): Search Staff by Name + Checkin/Checkout & Scanner Input -->
+                <div class="col-lg-5">
+                    <div class="card border-0 shadow-sm rounded-4 h-100">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
+                            <div>
+                                <h5 class="mb-0 fw-bold text-dark">
+                                    <i class="fas fa-magnifying-glass text-primary me-2"></i>Search Staff by Name or Scan Badge
+                                </h5>
+                                <div class="small text-muted">Type name &rarr; Find &rarr; Click <strong>Checkin</strong> (disables) then <strong>Checkout</strong> (disables)</div>
+                            </div>
+                            <span class="badge bg-dark text-white" id="kioskStaffMatchBadge"><?php echo count($usersWithBadges); ?> Staff</span>
+                        </div>
+
+                        <div class="card-body p-3">
+                            <!-- Search by Name Input + Find Button -->
+                            <form onsubmit="event.preventDefault();filterKioskStaffByName();" class="mb-3">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-primary"><i class="fas fa-search"></i></span>
+                                    <input type="text" id="kioskStaffSearchInput" class="form-control fw-semibold" placeholder="Type staff name, role, or badge (ABL-BDG-0001)..." oninput="filterKioskStaffByName()" autocomplete="off">
+                                    <button type="submit" class="btn btn-primary fw-bold px-3">Find</button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('kioskStaffSearchInput').value='';filterKioskStaffByName();" title="Clear">
+                                        <i class="fas fa-xmark"></i>
+                                    </button>
+                                </div>
+                            </form>
+
+                            <!-- Staff List with Stateful Checkin -> Checkout Buttons -->
+                            <div class="overflow-auto pe-1" style="max-height: 390px;" id="kioskStaffListContainer">
+                                <?php foreach ($usersWithBadges as $uid => $ub):
+                                    $fullName = $ub['full_name'] ?: $ub['username'];
+                                    $ubInitials = getUserInitials($fullName);
+                                    $cKey = $ub['clearance_level'] ?: 'L1_VENUE_BASIC';
+                                    $cInfo = $clearanceMeta[$cKey] ?? $clearanceMeta['L1_VENUE_BASIC'];
+                                ?>
+                                <div class="p-2 mb-2 rounded-3 border bg-white d-flex justify-content-between align-items-center gap-2 kiosk-staff-row"
+                                     id="kiosk-staff-row-<?php echo $uid; ?>"
+                                     data-uid="<?php echo $uid; ?>"
+                                     data-search="<?php echo strtolower(htmlspecialchars($fullName . ' ' . $ub['username'] . ' ' . $ub['badge_code'] . ' ' . $ub['staff_code'] . ' ' . $ub['role'] . ' ' . ($ub['department'] ?? ''))); ?>"
+                                     style="cursor: pointer; transition: all 0.2s;"
+                                     onclick="handleKioskStaffRowClick(event, <?php echo $uid; ?>, '<?php echo htmlspecialchars($ub['badge_code']); ?>')">
+                                    <div class="d-flex align-items-center gap-2 overflow-hidden">
+                                        <?php if ($ub['has_photo']): ?>
+                                            <img src="<?php echo htmlspecialchars($ub['profile_image']); ?>"
+                                                 alt="<?php echo htmlspecialchars($fullName); ?>"
+                                                 style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 2px solid <?php echo $cInfo['color']; ?>;"
+                                                 onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.classList.remove('d-none');">
+                                            <div class="rounded-circle d-none text-white d-flex align-items-center justify-content-center fw-bold"
+                                                 style="width: 40px; height: 40px; background: <?php echo $cInfo['color']; ?>; flex-shrink: 0; font-size: 0.8rem;">
+                                                <?php echo htmlspecialchars($ubInitials); ?>
+                                            </div>
+                                        <?php else: ?>
+                                            <div class="rounded-circle text-white d-flex align-items-center justify-content-center fw-bold"
+                                                 style="width: 40px; height: 40px; background: <?php echo $cInfo['color']; ?>; flex-shrink: 0; font-size: 0.8rem;">
+                                                <?php echo htmlspecialchars($ubInitials); ?>
+                                            </div>
+                                        <?php endif; ?>
+                                        <div class="text-truncate">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="fw-bold text-dark text-truncate"><?php echo htmlspecialchars($fullName); ?></span>
+                                                <span id="kiosk-status-pill-<?php echo $uid; ?>" class="badge bg-secondary-subtle text-secondary" style="font-size: 0.62rem;">Ready</span>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-1 mt-1" style="font-size: 0.72rem;">
+                                                <span class="badge bg-dark font-monospace"><?php echo htmlspecialchars($ub['badge_code']); ?></span>
+                                                <span class="badge" style="background: <?php echo $cInfo['color']; ?>;"><?php echo $cInfo['code']; ?></span>
+                                                <span class="text-muted text-truncate"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $ub['role']))); ?></span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="col-6">
-                                        <input type="radio" class="btn-check" name="checkpoint_type" id="cp_type_venue" value="event_venue" onchange="toggleCheckpointDropdown()">
-                                        <label class="btn btn-outline-primary w-100 fw-bold py-2" for="cp_type_venue">
-                                            <i class="fas fa-location-dot d-block fs-4 mb-1"></i>Event Venue
-                                        </label>
+
+                                    <div class="d-flex gap-1 flex-shrink-0">
+                                        <button type="button"
+                                                id="kiosk-btn-checkin-<?php echo $uid; ?>"
+                                                class="btn btn-sm btn-success fw-bold px-2 py-1"
+                                                style="font-size: 0.76rem;"
+                                                onclick="handleKioskStaffAction(<?php echo $uid; ?>, '<?php echo htmlspecialchars($ub['badge_code']); ?>', 'check_in')">
+                                            <i class="fas fa-sign-in-alt me-1"></i>Checkin
+                                        </button>
+                                        <button type="button"
+                                                id="kiosk-btn-checkout-<?php echo $uid; ?>"
+                                                class="btn btn-sm btn-warning fw-bold text-dark px-2 py-1"
+                                                style="font-size: 0.76rem;"
+                                                disabled
+                                                onclick="handleKioskStaffAction(<?php echo $uid; ?>, '<?php echo htmlspecialchars($ub['badge_code']); ?>', 'check_out')">
+                                            <i class="fas fa-sign-out-alt me-1"></i>Checkout
+                                        </button>
                                     </div>
                                 </div>
+                                <?php endforeach; ?>
+                            </div>
 
-                                <!-- Step 2: Specific Stock Location or Event Venue -->
-                                <div class="mb-3" id="stockCheckpointSelectWrap">
-                                    <label class="form-label fw-bold small">2. Active Stock Warehouse Gate</label>
-                                    <select class="form-select" id="kiosk_stock_id">
-                                        <?php foreach ($stockLocations as $sl): ?>
-                                            <option value="<?php echo (int)$sl['id']; ?>">
-                                                <?php echo htmlspecialchars($sl['name'] . (!empty($sl['code']) ? ' (' . $sl['code'] . ')' : '')); ?>
-                                                — Hours: <?php echo substr($sl['open_time'] ?? '08:00', 0, 5); ?> to <?php echo substr($sl['close_time'] ?? '18:00', 0, 5); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
+                            <!-- Direct QR / USB Scanner Input Bar -->
+                            <form id="gateKioskForm" onsubmit="submitGateScan(event)" class="mt-3 pt-3 border-top">
+                                <input type="hidden" id="kiosk_scan_mode" value="auto">
+                                <input type="hidden" id="kiosk_scan_notes" value="">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-dark text-warning"><i class="fas fa-barcode me-1"></i>Scanner</span>
+                                    <input type="text" class="form-control fw-bold font-monospace" id="kiosk_scan_input" placeholder="Or scan badge QR / barcode here (ABL-BDG-0001)..." autocomplete="off">
+                                    <button type="submit" class="btn btn-dark fw-bold">
+                                        <i class="fas fa-bolt me-1 text-warning"></i>Scan Badge
+                                    </button>
                                 </div>
-
-                                <div class="mb-3 d-none" id="venueCheckpointSelectWrap">
-                                    <label class="form-label fw-bold small">2. Active Event Venue &amp; Calltime</label>
-                                    <select class="form-select" id="kiosk_event_id">
-                                        <?php foreach ($eventsList as $ev): ?>
-                                            <option value="<?php echo (int)$ev['id']; ?>">
-                                                <?php echo htmlspecialchars($ev['title'] . (!empty($ev['location']) ? ' @ ' . $ev['location'] : '')); ?>
-                                                (Calltime: <?php echo htmlspecialchars($ev['call_time'] ?: '08:00'); ?>)
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-
-                                <!-- Step 3: Scan Action Mode -->
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold small">3. Attendance Action</label>
-                                    <select class="form-select form-select-sm" id="kiosk_scan_mode">
-                                        <option value="auto">Auto-Detect (Toggle Check-In / Check-Out)</option>
-                                        <option value="check_in">Force Check-In (Arrival)</option>
-                                        <option value="check_out">Force Check-Out (Departure)</option>
-                                        <option value="access_verify">Verify Door Clearance Only</option>
-                                    </select>
-                                </div>
-
-                                <!-- Step 4: Badge Code / QR Input -->
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold small">4. Scan QR / RFID or Select Staff Badge</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-dark text-warning"><i class="fas fa-barcode"></i></span>
-                                        <input type="text" class="form-control form-control-lg fw-bold" id="kiosk_scan_input" placeholder="Scan ABL-BDG-0001 or TAX-0001..." required autocomplete="off">
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center mt-2">
-                                        <span class="text-muted small">Or quick-pick staff member to simulate scan:</span>
-                                        <select class="form-select form-select-sm w-auto" onchange="if(this.value){document.getElementById('kiosk_scan_input').value=this.value;submitGateScan();}">
-                                            <option value="">— Quick Test Staff —</option>
-                                            <?php foreach ($usersWithBadges as $ub): ?>
-                                                <option value="<?php echo htmlspecialchars($ub['badge_code']); ?>">
-                                                    <?php echo htmlspecialchars($ub[' badge_code'] ?? $ub['badge_code']); ?> — <?php echo htmlspecialchars($ub['full_name'] ?: $ub['username']); ?> (<?php echo htmlspecialchars($ub['role']); ?>)
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div class="mb-3">
-                                    <input type="text" class="form-control form-control-sm" id="kiosk_scan_notes" placeholder="Optional gate note (e.g., Loading Bay 2, Shift handover)...">
-                                </div>
-
-                                <button type="submit" class="btn btn-primary w-100 fw-bold py-2 fs-6 shadow-sm">
-                                    <i class="fas fa-bolt me-2"></i>Verify Clearance &amp; Record Scan
-                                </button>
                             </form>
                         </div>
                     </div>
                 </div>
 
-                <!-- Right Column: Live Verification Result Display -->
+                <!-- Right Column (col-lg-7): Live Gate Decision & Recent Scans Feed -->
                 <div class="col-lg-7">
-                    <div id="kioskResultPlaceholder" class="card border-0 shadow-sm rounded-4 h-100 d-flex align-items-center justify-content-center p-5 text-center">
-                        <div>
-                            <div class="rounded-circle bg-light d-inline-flex align-items-center justify-content-center mb-3" style="width: 90px; height: 90px;">
-                                <i class="fas fa-id-card-clip fa-3x text-secondary"></i>
+                    <div class="card border-0 shadow-sm rounded-4 h-100">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
+                            <div>
+                                <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-shield-check text-success me-2"></i>Live Gate Decision &amp; Recent Scans</h5>
+                                <div class="small text-muted" id="activeCheckpointBannerLabel">Active Gate: Stock (BKAr / KCC)</div>
                             </div>
-                            <h5 class="fw-bold text-dark">Ready to Scan Staff ID Badge</h5>
-                            <p class="text-muted small mx-auto" style="max-width: 420px;">
-                                Present a staff CR80 QR Code, RFID tag, or select a staff member on the left to verify their clearance for the active <strong>Stock Warehouse</strong> or <strong>Event Venue</strong>.
-                            </p>
+                            <a href="venue_scanner.php" target="_blank" class="btn btn-xs btn-outline-primary fw-bold">
+                                <i class="fas fa-up-right-from-square me-1"></i>Full-Screen Kiosk
+                            </a>
                         </div>
-                    </div>
 
-                    <div id="kioskResultActiveCard" class="p-4 shadow-sm d-none">
-                        <!-- Populated dynamically by JS on scan -->
+                        <div class="card-body p-4">
+                            <div id="kioskResultPlaceholder" class="p-4 rounded-4 border bg-light text-center mb-4">
+                                <i class="fas fa-id-card-clip fa-2x text-secondary mb-2"></i>
+                                <h6 class="fw-bold text-dark mb-1">Ready for Stock or Venue Checkin / Checkout</h6>
+                                <p class="text-muted small mb-0">
+                                    Select <strong>Stock (BKAr, KCC)</strong> or <strong>Venue (Marriot Hotel, FourPoint Hotel, MovenPick Hotel..)</strong> above, then click <strong>Checkin</strong> or <strong>Checkout</strong> next to any staff member.
+                                </p>
+                            </div>
+
+                            <div id="kioskResultActiveCard" class="rounded-4 overflow-hidden shadow-sm mb-4 d-none">
+                                <!-- Populated dynamically by JS on Checkin / Checkout / Scan -->
+                            </div>
+
+                            <h6 class="fw-bold text-uppercase small text-muted mb-2">
+                                <i class="fas fa-clock-rotate-left me-1"></i>Recent Stock &amp; Venue Gate Scans
+                            </h6>
+                            <div id="kioskRecentScansFeed" class="overflow-auto" style="max-height: 230px;">
+                                <?php foreach (array_slice($attendanceLogs, 0, 8) as $rLog):
+                                    $rName = $rLog['full_name'] ?: ($rLog['username'] ?: 'Staff');
+                                    $rInitials = getUserInitials($rName);
+                                    $rUid = (int)($rLog['user_id'] ?? 0);
+                                    $rUserObj = $usersWithBadges[$rUid] ?? null;
+                                    $rHasPhoto = $rUserObj && !empty($rUserObj['has_photo']);
+                                    $rPhotoUrl = $rHasPhoto ? $rUserObj['profile_image'] : '';
+                                    $rColor = $rUserObj ? ($clearanceMeta[$rUserObj['clearance_level']]['color'] ?? '#3b82f6') : '#3b82f6';
+                                ?>
+                                    <div class="p-2 rounded-3 border mb-2 small d-flex justify-content-between align-items-center"
+                                         style="border-left: 4px solid <?php echo ($rLog['access_status'] === 'granted') ? '#10b981' : '#ef4444'; ?> !important;">
+                                        <div class="d-flex align-items-center gap-2 overflow-hidden">
+                                            <?php if ($rHasPhoto): ?>
+                                                <img src="<?php echo htmlspecialchars($rPhotoUrl); ?>"
+                                                     alt="<?php echo htmlspecialchars($rName); ?>"
+                                                     style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1.5px solid <?php echo $rColor; ?>;"
+                                                     onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.classList.remove('d-none');">
+                                                <div class="rounded-circle d-none text-white d-flex align-items-center justify-content-center fw-bold"
+                                                     style="width: 34px; height: 34px; background: <?php echo $rColor; ?>; flex-shrink: 0; font-size: 0.72rem;">
+                                                    <?php echo htmlspecialchars($rInitials); ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="rounded-circle text-white d-flex align-items-center justify-content-center fw-bold"
+                                                     style="width: 34px; height: 34px; background: <?php echo $rColor; ?>; flex-shrink: 0; font-size: 0.72rem;">
+                                                    <?php echo htmlspecialchars($rInitials); ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            <div class="text-truncate">
+                                                <div class="fw-bold text-dark text-truncate"><?php echo htmlspecialchars($rName); ?></div>
+                                                <div class="text-muted text-truncate" style="font-size: 0.72rem;">
+                                                    <?php if ($rLog['checkpoint_type'] === 'stock_warehouse'): ?>
+                                                        <span class="text-success fw-semibold">[Stock]</span>
+                                                    <?php else: ?>
+                                                        <span class="text-primary fw-semibold">[Venue]</span>
+                                                    <?php endif; ?>
+                                                    <?php echo htmlspecialchars($rLog['checkpoint_name']); ?>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="text-end flex-shrink-0 ms-2">
+                                            <?php if ($rLog['access_status'] === 'granted'): ?>
+                                                <span class="badge bg-success"><?php echo strtoupper(str_replace('_', ' ', $rLog['scan_action'])); ?></span>
+                                            <?php else: ?>
+                                                <span class="badge bg-danger">DENIED</span>
+                                            <?php endif; ?>
+                                            <div class="text-muted" style="font-size: 0.68rem;"><?php echo date('h:i A', strtotime($rLog['scanned_at'])); ?></div>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1712,6 +1915,7 @@ require_once 'views/partials/header.php';
 
 <script>
     const usersBadgeDirectory = <?php echo json_encode($usersWithBadges); ?>;
+    const kioskCheckpointStateMap = <?php echo json_encode($todayCheckpointStates); ?>;
 
     // Render all QR codes on DOM ready
     document.addEventListener('DOMContentLoaded', function() {
@@ -1731,7 +1935,157 @@ require_once 'views/partials/header.php';
         if (document.getElementById('badgeSearchInput').value) {
             filterBadgeGallery();
         }
+        syncKioskStaffButtonStates();
     });
+
+    function openTerminalWithToggle(cpType) {
+        const kioskTab = document.getElementById('tab-kiosk-btn');
+        if (kioskTab) kioskTab.click();
+        if (cpType === 'event_venue') {
+            document.getElementById('cp_type_venue').checked = true;
+        } else {
+            document.getElementById('cp_type_stock').checked = true;
+        }
+        toggleCheckpointDropdown();
+    }
+
+    function selectQuickStockGate(stockId, btnEl) {
+        document.getElementById('kiosk_stock_id').value = stockId;
+        document.querySelectorAll('.stock-quick-pill').forEach(function(b) {
+            b.classList.remove('btn-success');
+            b.classList.add('btn-outline-success');
+        });
+        if (btnEl) {
+            btnEl.classList.remove('btn-outline-success');
+            btnEl.classList.add('btn-success');
+        }
+        syncKioskStaffButtonStates();
+    }
+
+    function selectQuickVenueGate(eventId, btnEl) {
+        document.getElementById('kiosk_event_id').value = eventId;
+        document.querySelectorAll('.venue-quick-pill').forEach(function(b) {
+            b.classList.remove('btn-primary');
+            b.classList.add('btn-outline-primary');
+        });
+        if (btnEl) {
+            btnEl.classList.remove('btn-outline-primary');
+            btnEl.classList.add('btn-primary');
+        }
+        syncKioskStaffButtonStates();
+    }
+
+    function filterKioskStaffByName() {
+        const q = (document.getElementById('kioskStaffSearchInput').value || '').toLowerCase().trim();
+        let count = 0;
+        document.querySelectorAll('.kiosk-staff-row').forEach(function(row) {
+            const hay = row.getAttribute('data-search') || '';
+            const match = !q || hay.indexOf(q) !== -1;
+            row.classList.toggle('d-none', !match);
+            row.classList.toggle('d-flex', match);
+            if (match) count++;
+        });
+        const badge = document.getElementById('kioskStaffMatchBadge');
+        if (badge) badge.textContent = count + ' Found';
+    }
+
+    function applyKioskStaffButtonState(uid, stateObj) {
+        const btnIn = document.getElementById('kiosk-btn-checkin-' + uid);
+        const btnOut = document.getElementById('kiosk-btn-checkout-' + uid);
+        const pill = document.getElementById('kiosk-status-pill-' + uid);
+        if (!btnIn || !btnOut) return;
+
+        const state = stateObj ? stateObj.state : 'ready';
+        const timeStr = stateObj && stateObj.time ? stateObj.time : '';
+
+        if (state === 'checked_in') {
+            btnIn.disabled = true;
+            btnIn.className = 'btn btn-sm btn-secondary fw-bold px-2 py-1 opacity-50';
+            btnIn.innerHTML = '<i class="fas fa-check me-1"></i>Checkin';
+
+            btnOut.disabled = false;
+            btnOut.className = 'btn btn-sm btn-warning fw-bold text-dark px-2 py-1';
+            btnOut.innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Checkout';
+
+            if (pill) {
+                pill.className = 'badge bg-success-subtle text-success border border-success-subtle';
+                pill.textContent = 'Checked In' + (timeStr ? ' • ' + timeStr : '');
+            }
+        } else if (state === 'checked_out') {
+            btnIn.disabled = true;
+            btnIn.className = 'btn btn-sm btn-secondary fw-bold px-2 py-1 opacity-50';
+            btnIn.innerHTML = '<i class="fas fa-check me-1"></i>Checkin';
+
+            btnOut.disabled = true;
+            btnOut.className = 'btn btn-sm btn-secondary fw-bold px-2 py-1 opacity-50';
+            btnOut.innerHTML = '<i class="fas fa-check-double me-1"></i>Checkout';
+
+            if (pill) {
+                pill.className = 'badge bg-info-subtle text-info border border-info-subtle';
+                pill.textContent = 'Checked Out' + (timeStr ? ' • ' + timeStr : '');
+            }
+        } else {
+            btnIn.disabled = false;
+            btnIn.className = 'btn btn-sm btn-success fw-bold px-2 py-1';
+            btnIn.innerHTML = '<i class="fas fa-sign-in-alt me-1"></i>Checkin';
+
+            btnOut.disabled = true;
+            btnOut.className = 'btn btn-sm btn-outline-secondary fw-bold px-2 py-1 opacity-50';
+            btnOut.innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Checkout';
+
+            if (pill) {
+                pill.className = 'badge bg-secondary-subtle text-secondary';
+                pill.textContent = 'Ready';
+            }
+        }
+    }
+
+    function syncKioskStaffButtonStates() {
+        const isStock = document.getElementById('cp_type_stock').checked;
+        const cpType = isStock ? 'stock_warehouse' : 'event_venue';
+        const selEl = isStock ? document.getElementById('kiosk_stock_id') : document.getElementById('kiosk_event_id');
+        const cpId = selEl ? selEl.value : '1';
+        const prefix = cpType + '_' + cpId + '_';
+
+        const bannerLabel = document.getElementById('activeCheckpointBannerLabel');
+        if (bannerLabel && selEl && selEl.options[selEl.selectedIndex]) {
+            bannerLabel.textContent = 'Active ' + (isStock ? 'Stock Gate: ' : 'Venue Gate: ') + selEl.options[selEl.selectedIndex].text;
+        }
+
+        document.querySelectorAll('.kiosk-staff-row').forEach(function(row) {
+            const uid = row.getAttribute('data-uid');
+            applyKioskStaffButtonState(uid, kioskCheckpointStateMap[prefix + uid] || null);
+        });
+    }
+
+    function handleKioskStaffRowClick(event, uid, badgeCode) {
+        if (event.target.closest('button')) {
+            return;
+        }
+        document.querySelectorAll('.kiosk-staff-row').forEach(el => el.classList.remove('border-primary', 'bg-light'));
+        const row = document.getElementById('kiosk-staff-row-' + uid);
+        if (row) {
+            row.classList.add('border-primary', 'bg-light');
+        }
+        document.getElementById('kiosk_scan_mode').value = 'verify_only';
+        document.getElementById('kiosk_scan_input').value = badgeCode;
+        submitGateScan();
+        document.getElementById('kiosk_scan_mode').value = 'auto';
+        document.getElementById('kiosk_scan_input').value = '';
+    }
+
+    function handleKioskStaffAction(uid, badgeCode, action) {
+        const btnIn = document.getElementById('kiosk-btn-checkin-' + uid);
+        const btnOut = document.getElementById('kiosk-btn-checkout-' + uid);
+        if (action === 'check_in' && btnIn) btnIn.disabled = true;
+        if (action === 'check_out' && btnOut) btnOut.disabled = true;
+
+        document.getElementById('kiosk_scan_mode').value = action;
+        document.getElementById('kiosk_scan_input').value = badgeCode;
+        submitGateScan();
+        document.getElementById('kiosk_scan_mode').value = 'auto';
+        document.getElementById('kiosk_scan_input').value = '';
+    }
 
     function filterBadgeGallery() {
         const q = (document.getElementById('badgeSearchInput').value || '').toLowerCase().trim();
@@ -1894,6 +2248,12 @@ require_once 'views/partials/header.php';
         const isStock = document.getElementById('cp_type_stock').checked;
         document.getElementById('stockCheckpointSelectWrap').classList.toggle('d-none', !isStock);
         document.getElementById('venueCheckpointSelectWrap').classList.toggle('d-none', isStock);
+        const searchLabel = document.getElementById('kioskSearchTypeLabel');
+        if (searchLabel) {
+            searchLabel.textContent = isStock ? 'Stock (BKAr, KCC)' : 'Venue (Marriot, FourPoint, MovenPick..)';
+            searchLabel.className = isStock ? 'badge bg-success' : 'badge bg-info text-dark';
+        }
+        syncKioskStaffButtonStates();
     }
 
     function simulateGateScan(badgeCode) {
@@ -1972,60 +2332,174 @@ require_once 'views/partials/header.php';
                 const actionLabel = data.scan_action === 'check_in' ? 'CHECKED IN (ARRIVAL)' :
                                    (data.scan_action === 'check_out' ? 'CHECKED OUT (DEPARTURE)' : 'CLEARANCE VERIFIED');
 
+                if (granted && u && u.id && (data.scan_action === 'check_in' || data.scan_action === 'check_out')) {
+                    const stateKey = getKioskStateKey(u.id, cpType, cpId);
+                    kioskCheckpointStateMap[stateKey] = {
+                        action: data.scan_action,
+                        time: data.scanned_at
+                    };
+                    applyKioskStaffButtonState(u.id, data.scan_action, data.scanned_at);
+                }
+
+                const getInitials = (name) => {
+                    const clean = (name || '').toString().trim();
+                    if (!clean) return 'ST';
+                    const parts = clean.split(/[\s_\-]+/).filter(Boolean);
+                    return parts.length >= 2
+                        ? (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
+                        : parts[0].substring(0, 2).toUpperCase();
+                };
+                const uInitials = getInitials(u.full_name);
+                const uColor = u.clearance_color || '#17487a';
+                const hasProfileImg = u.profile_image && u.profile_image.trim() !== '';
+                const roleDeptTag = (u.role ? u.role.replace(/_/g, ' ').toUpperCase() : 'CREW') + (u.department ? ' - ' + u.department.toUpperCase() : '');
+                const timeActionText = data.scan_action === 'check_in' ? 'Arrived at' : (data.scan_action === 'check_out' ? 'Departed at' : 'Scanned at');
+
+                const smallAvatarHtml = hasProfileImg
+                    ? `<img src="${u.profile_image}" alt="${u.full_name}" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1.5px solid ${uColor};" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.classList.remove('d-none');">
+                       <div class="rounded-circle d-none text-white d-flex align-items-center justify-content-center fw-bold" style="width: 34px; height: 34px; background: ${uColor}; flex-shrink: 0; font-size: 0.72rem;">${uInitials}</div>`
+                    : `<div class="rounded-circle text-white d-flex align-items-center justify-content-center fw-bold" style="width: 34px; height: 34px; background: ${uColor}; flex-shrink: 0; font-size: 0.72rem;">${uInitials}</div>`;
+
+                card.className = 'rounded-4 overflow-hidden mb-3 shadow-lg border-0 text-start';
+                card.style.background = '#ffffff';
+
                 card.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
-                        <div>
-                            <span class="badge ${granted ? 'bg-success' : 'bg-danger'} fs-6 px-3 py-2">
-                                <i class="fas ${granted ? 'fa-check-circle' : 'fa-triangle-exclamation'} me-2"></i>
-                                ${granted ? 'ACCESS GRANTED — ' + actionLabel : 'ACCESS DENIED — ENTRY BLOCKED'}
-                            </span>
+                    <div class="row g-0">
+                        <!-- Left: Portrait Photo with Role Pill at Bottom -->
+                        <div class="col-md-5 position-relative" style="background: #e2e8f0; min-height: 290px;">
+                            ${hasProfileImg ? `
+                                <img src="${u.profile_image}"
+                                     alt="${u.full_name}"
+                                     style="width: 100%; height: 100%; min-height: 290px; max-height: 330px; object-fit: cover; object-position: center top; display: block;"
+                                     onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.classList.remove('d-none');">
+                            ` : ''}
+                            <div class="${hasProfileImg ? 'd-none' : ''} d-flex flex-column align-items-center justify-content-center w-100 h-100"
+                                 style="min-height: 290px; background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);">
+                                <div class="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold text-white shadow"
+                                     style="width: 96px; height: 96px; background: rgba(255,255,255,0.18); border: 3px solid rgba(255,255,255,0.4); font-size: 2.3rem; letter-spacing: 1px;">
+                                    ${uInitials}
+                                </div>
+                            </div>
+                            <!-- Bottom Cyan Role Pill -->
+                            <div class="position-absolute bottom-0 start-50 translate-middle-x mb-3 text-nowrap px-2" style="z-index: 3; max-width: 90%;">
+                                <span class="badge shadow text-truncate d-inline-block"
+                                      style="background: #2998d8; color: #ffffff; font-weight: 800; font-size: 0.82rem; padding: 7px 18px; border-radius: 20px; letter-spacing: 0.8px; max-width: 100%;">
+                                    ${roleDeptTag}
+                                </span>
+                            </div>
                         </div>
-                        <div class="text-end small text-muted">
-                            <div class="fw-bold text-dark">${data.scanned_at}</div>
-                            <div>${data.scanned_date}</div>
-                        </div>
-                    </div>
 
-                    <div class="d-flex align-items-center gap-3 mb-3">
-                        <div class="rounded-circle bg-dark text-white d-flex align-items-center justify-content-center fw-bold fs-3" style="width: 72px; height: 72px; flex-shrink: 0;">
-                            ${u.full_name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                            <h4 class="fw-bold text-dark mb-1">${u.full_name}</h4>
-                            <div class="d-flex flex-wrap gap-2 align-items-center">
-                                <span class="badge bg-dark font-monospace">${u.badge_code}</span>
-                                <span class="badge bg-secondary font-monospace">${u.staff_code}</span>
-                                <span class="badge" style="background: ${u.clearance_color};">${u.clearance_title}</span>
+                        <!-- Right: Blue Header with Name, Status Circle, Big Pill, Timestamp & Footer -->
+                        <div class="col-md-7 d-flex flex-column justify-content-between" style="background: #ffffff;">
+                            <!-- Top Navy Blue Name Header -->
+                            <div class="px-4 py-3" style="background: #17487a;">
+                                <h3 class="fw-bold mb-0 text-white" style="letter-spacing: 0.5px; font-size: 1.65rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                                    ${u.full_name}
+                                </h3>
                             </div>
-                        </div>
-                    </div>
 
-                    <div class="p-3 rounded-3 bg-white border mb-3">
-                        <div class="row g-2 small">
-                            <div class="col-sm-6">
-                                <span class="text-muted d-block">Checkpoint Gate:</span>
-                                <strong class="text-dark">${data.checkpoint_name}</strong>
+                            <!-- Middle Section: Clearance Pill + Circle Icon + ACCESS GRANTED + Timestamp -->
+                            <div class="p-3 px-4 position-relative d-flex flex-column align-items-center justify-content-center flex-grow-1">
+                                <!-- Top-Right Clearance Tag -->
+                                <div class="position-absolute top-0 end-0 p-3">
+                                    <span class="badge" style="background: #e2e8f0; color: #334155; font-size: 0.78rem; font-weight: 700; border-radius: 8px; padding: 5px 12px;">
+                                        ${u.clearance_title || 'Technical & Stage'}
+                                    </span>
+                                </div>
+
+                                <!-- Big Status Ring Icon -->
+                                <div class="mt-2 mb-2">
+                                    ${granted ? `
+                                        <div class="rounded-circle d-flex align-items-center justify-content-center shadow-sm"
+                                             style="width: 74px; height: 74px; border: 4.5px solid #22c55e; background: #ffffff;">
+                                            <i class="fas fa-check" style="font-size: 2.2rem; color: #22c55e;"></i>
+                                        </div>
+                                    ` : `
+                                        <div class="rounded-circle d-flex align-items-center justify-content-center shadow-sm"
+                                             style="width: 74px; height: 74px; border: 4.5px solid #ef4444; background: #ffffff;">
+                                            <i class="fas fa-times" style="font-size: 2.2rem; color: #ef4444;"></i>
+                                        </div>
+                                    `}
+                                </div>
+
+                                <!-- Big Status Action Button / Pill -->
+                                <div class="my-2">
+                                    <span class="badge shadow-sm"
+                                          style="background: ${granted ? '#16a34a' : '#dc2626'}; color: #ffffff; font-size: 1.18rem; font-weight: 800; border-radius: 10px; padding: 9px 26px; letter-spacing: 0.8px;">
+                                        ${granted ? 'ACCESS GRANTED' : 'ACCESS DENIED'}
+                                    </span>
+                                </div>
+
+                                <!-- Timestamp / Denial Reason -->
+                                <div class="mt-2 text-center">
+                                    <span class="fw-bold" style="color: #0f2e5a; font-size: 0.95rem;">
+                                        ${timeActionText} - ${data.scanned_at}.
+                                    </span>
+                                    ${!granted ? `<div class="small text-danger fw-semibold mt-1">${data.reason}</div>` : ''}
+                                </div>
                             </div>
-                            <div class="col-sm-6">
-                                <span class="text-muted d-block">Role &amp; Department:</span>
-                                <strong class="text-dark">${u.role} (${u.department})</strong>
-                            </div>
-                            <div class="col-12 mt-2 pt-2 border-top">
-                                <span class="text-muted d-block">Verification Decision:</span>
-                                <strong class="${granted ? 'text-success' : 'text-danger'}">${data.reason}</strong>
+
+                            <!-- Bottom Footer Bar: Badge #, Location & Quick Function Buttons -->
+                            <div class="px-3 py-2 d-flex flex-wrap justify-content-between align-items-center border-top"
+                                 style="background: #edf2f7; border-color: #e2e8f0 !important; font-size: 0.88rem;">
+                                <div>
+                                    <strong style="color: #0f2e5a; font-family: monospace; letter-spacing: 0.5px; font-size: 0.92rem;">
+                                        BADGE #: ${u.badge_code}
+                                    </strong>
+                                </div>
+                                <div class="d-flex align-items-center gap-1">
+                                    <i class="fas fa-map-marker-alt" style="color: #b45309;"></i>
+                                    <span class="fst-italic text-secondary" style="font-size: 0.82rem;">
+                                        ${data.checkpoint_name} ${granted ? 'Clearance - Verified.' : '— Denied.'}
+                                    </span>
+                                </div>
+                                <div class="d-flex gap-1">
+                                    <button type="button"
+                                            class="btn btn-xs ${granted && data.scan_action === 'check_in' ? 'btn-success' : 'btn-outline-success'} fw-bold px-2 py-1"
+                                            style="font-size: 0.72rem; border-radius: 6px;"
+                                            onclick="handleKioskStaffAction(${u.id}, '${u.badge_code}', 'check_in')"
+                                            title="Check In">
+                                        <i class="fas fa-sign-in-alt me-1"></i>Checkin
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-xs ${granted && data.scan_action === 'check_out' ? 'btn-warning text-dark' : 'btn-outline-warning text-dark'} fw-bold px-2 py-1"
+                                            style="font-size: 0.72rem; border-radius: 6px;"
+                                            onclick="handleKioskStaffAction(${u.id}, '${u.badge_code}', 'check_out')"
+                                            title="Check Out">
+                                        <i class="fas fa-sign-out-alt me-1"></i>Checkout
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-center">
-                        <a href="id_badges.php?tab=roster" class="btn btn-sm btn-outline-dark fw-bold">
-                            <i class="fas fa-clipboard-user me-1"></i>View Updated On-Site Roster
-                        </a>
-                        <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="openConfigureBadgeModal(${u.id})">
-                            <i class="fas fa-sliders me-1"></i>Modify User Clearance
-                        </button>
                     </div>
                 `;
+
+                const feed = document.getElementById('kioskRecentScansFeed');
+                if (feed) {
+                    const rowHtml = `
+                        <div class="p-2 rounded-3 border mb-2 small d-flex justify-content-between align-items-center bg-light"
+                             style="border-left: 4px solid ${granted ? '#10b981' : '#ef4444'} !important;">
+                            <div class="d-flex align-items-center gap-2 overflow-hidden">
+                                ${smallAvatarHtml}
+                                <div class="text-truncate">
+                                    <span class="fw-bold text-dark">${u.full_name}</span>
+                                    <span class="text-muted ms-1">(${u.badge_code})</span>
+                                    <div class="text-muted text-truncate" style="font-size: 0.72rem;">
+                                        <i class="fas ${cpType === 'stock_warehouse' ? 'fa-warehouse text-success' : 'fa-location-dot text-primary'} me-1"></i>
+                                        ${data.checkpoint_name}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-end flex-shrink-0 ms-2">
+                                <span class="badge ${granted ? 'bg-success' : 'bg-danger'}">
+                                    ${granted ? data.scan_action.replace('_', ' ').toUpperCase() : 'DENIED'}
+                                </span>
+                                <div class="text-muted" style="font-size: 0.68rem;">${data.scanned_at}</div>
+                            </div>
+                        </div>
+                    `;
+                    feed.insertAdjacentHTML('afterbegin', rowHtml);
+                }
             });
     }
 </script>

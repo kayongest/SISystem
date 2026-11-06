@@ -132,6 +132,35 @@ if (!function_exists('getDefaultBadgeSpecForRole')) {
     }
 }
 
+if (!function_exists('normalizeEventNumericId')) {
+    function normalizeEventNumericId($rawId): int
+    {
+        $str = trim((string)$rawId);
+        if ($str === '') {
+            return 0;
+        }
+        if (ctype_digit($str)) {
+            return (int)$str;
+        }
+        return (abs(crc32($str)) % 900000) + 10000;
+    }
+}
+
+if (!function_exists('getUserInitials')) {
+    function getUserInitials($name): string
+    {
+        $clean = trim((string)$name);
+        if ($clean === '') {
+            return 'ST';
+        }
+        $parts = preg_split('/[\s_\-]+/', $clean, -1, PREG_SPLIT_NO_EMPTY);
+        if (count($parts) >= 2) {
+            return strtoupper(substr($parts[0], 0, 1) . substr($parts[1], 0, 1));
+        }
+        return strtoupper(substr($parts[0], 0, 2));
+    }
+}
+
 if (!function_exists('ensureBadgesAndAttendanceTables')) {
     function ensureBadgesAndAttendanceTables($conn)
     {
@@ -181,6 +210,75 @@ if (!function_exists('ensureBadgesAndAttendanceTables')) {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
 
+        // 2b. Ensure core Stock Warehouses and Hotel Venues exist if empty
+        try {
+            $conn->query("
+                CREATE TABLE IF NOT EXISTS stock_locations (
+                    id INT(11) PRIMARY KEY AUTO_INCREMENT,
+                    name VARCHAR(255) NOT NULL,
+                    location VARCHAR(255) DEFAULT NULL,
+                    location_code VARCHAR(50) DEFAULT NULL,
+                    code VARCHAR(50) DEFAULT NULL,
+                    open_time TIME DEFAULT '08:00:00',
+                    close_time TIME DEFAULT '18:00:00',
+                    is_active TINYINT(1) DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ");
+
+            // Only seed if stock_locations table is completely empty
+            $stkCountRes = @$conn->query("SELECT COUNT(*) as cnt FROM stock_locations");
+            $stkCount = ($stkCountRes && ($row = $stkCountRes->fetch_assoc())) ? (int)$row['cnt'] : 0;
+            if ($stkCount === 0) {
+                $defaultStocks = [
+                    ['name' => 'Ndera Warehouse', 'code' => 'NDR-STK', 'location' => 'Ndera Central Warehouse'],
+                    ['name' => 'BK Arena Stock', 'code' => 'BKA-STK', 'location' => 'BK Arena Stock Room'],
+                    ['name' => 'KCC Stock', 'code' => 'KCC-STK', 'location' => 'Kigali Convention Centre Stock']
+                ];
+                foreach ($defaultStocks as $ds) {
+                    $insSt = $conn->prepare("INSERT INTO stock_locations (name, code, location_code, location, open_time, close_time, is_active) VALUES (?, ?, ?, ?, '08:00:00', '18:00:00', 1)");
+                    if ($insSt) {
+                        $insSt->bind_param("ssss", $ds['name'], $ds['code'], $ds['code'], $ds['location']);
+                        $insSt->execute();
+                        $insSt->close();
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Non-fatal if stock_locations has custom constraints
+        }
+
+        try {
+            // Clean up any accidental empty primary key entry in events (events.id is VARCHAR primary key)
+            @$conn->query("DELETE FROM events WHERE id = ''");
+
+            $defaultHotelVenues = [
+                ['id' => '1001', 'title' => 'Marriot Hotel', 'location' => 'Kigali Marriott Hotel — Grand Ballroom', 'call_time' => '08:00'],
+                ['id' => '1002', 'title' => 'FourPoint Hotel', 'location' => 'Four Points by Sheraton Kigali', 'call_time' => '08:30'],
+                ['id' => '1003', 'title' => 'MovenPick Hotel', 'location' => 'Mövenpick Hotel Kigali — Conference Hall', 'call_time' => '09:00']
+            ];
+            foreach ($defaultHotelVenues as $dv) {
+                $chkEv = $conn->prepare("SELECT id FROM events WHERE id = ? OR LOWER(title) LIKE LOWER(?) OR LOWER(location) LIKE LOWER(?) LIMIT 1");
+                if ($chkEv) {
+                    $likeTitle = '%' . $dv['title'] . '%';
+                    $chkEv->bind_param("sss", $dv['id'], $likeTitle, $likeTitle);
+                    $chkEv->execute();
+                    $existsEv = $chkEv->get_result()->fetch_assoc();
+                    $chkEv->close();
+                    if (!$existsEv) {
+                        $insEv = $conn->prepare("INSERT IGNORE INTO events (id, title, location, date, call_time) VALUES (?, ?, ?, CURDATE(), ?)");
+                        if ($insEv) {
+                            $insEv->bind_param("ssss", $dv['id'], $dv['title'], $dv['location'], $dv['call_time']);
+                            $insEv->execute();
+                            $insEv->close();
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Non-fatal if events table is not yet initialized
+        }
+
         // Gather existing stock_locations IDs and events IDs for smart seeding
         $allStockIds = [];
         $stockRes = @$conn->query("SELECT id, name FROM stock_locations WHERE is_active = 1 ORDER BY id ASC");
@@ -197,7 +295,9 @@ if (!function_exists('ensureBadgesAndAttendanceTables')) {
         $evRes = @$conn->query("SELECT id, title, location FROM events ORDER BY id DESC LIMIT 20");
         if ($evRes) {
             while ($r = $evRes->fetch_assoc()) {
-                $allEventIds[] = (int)$r['id'];
+                $numId = normalizeEventNumericId($r['id']);
+                $r['id'] = $numId;
+                $allEventIds[] = $numId;
                 $eventList[] = $r;
             }
         }
