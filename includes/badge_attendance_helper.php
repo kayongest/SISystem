@@ -5,8 +5,39 @@
  */
 
 if (!function_exists('getClearanceLevelsMeta')) {
-    function getClearanceLevelsMeta()
+    function getClearanceLevelsMeta($conn = null)
     {
+        if ($conn === null) {
+            $conn = $GLOBALS['conn'] ?? null;
+        }
+
+        if ($conn && $conn instanceof \mysqli) {
+            $res = @$conn->query("SELECT * FROM access_clearance_levels WHERE is_active = 1 ORDER BY sort_order ASC, id ASC");
+            if ($res && $res->num_rows > 0) {
+                $meta = [];
+                while ($row = $res->fetch_assoc()) {
+                    $meta[$row['level_key']] = [
+                        'id' => (int)$row['id'],
+                        'key' => $row['level_key'],
+                        'code' => $row['code'],
+                        'title' => $row['title'],
+                        'short' => $row['short_name'],
+                        'color' => $row['color'],
+                        'bg' => $row['bg'],
+                        'border' => $row['border'],
+                        'badge_bg' => $row['badge_bg'],
+                        'icon' => $row['icon'],
+                        'description' => $row['description'],
+                        'default_stock_access' => $row['default_stock_access'],
+                        'default_venue_access' => $row['default_venue_access'],
+                        'sort_order' => (int)$row['sort_order'],
+                        'is_active' => (int)$row['is_active']
+                    ];
+                }
+                return $meta;
+            }
+        }
+
         return [
             'L4_ALL_ACCESS' => [
                 'code' => 'L4',
@@ -175,7 +206,7 @@ if (!function_exists('ensureBadgesAndAttendanceTables')) {
                 user_id INT NOT NULL UNIQUE,
                 badge_code VARCHAR(32) NOT NULL UNIQUE,
                 rfid_uid VARCHAR(64) DEFAULT NULL,
-                clearance_level ENUM('L1_VENUE_BASIC', 'L2_TECH_STAGE', 'L3_STOCK_WAREHOUSE', 'L4_ALL_ACCESS') NOT NULL DEFAULT 'L1_VENUE_BASIC',
+                clearance_level VARCHAR(50) NOT NULL DEFAULT 'L1_VENUE_BASIC',
                 stock_access_mode ENUM('none', 'selected', 'all') NOT NULL DEFAULT 'none',
                 allowed_stock_ids TEXT DEFAULT NULL,
                 venue_access_mode ENUM('none', 'assigned_only', 'selected', 'all') NOT NULL DEFAULT 'assigned_only',
@@ -188,6 +219,111 @@ if (!function_exists('ensureBadgesAndAttendanceTables')) {
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
+
+        // 1b. Ensure access_clearance_levels table exists & seeded
+        try {
+            $conn->query("
+                CREATE TABLE IF NOT EXISTS access_clearance_levels (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    level_key VARCHAR(50) NOT NULL UNIQUE,
+                    code VARCHAR(10) NOT NULL,
+                    title VARCHAR(150) NOT NULL,
+                    short_name VARCHAR(100) NOT NULL,
+                    color VARCHAR(20) NOT NULL DEFAULT '#0284c7',
+                    bg VARCHAR(20) NOT NULL DEFAULT '#f0f9ff',
+                    border VARCHAR(20) NOT NULL DEFAULT '#bae6fd',
+                    badge_bg VARCHAR(255) NOT NULL DEFAULT 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                    icon VARCHAR(50) NOT NULL DEFAULT 'fa-shield-halved',
+                    description TEXT DEFAULT NULL,
+                    default_stock_access ENUM('none', 'selected', 'all') NOT NULL DEFAULT 'none',
+                    default_venue_access ENUM('none', 'assigned_only', 'selected', 'all') NOT NULL DEFAULT 'assigned_only',
+                    sort_order INT NOT NULL DEFAULT 0,
+                    is_active TINYINT(1) NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ");
+
+            // Migrate user_badges.clearance_level if it's enum
+            @$conn->query("ALTER TABLE user_badges MODIFY COLUMN clearance_level VARCHAR(50) NOT NULL DEFAULT 'L1_VENUE_BASIC'");
+
+            $lvlCountRes = @$conn->query("SELECT COUNT(*) as cnt FROM access_clearance_levels");
+            $lvlCount = ($lvlCountRes && ($row = $lvlCountRes->fetch_assoc())) ? (int)$row['cnt'] : 0;
+            if ($lvlCount === 0) {
+                $defaults = [
+                    [
+                        'level_key' => 'L1_VENUE_BASIC',
+                        'code' => 'L1',
+                        'title' => 'Level 1 — Basic Venue Crew',
+                        'short_name' => 'Assigned Venues Only',
+                        'color' => '#0284c7',
+                        'bg' => '#f0f9ff',
+                        'border' => '#bae6fd',
+                        'badge_bg' => 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                        'icon' => 'fa-location-dot',
+                        'description' => 'Standard crew access restricted strictly to assigned Event Venues during scheduled calltimes.',
+                        'default_stock_access' => 'none',
+                        'default_venue_access' => 'assigned_only',
+                        'sort_order' => 1
+                    ],
+                    [
+                        'level_key' => 'L2_TECH_STAGE',
+                        'code' => 'L2',
+                        'title' => 'Level 2 — Technical & Stage',
+                        'short_name' => 'Tech Stage & Dispatch Stock',
+                        'color' => '#4f46e5',
+                        'bg' => '#eef2ff',
+                        'border' => '#c7d2fe',
+                        'badge_bg' => 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+                        'icon' => 'fa-sliders',
+                        'description' => 'Access to Technical Stage areas, FOH/Backstage at assigned Event Venues, and designated Dispatch Stock Locations.',
+                        'default_stock_access' => 'selected',
+                        'default_venue_access' => 'assigned_only',
+                        'sort_order' => 2
+                    ],
+                    [
+                        'level_key' => 'L3_STOCK_WAREHOUSE',
+                        'code' => 'L3',
+                        'title' => 'Level 3 — Stock & Warehouse',
+                        'short_name' => 'Stock & Assigned Venues',
+                        'color' => '#059669',
+                        'bg' => '#ecfdf5',
+                        'border' => '#a7f3d0',
+                        'badge_bg' => 'linear-gradient(135deg, #059669 0%, #065f46 100%)',
+                        'icon' => 'fa-warehouse',
+                        'description' => 'Full access to authorized Stock Warehouses, Loading Bays, and Assigned Event Venues.',
+                        'default_stock_access' => 'all',
+                        'default_venue_access' => 'assigned_only',
+                        'sort_order' => 3
+                    ],
+                    [
+                        'level_key' => 'L4_ALL_ACCESS',
+                        'code' => 'L4',
+                        'title' => 'Level 4 — Full All-Access',
+                        'short_name' => 'All-Access (Stock & Venues)',
+                        'color' => '#dc2626',
+                        'bg' => '#fef2f2',
+                        'border' => '#fecaca',
+                        'badge_bg' => 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+                        'icon' => 'fa-shield-halved',
+                        'description' => 'Unrestricted 24/7 entry to all Stock Warehouses, Production Vaults, Backstage Technical Zones, and Event Venues.',
+                        'default_stock_access' => 'all',
+                        'default_venue_access' => 'all',
+                        'sort_order' => 4
+                    ]
+                ];
+                foreach ($defaults as $d) {
+                    $st = $conn->prepare("INSERT INTO access_clearance_levels (level_key, code, title, short_name, color, bg, border, badge_bg, icon, description, default_stock_access, default_venue_access, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    if ($st) {
+                        $st->bind_param("ssssssssssssi", $d['level_key'], $d['code'], $d['title'], $d['short_name'], $d['color'], $d['bg'], $d['border'], $d['badge_bg'], $d['icon'], $d['description'], $d['default_stock_access'], $d['default_venue_access'], $d['sort_order']);
+                        $st->execute();
+                        $st->close();
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Non-fatal
+        }
 
         // 2. Create attendance_logs table
         $conn->query("

@@ -216,6 +216,149 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
         exit();
     }
 
+    // 2b. Save / Update Access Clearance Level (CRUD)
+    if ($action === 'save_clearance_level') {
+        $id = (int)($_POST['level_id'] ?? 0);
+        $code = strtoupper(trim($_POST['code'] ?? ''));
+        $title = trim($_POST['title'] ?? '');
+        $shortName = trim($_POST['short_name'] ?? '');
+        $levelKey = trim($_POST['level_key'] ?? '');
+        $color = trim($_POST['color'] ?? '#0284c7');
+        $icon = trim($_POST['icon'] ?? 'fa-shield-halved');
+        $description = trim($_POST['description'] ?? '');
+        $defaultStock = $_POST['default_stock_access'] ?? 'none';
+        $defaultVenue = $_POST['default_venue_access'] ?? 'assigned_only';
+        $sortOrder = (int)($_POST['sort_order'] ?? 0);
+
+        if ($code === '' || $title === '') {
+            echo json_encode(['success' => false, 'message' => 'Level Code (e.g. L5) and Level Title are required.']);
+            exit();
+        }
+
+        if ($levelKey === '') {
+            $slug = preg_replace('/[^A-Z0-9]+/', '_', strtoupper($code . '_' . $title));
+            $levelKey = trim($slug, '_');
+        } else {
+            $levelKey = preg_replace('/[^A-Z0-9_]+/', '', strtoupper($levelKey));
+        }
+
+        $bg = '#f8fafc';
+        $border = '#e2e8f0';
+        $badgeBg = 'linear-gradient(135deg, ' . $color . ' 0%, #0f172a 100%)';
+
+        if ($id > 0) {
+            $chk = $conn->prepare("SELECT id, level_key FROM access_clearance_levels WHERE level_key = ? AND id != ?");
+            $chk->bind_param("si", $levelKey, $id);
+            $chk->execute();
+            if ($chk->get_result()->fetch_assoc()) {
+                echo json_encode(['success' => false, 'message' => 'Clearance level key "' . $levelKey . '" is already in use by another level.']);
+                exit();
+            }
+            $chk->close();
+
+            $origSt = $conn->prepare("SELECT level_key FROM access_clearance_levels WHERE id = ?");
+            $origSt->bind_param("i", $id);
+            $origSt->execute();
+            $origRow = $origSt->get_result()->fetch_assoc();
+            $origSt->close();
+            $oldKey = $origRow ? $origRow['level_key'] : $levelKey;
+
+            $up = $conn->prepare("
+                UPDATE access_clearance_levels
+                SET level_key = ?, code = ?, title = ?, short_name = ?, color = ?, bg = ?, border = ?, badge_bg = ?, icon = ?, description = ?, default_stock_access = ?, default_venue_access = ?, sort_order = ?
+                WHERE id = ?
+            ");
+            $up->bind_param("ssssssssssssii", $levelKey, $code, $title, $shortName, $color, $bg, $border, $badgeBg, $icon, $description, $defaultStock, $defaultVenue, $sortOrder, $id);
+            $success = $up->execute();
+            $up->close();
+
+            if ($success && $oldKey !== $levelKey) {
+                $upBadge = $conn->prepare("UPDATE user_badges SET clearance_level = ? WHERE clearance_level = ?");
+                $upBadge->bind_param("ss", $levelKey, $oldKey);
+                $upBadge->execute();
+                $upBadge->close();
+            }
+
+            echo json_encode(['success' => true, 'message' => 'Access clearance level updated successfully!']);
+            exit();
+        } else {
+            $chk = $conn->prepare("SELECT id FROM access_clearance_levels WHERE level_key = ?");
+            $chk->bind_param("s", $levelKey);
+            $chk->execute();
+            if ($chk->get_result()->fetch_assoc()) {
+                echo json_encode(['success' => false, 'message' => 'Clearance level key "' . $levelKey . '" already exists.']);
+                exit();
+            }
+            $chk->close();
+
+            $ins = $conn->prepare("
+                INSERT INTO access_clearance_levels (level_key, code, title, short_name, color, bg, border, badge_bg, icon, description, default_stock_access, default_venue_access, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $ins->bind_param("ssssssssssssi", $levelKey, $code, $title, $shortName, $color, $bg, $border, $badgeBg, $icon, $description, $defaultStock, $defaultVenue, $sortOrder);
+            $success = $ins->execute();
+            $newId = $ins->insert_id;
+            $ins->close();
+
+            echo json_encode(['success' => true, 'id' => $newId, 'message' => 'New access clearance level added successfully!']);
+            exit();
+        }
+    }
+
+    // 2c. Get Access Clearance Level Details for Edit Modal
+    if ($action === 'get_clearance_level') {
+        $id = (int)($_POST['id'] ?? 0);
+        $st = $conn->prepare("SELECT * FROM access_clearance_levels WHERE id = ?");
+        $st->bind_param("i", $id);
+        $st->execute();
+        $row = $st->get_result()->fetch_assoc();
+        $st->close();
+        if ($row) {
+            echo json_encode(['success' => true, 'level' => $row]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Clearance level not found.']);
+        }
+        exit();
+    }
+
+    // 2d. Delete Access Clearance Level (with Badge Reassignment)
+    if ($action === 'delete_clearance_level') {
+        $id = (int)($_POST['id'] ?? 0);
+        $reassignKey = trim($_POST['reassign_to'] ?? 'L1_VENUE_BASIC');
+
+        $st = $conn->prepare("SELECT * FROM access_clearance_levels WHERE id = ?");
+        $st->bind_param("i", $id);
+        $st->execute();
+        $lvl = $st->get_result()->fetch_assoc();
+        $st->close();
+
+        if (!$lvl) {
+            echo json_encode(['success' => false, 'message' => 'Level not found.']);
+            exit();
+        }
+
+        $targetKey = $lvl['level_key'];
+
+        // Reassign any users currently assigned to this level
+        $reassignSt = $conn->prepare("UPDATE user_badges SET clearance_level = ? WHERE clearance_level = ?");
+        $reassignSt->bind_param("ss", $reassignKey, $targetKey);
+        $reassignSt->execute();
+        $affectedUsers = $reassignSt->affected_rows;
+        $reassignSt->close();
+
+        // Delete the level
+        $delSt = $conn->prepare("DELETE FROM access_clearance_levels WHERE id = ?");
+        $delSt->bind_param("i", $id);
+        $success = $delSt->execute();
+        $delSt->close();
+
+        echo json_encode([
+            'success' => $success,
+            'message' => 'Clearance level deleted.' . ($affectedUsers > 0 ? " {$affectedUsers} staff members were reassigned to {$reassignKey}." : '')
+        ]);
+        exit();
+    }
+
     // 3. Scan Badge at Gate Kiosk (Stock Warehouse / Event Venue / Office)
     if ($action === 'scan_badge_attendance') {
         $rawInput = trim($_POST['scan_input'] ?? '');
@@ -357,6 +500,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
         $cMeta = $clearanceMeta[$matchedBadge['clearance_level']] ?? $clearanceMeta['L1_VENUE_BASIC'];
         $hasPhoto = !empty($matchedUser['profile_image']) && file_exists(__DIR__ . '/' . $matchedUser['profile_image']);
 
+        // Fetch today's check_in and check_out times for this user at this checkpoint
+        $inTime = null;
+        $outTime = null;
+        $todayTimesStmt = $conn->prepare("
+            SELECT scan_action, DATE_FORMAT(scanned_at, '%H:%i:%s %p') as formatted_time
+            FROM attendance_logs
+            WHERE user_id = ? AND checkpoint_type = ? AND checkpoint_id = ? AND access_status = 'granted'
+              AND DATE(scanned_at) = CURDATE() AND scan_action IN ('check_in', 'check_out')
+            ORDER BY scanned_at ASC, id ASC
+        ");
+        if ($todayTimesStmt) {
+            $todayTimesStmt->bind_param("isi", $uid, $checkpointType, $checkpointId);
+            $todayTimesStmt->execute();
+            $ttRes = $todayTimesStmt->get_result();
+            while ($ttRow = $ttRes->fetch_assoc()) {
+                if ($ttRow['scan_action'] === 'check_in') {
+                    $inTime = $ttRow['formatted_time'];
+                } elseif ($ttRow['scan_action'] === 'check_out') {
+                    $outTime = $ttRow['formatted_time'];
+                }
+            }
+            $todayTimesStmt->close();
+        }
+        if (!$inTime && $resolvedAction === 'check_in' && $accessStatus === 'granted') {
+            $inTime = date('H:i:s A', strtotime($nowStr));
+        }
+        if (!$outTime && $resolvedAction === 'check_out' && $accessStatus === 'granted') {
+            $outTime = date('H:i:s A', strtotime($nowStr));
+        }
+
         echo json_encode([
             'success' => true,
             'log_id' => $logId,
@@ -364,7 +537,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
             'scan_action' => $resolvedAction,
             'punctuality' => $punctuality,
             'reason' => $eval['reason'],
-            'scanned_at' => date('h:i:s A', strtotime($nowStr)),
+            'scanned_at' => date('H:i:s A', strtotime($nowStr)),
+            'check_in_time' => $inTime,
+            'check_out_time' => $outTime,
             'scanned_date' => date('M d, Y', strtotime($nowStr)),
             'checkpoint_type' => $checkpointType,
             'checkpoint_name' => $checkpointName,
@@ -478,10 +653,10 @@ foreach ($attendanceLogs as $al) {
     }
 }
 
-// Build today's attendance state map per checkpoint: "{checkpoint_type}_{checkpoint_id}_{user_id}" => ['state' => 'checked_in'|'checked_out', 'time' => 'HH:MM AM']
+// Build today's attendance state map per checkpoint: "{checkpoint_type}_{checkpoint_id}_{user_id}" => ['state' => 'checked_in'|'checked_out', 'time' => 'HH:MM:SS AM', 'check_in_time' => ..., 'check_out_time' => ...]
 $todayCheckpointStates = [];
 $stateQ = $conn->query("
-    SELECT user_id, checkpoint_type, checkpoint_id, scan_action, DATE_FORMAT(scanned_at, '%h:%i %p') as scan_time
+    SELECT user_id, checkpoint_type, checkpoint_id, scan_action, DATE_FORMAT(scanned_at, '%H:%i:%s %p') as scan_time
     FROM attendance_logs
     WHERE access_status = 'granted'
       AND DATE(scanned_at) = CURDATE()
@@ -491,12 +666,78 @@ $stateQ = $conn->query("
 if ($stateQ) {
     while ($sr = $stateQ->fetch_assoc()) {
         $sKey = $sr['checkpoint_type'] . '_' . (int)$sr['checkpoint_id'] . '_' . (int)$sr['user_id'];
-        $todayCheckpointStates[$sKey] = [
-            'state' => ($sr['scan_action'] === 'check_in') ? 'checked_in' : 'checked_out',
-            'time' => $sr['scan_time']
-        ];
+        if (!isset($todayCheckpointStates[$sKey])) {
+            $todayCheckpointStates[$sKey] = [
+                'state' => ($sr['scan_action'] === 'check_in') ? 'checked_in' : 'checked_out',
+                'time' => $sr['scan_time'],
+                'check_in_time' => ($sr['scan_action'] === 'check_in') ? $sr['scan_time'] : null,
+                'check_out_time' => ($sr['scan_action'] === 'check_out') ? $sr['scan_time'] : null
+            ];
+        } else {
+            $todayCheckpointStates[$sKey]['state'] = ($sr['scan_action'] === 'check_in') ? 'checked_in' : 'checked_out';
+            $todayCheckpointStates[$sKey]['time'] = $sr['scan_time'];
+            if ($sr['scan_action'] === 'check_in') {
+                $todayCheckpointStates[$sKey]['check_in_time'] = $sr['scan_time'];
+            } elseif ($sr['scan_action'] === 'check_out') {
+                $todayCheckpointStates[$sKey]['check_out_time'] = $sr['scan_time'];
+            }
+        }
     }
 }
+
+// Resolve default / initial user for the Live Gate Decision card (Patrick, Eric, or latest scan)
+$initialKioskUser = null;
+if (isset($usersWithBadges[6])) {
+    $initialKioskUser = $usersWithBadges[6];
+} elseif (isset($usersWithBadges[9])) {
+    $initialKioskUser = $usersWithBadges[9];
+} else {
+    foreach ($usersWithBadges as $u) {
+        $uName = strtolower($u['full_name'] . ' ' . $u['username']);
+        if (strpos($uName, 'patr') !== false || strpos($uName, 'eric') !== false) {
+            $initialKioskUser = $u;
+            break;
+        }
+    }
+}
+if (!$initialKioskUser && !empty($attendanceLogs)) {
+    $initUid = (int)($attendanceLogs[0]['user_id'] ?? 0);
+    $initialKioskUser = $usersWithBadges[$initUid] ?? null;
+}
+if (!$initialKioskUser && !empty($usersWithBadges)) {
+    $initialKioskUser = reset($usersWithBadges);
+}
+
+// Pre-selected checkpoint type & venue / stock
+$defaultType = isset($_GET['type']) && in_array($_GET['type'], ['event_venue', 'stock_warehouse'], true)
+    ? $_GET['type']
+    : 'event_venue';
+
+$defaultEventId = !empty($eventsList) ? (int)$eventsList[0]['id'] : 1;
+foreach ($eventsList as $ev) {
+    if (stripos($ev['title'], 'movenpick') !== false) {
+        $defaultEventId = (int)$ev['id'];
+        break;
+    }
+}
+$defaultStockId = !empty($stockLocations) ? (int)$stockLocations[0]['id'] : 1;
+
+if ($defaultType === 'event_venue') {
+    $matchedEvent = $eventMap[$defaultEventId] ?? (!empty($eventsList) ? $eventsList[0] : null);
+    $initialCheckpointName = $matchedEvent
+        ? ($matchedEvent['title'] . (!empty($matchedEvent['location']) ? ' — ' . $matchedEvent['location'] : ''))
+        : 'Mövenpick Hotel Kigali — Conference Hall';
+} else {
+    $matchedStock = $stockMap[$defaultStockId] ?? (!empty($stockLocations) ? $stockLocations[0] : null);
+    $initialCheckpointName = $matchedStock
+        ? ($matchedStock['name'] . (!empty($matchedStock['location']) ? ' — ' . $matchedStock['location'] : ''))
+        : 'Ndera Central Warehouse';
+}
+
+$initActiveId = ($defaultType === 'event_venue') ? $defaultEventId : $defaultStockId;
+$initKey = $defaultType . '_' . $initActiveId . '_' . ($initialKioskUser ? (int)$initialKioskUser['id'] : 0);
+$initInTime = $todayCheckpointStates[$initKey]['check_in_time'] ?? '10:46:36 AM';
+$initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 AM';
 
 // Optional focus user if linked from users.php?focus_user=X
 $focusUserId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
@@ -771,6 +1012,19 @@ require_once 'views/partials/header.php';
         border-radius: 16px;
     }
 
+    .gate-time-action {
+        transition: all 0.18s ease-in-out;
+        padding: 5px 10px;
+        border-radius: 8px;
+    }
+    .gate-time-action:hover {
+        background: rgba(15, 23, 42, 0.07);
+        transform: translateY(-1px);
+    }
+    .gate-time-action:active {
+        transform: translateY(0);
+    }
+
     /* Print Media Rules for CR80 Badges */
     @media print {
         body * {
@@ -911,7 +1165,7 @@ require_once 'views/partials/header.php';
     </div>
 
     <!-- Main Navigation Tabs -->
-    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 no-print">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 no-print">
         <ul class="nav hub-nav-pills mb-0" id="badgesHubTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link <?php echo ($initialTab === 'gallery') ? 'active' : ''; ?>" id="tab-gallery-btn" data-bs-toggle="pill" data-bs-target="#pane-gallery" type="button" role="tab">
@@ -930,10 +1184,18 @@ require_once 'views/partials/header.php';
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link <?php echo ($initialTab === 'matrix') ? 'active' : ''; ?>" id="tab-matrix-btn" data-bs-toggle="pill" data-bs-target="#pane-matrix" type="button" role="tab">
-                    <i class="fas fa-sliders me-2 text-success"></i>4. Stock &amp; Venue Clearance Matrix
+                    <i class="fas fa-sliders me-2 text-success"></i>4. Access Levels &amp; Clearance Matrix
                 </button>
             </li>
         </ul>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-success fw-bold" onclick="document.getElementById('tab-matrix-btn').click(); openAddAccessLevelModal();">
+                <i class="fas fa-plus-circle me-1"></i>New Access Level
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="document.getElementById('tab-matrix-btn').click();">
+                <i class="fas fa-layer-group me-1"></i>Access Levels (CRUD)
+            </button>
+        </div>
     </div>
 
     <div class="tab-content" id="badgesHubTabsContent">
@@ -1271,84 +1533,70 @@ require_once 'views/partials/header.php';
 
         <!-- ==================== TAB 2: ATTENDANCE & GATE ACCESS TERMINAL ==================== -->
         <div class="tab-pane fade <?php echo ($initialTab === 'kiosk') ? 'show active' : ''; ?> no-print" id="pane-kiosk" role="tabpanel">
-            <!-- Top Terminal Control Card with 2 Toggles: Stock & Venue -->
-            <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
-                <div class="card-header bg-dark text-white py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
-                    <div>
-                        <h5 class="mb-0 fw-bold"><i class="fas fa-qrcode text-warning me-2"></i>Attendance &amp; Gate Access Terminal</h5>
-                        <div class="small text-white-50">Toggle between <strong>Stock (<?php echo htmlspecialchars($stockLabelSummary); ?>)</strong> and <strong>Venue (<?php echo htmlspecialchars($venueLabelSummary); ?>)</strong></div>
-                    </div>
-
-                    <!-- 2 Main Toggles: Stock & Venue -->
-                    <div class="btn-group" role="group" aria-label="Stock and Venue Toggle">
-                        <input type="radio" class="btn-check" name="checkpoint_type" id="cp_type_stock" value="stock_warehouse" checked onchange="toggleCheckpointDropdown()">
-                        <label class="btn btn-outline-success fw-bold px-4 py-2" for="cp_type_stock">
-                            <i class="fas fa-warehouse me-2"></i>Stock (<?php echo htmlspecialchars($stockLabelSummary); ?>)
-                        </label>
-
-                        <input type="radio" class="btn-check" name="checkpoint_type" id="cp_type_venue" value="event_venue" onchange="toggleCheckpointDropdown()">
-                        <label class="btn btn-outline-info fw-bold px-4 py-2" for="cp_type_venue">
-                            <i class="fas fa-hotel me-2"></i>Venue (<?php echo htmlspecialchars($venueLabelSummary); ?>)
-                        </label>
-                    </div>
-                </div>
-
-                <div class="card-body p-3 bg-light border-top">
-                    <!-- Stock Location Selector Wrap (Shown when Stock Toggle is active) -->
-                    <div id="stockCheckpointSelectWrap" class="row g-3 align-items-center">
-                        <div class="col-lg-5">
-                            <label class="form-label fw-bold small text-success mb-1">
-                                <i class="fas fa-warehouse me-1"></i>Active Stock Warehouse Gate (<?php echo htmlspecialchars($stockLabelSummary); ?>)
+            <!-- Top Terminal Control Card: 3-Step Checkpoint & Mode Selector -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden" style="background: #0f172a; color: #ffffff;">
+                <div class="p-3 px-4">
+                    <div class="row g-3 align-items-center">
+                        <!-- Step 1: Toggle Checkpoint Type (Stock & Venue) -->
+                        <div class="col-md-4">
+                            <label class="form-label small text-info fw-bold text-uppercase mb-1">
+                                <i class="fas fa-tower-broadcast me-1"></i>1. TOGGLE CHECKPOINT TYPE (STOCK &amp; VENUE)
                             </label>
-                            <select class="form-select fw-bold border-success" id="kiosk_stock_id" onchange="syncKioskStaffButtonStates()">
-                                <?php foreach ($stockLocations as $sl): ?>
-                                    <option value="<?php echo (int)$sl['id']; ?>">
-                                        <?php echo htmlspecialchars($sl['name'] . (!empty($sl['code']) ? ' (' . $sl['code'] . ')' : '') . (!empty($sl['location']) ? ' — ' . $sl['location'] : '')); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-lg-7">
-                            <div class="small text-muted fw-semibold mb-1">Quick Select Stock Gate:</div>
-                            <div class="d-flex flex-wrap gap-2">
-                                <?php foreach ($stockLocations as $idx => $sl): ?>
-                                    <button type="button"
-                                            class="btn btn-sm <?php echo $idx === 0 ? 'btn-success' : 'btn-outline-success'; ?> fw-bold stock-quick-pill"
-                                            data-stock-id="<?php echo (int)$sl['id']; ?>"
-                                            onclick="selectQuickStockGate(<?php echo (int)$sl['id']; ?>, this)">
-                                        <i class="fas fa-warehouse me-1"></i><?php echo htmlspecialchars($sl['name']); ?>
-                                    </button>
-                                <?php endforeach; ?>
+                            <div class="btn-group w-100" role="group" aria-label="Stock and Venue Toggle">
+                                <input type="radio" class="btn-check" name="checkpoint_type" id="cp_type_stock" value="stock_warehouse" <?php echo ($defaultType === 'stock_warehouse') ? 'checked' : ''; ?> onchange="toggleCheckpointDropdown()">
+                                <label class="btn btn-outline-success fw-bold btn-sm py-2" for="cp_type_stock" id="btn_label_stock" style="<?php echo ($defaultType === 'stock_warehouse') ? 'background: #16a34a; color: #ffffff; border-color: #16a34a;' : ''; ?>">
+                                    <i class="fas fa-warehouse me-1"></i>Stock (<?php echo htmlspecialchars($stockLabelSummary); ?>)
+                                </label>
+
+                                <input type="radio" class="btn-check" name="checkpoint_type" id="cp_type_venue" value="event_venue" <?php echo ($defaultType === 'event_venue') ? 'checked' : ''; ?> onchange="toggleCheckpointDropdown()">
+                                <label class="btn btn-outline-info fw-bold btn-sm py-2" for="cp_type_venue" id="btn_label_venue" style="<?php echo ($defaultType === 'event_venue') ? 'background: #00d2ff; color: #000000; border-color: #00d2ff;' : ''; ?>">
+                                    <i class="fas fa-location-dot me-1"></i>Venue (<?php echo htmlspecialchars($venueLabelSummary); ?>)
+                                </label>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Event Venue Selector Wrap (Shown when Venue Toggle is active) -->
-                    <div id="venueCheckpointSelectWrap" class="row g-3 align-items-center d-none">
-                        <div class="col-lg-5">
-                            <label class="form-label fw-bold small text-primary mb-1">
-                                <i class="fas fa-hotel me-1"></i>Active Event Venue (<?php echo htmlspecialchars($venueLabelSummary); ?>)
-                            </label>
-                            <select class="form-select fw-bold border-primary" id="kiosk_event_id" onchange="syncKioskStaffButtonStates()">
-                                <?php foreach ($eventsList as $ev): ?>
-                                    <option value="<?php echo (int)$ev['id']; ?>">
-                                        <?php echo htmlspecialchars($ev['title'] . (!empty($ev['location']) ? ' — ' . $ev['location'] : '') . ' (Calltime: ' . ($ev['call_time'] ?: '08:00') . ')'); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-lg-7">
-                            <div class="small text-muted fw-semibold mb-1">Quick Select Hotel / Event Venue:</div>
-                            <div class="d-flex flex-wrap gap-2">
-                                <?php foreach (array_slice($eventsList, 0, 6) as $idx => $ev): ?>
-                                    <button type="button"
-                                            class="btn btn-sm <?php echo $idx === 0 ? 'btn-primary' : 'btn-outline-primary'; ?> fw-bold venue-quick-pill"
-                                            data-event-id="<?php echo (int)$ev['id']; ?>"
-                                            onclick="selectQuickVenueGate(<?php echo (int)$ev['id']; ?>, this)">
-                                        <i class="fas fa-location-dot me-1"></i><?php echo htmlspecialchars($ev['title']); ?>
-                                    </button>
-                                <?php endforeach; ?>
+                        <!-- Step 2: Active Venue or Stock Warehouse Selector -->
+                        <div class="col-md-4">
+                            <!-- Event Venue Selector Wrap (Shown when Venue Toggle is active) -->
+                            <div id="venueCheckpointSelectWrap" class="<?php echo ($defaultType === 'event_venue') ? '' : 'd-none'; ?>">
+                                <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">
+                                    2. ACTIVE VENUE (<?php echo htmlspecialchars($venueLabelSummary); ?>)
+                                </label>
+                                <select class="form-select bg-dark text-white border-secondary fw-semibold" id="kiosk_event_id" onchange="syncKioskStaffButtonStates()">
+                                    <?php foreach ($eventsList as $ev): ?>
+                                        <option value="<?php echo (int)$ev['id']; ?>" <?php echo ($defaultEventId === (int)$ev['id']) ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($ev['title'] . (!empty($ev['location']) ? ' — ' . $ev['location'] : '') . (!empty($ev['venue_room']) ? ' (Room: ' . $ev['venue_room'] . ')' : '') . ' (Calltime: ' . ($ev['call_time'] ?: '08:00') . ')'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
+
+                            <!-- Stock Location Selector Wrap (Shown when Stock Toggle is active) -->
+                            <div id="stockCheckpointSelectWrap" class="<?php echo ($defaultType === 'stock_warehouse') ? '' : 'd-none'; ?>">
+                                <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">
+                                    2. ACTIVE STOCK WAREHOUSE (<?php echo htmlspecialchars($stockLabelSummary); ?>)
+                                </label>
+                                <select class="form-select bg-dark text-white border-secondary fw-semibold" id="kiosk_stock_id" onchange="syncKioskStaffButtonStates()">
+                                    <?php foreach ($stockLocations as $sl): ?>
+                                        <option value="<?php echo (int)$sl['id']; ?>" <?php echo ($defaultStockId === (int)$sl['id']) ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($sl['name'] . (!empty($sl['code']) ? ' (' . $sl['code'] . ')' : '') . (!empty($sl['location']) ? ' — ' . $sl['location'] : '')); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Scan Action Mode -->
+                        <div class="col-md-4">
+                            <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">
+                                3. SCAN ACTION MODE
+                            </label>
+                            <select id="kiosk_scan_mode_select" class="form-select bg-dark text-white border-secondary fw-semibold" onchange="syncScanActionMode()">
+                                <option value="auto">Auto-Toggle (Check-In on Arrival / Check-Out on Exit)</option>
+                                <option value="check_in">Check-In Only (Venue / Stock Arrival)</option>
+                                <option value="check_out">Check-Out Only (Departure)</option>
+                                <option value="access_verify">Verify Badge Access Only</option>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -1362,7 +1610,7 @@ require_once 'views/partials/header.php';
                         <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
                             <div>
                                 <h5 class="mb-0 fw-bold text-dark">
-                                    <i class="fas fa-magnifying-glass text-primary me-2"></i>Search Staff by Name or Scan Badge
+                                    <i class="fas fa-magnifying-glass text-primary me-2"></i>Search Staff by Name &amp; Badge
                                 </h5>
                                 <div class="small text-muted">Type name &rarr; Find &rarr; Click <strong>Checkin</strong> (disables) then <strong>Checkout</strong> (disables)</div>
                             </div>
@@ -1467,8 +1715,8 @@ require_once 'views/partials/header.php';
                     <div class="card border-0 shadow-sm rounded-4 h-100">
                         <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
                             <div>
-                                <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-shield-check text-success me-2"></i>Live Gate Decision &amp; Recent Scans</h5>
-                                <div class="small text-muted" id="activeCheckpointBannerLabel">Active Gate: Stock (BKAr / KCC)</div>
+                                <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-shield-check text-success me-2"></i>Live Gate Decision</h5>
+                                <div class="small text-muted" id="activeCheckpointBannerLabel"><?php echo ($defaultType === 'event_venue' ? 'Active Venue: ' : 'Active Stock Gate: ') . htmlspecialchars($initialCheckpointName); ?></div>
                             </div>
                             <a href="venue_scanner.php" target="_blank" class="btn btn-xs btn-outline-primary fw-bold">
                                 <i class="fas fa-up-right-from-square me-1"></i>Full-Screen Kiosk
@@ -1476,17 +1724,152 @@ require_once 'views/partials/header.php';
                         </div>
 
                         <div class="card-body p-4">
+                            <?php if ($initialKioskUser):
+                                $initName = $initialKioskUser['full_name'] ?: $initialKioskUser['username'];
+                                $initInitials = getUserInitials($initName);
+                                $initRole = ucwords(str_replace('_', ' ', $initialKioskUser['role'] ?: 'Crew'));
+                                $initDept = strtoupper($initialKioskUser['department'] ?: 'Video');
+                                $initRoleDeptTag = strtoupper($initRole) . ($initDept ? ' - ' . $initDept : '');
+                                $initCKey = $initialKioskUser['clearance_level'] ?: 'L2_TECH_STAGE';
+                                $initCMeta = $clearanceMeta[$initCKey] ?? $clearanceMeta['L2_TECH_STAGE'];
+                                $initCCode = $initCMeta['code'] ?? 'L2';
+                                $initParts = preg_split('/[\x{2013}\x{2014}\-]/u', $initCMeta['title'] ?? '');
+                                $initCTitle = !empty($initParts) ? trim(end($initParts)) : 'Technical & Stage';
+                                $initHasPhoto = !empty($initialKioskUser['has_photo']);
+                                $initPhotoUrl = $initialKioskUser['profile_image'] ?? '';
+                                $initBadgeCode = $initialKioskUser['badge_code'] ?? 'ABL-BDG-0006';
+                            ?>
+                            <div id="kioskResultPlaceholder" class="p-4 rounded-4 border bg-light text-center mb-4 d-none">
+                                <i class="fas fa-id-card-clip fa-2x text-secondary mb-2"></i>
+                                <h6 class="fw-bold text-dark mb-1">Ready for Stock or Venue Checkin / Checkout</h6>
+                                <p class="text-muted small mb-0">Select a checkpoint above, then click Checkin or Checkout next to any staff member.</p>
+                            </div>
+
+                            <div id="kioskResultActiveCard" class="rounded-4 overflow-hidden mb-3 shadow-lg border-0 text-start" style="background: #ffffff;">
+                                <div class="row g-0">
+                                    <!-- Left: Portrait Photo with Role Pill at Bottom -->
+                                    <div class="col-md-5 position-relative" style="background: #e2e8f0; min-height: 290px;">
+                                        <?php if ($initHasPhoto): ?>
+                                            <img src="<?php echo htmlspecialchars($initPhotoUrl); ?>"
+                                                 alt="<?php echo htmlspecialchars($initName); ?>"
+                                                 style="width: 100%; height: 100%; min-height: 290px; max-height: 330px; object-fit: cover; object-position: center top; display: block;"
+                                                 onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.classList.remove('d-none');">
+                                        <?php endif; ?>
+                                        <div class="<?php echo $initHasPhoto ? 'd-none' : ''; ?> d-flex flex-column align-items-center justify-content-center w-100 h-100"
+                                             style="min-height: 290px; background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);">
+                                            <div class="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold text-white shadow"
+                                                 style="width: 96px; height: 96px; background: rgba(255,255,255,0.18); border: 3px solid rgba(255,255,255,0.4); font-size: 2.3rem; letter-spacing: 1px;">
+                                                <?php echo htmlspecialchars($initInitials); ?>
+                                            </div>
+                                        </div>
+                                        <!-- Bottom Cyan Role Pill -->
+                                        <div class="position-absolute bottom-0 start-50 translate-middle-x mb-3 text-nowrap px-2" style="z-index: 3; max-width: 90%;">
+                                            <span class="badge shadow text-truncate d-inline-block"
+                                                  style="background: #2998d8; color: #ffffff; font-weight: 800; font-size: 0.82rem; padding: 7px 18px; border-radius: 20px; letter-spacing: 0.8px; max-width: 100%;">
+                                                <?php echo htmlspecialchars($initRoleDeptTag); ?>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Right: Blue Header with Name + L2 Circle, Middle with Clearance Pill, Status Circle, Big Pill, In/Out Times & Footer -->
+                                    <div class="col-md-7 d-flex flex-column justify-content-between" style="background: #ffffff;">
+                                        <!-- Top Navy Blue Name Header with Clearance Code Circle Badge (Image 2) -->
+                                        <div class="px-4 py-3 d-flex justify-content-between align-items-center" style="background: #17487a;">
+                                            <h3 class="fw-bold mb-0 text-white" style="letter-spacing: 0.5px; font-size: 1.65rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                                                <?php echo htmlspecialchars($initName); ?>
+                                            </h3>
+                                            <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm"
+                                                 style="width: 36px; height: 36px; background: #ffffff; color: #0f172a; font-size: 0.95rem; font-weight: 800; flex-shrink: 0;"
+                                                 title="Clearance Level: <?php echo htmlspecialchars($initCCode); ?>">
+                                                <?php echo htmlspecialchars($initCCode); ?>
+                                            </div>
+                                        </div>
+
+                                        <!-- Middle Section: Clearance Pill + Circle Icon + ACCESS GRANTED + Timestamps -->
+                                        <div class="p-3 px-4 position-relative d-flex flex-column align-items-center justify-content-center flex-grow-1">
+                                            <!-- Top-Right Clearance Tag (Title only, Image 2 style) -->
+                                            <div class="position-absolute top-0 end-0 p-3">
+                                                <span class="badge" style="background: #8fa4b8; color: #0f172a; font-size: 0.84rem; font-weight: 800; border-radius: 14px; padding: 6px 16px; letter-spacing: 0.3px;">
+                                                    <?php echo htmlspecialchars($initCTitle); ?>
+                                                </span>
+                                            </div>
+
+                                            <!-- Big Status Ring Icon -->
+                                            <div class="mt-2 mb-2">
+                                                <div class="rounded-circle d-flex align-items-center justify-content-center shadow-sm"
+                                                     style="width: 74px; height: 74px; border: 4.5px solid #22c55e; background: #ffffff;">
+                                                    <i class="fas fa-check" style="font-size: 2.2rem; color: #22c55e;"></i>
+                                                </div>
+                                            </div>
+
+                                            <!-- Big Status Action Button / Pill -->
+                                            <div class="my-2">
+                                                <span class="badge shadow-sm"
+                                                      style="background: #16a34a; color: #ffffff; font-size: 1.18rem; font-weight: 800; border-radius: 10px; padding: 9px 28px; letter-spacing: 0.8px;">
+                                                    ACCESS GRANTED
+                                                </span>
+                                            </div>
+
+                                            <!-- Inbound (Check-in) and Outbound (Check-out) Timestamps (Image 2) -->
+                                            <div class="w-100 px-3 mt-3 d-flex justify-content-between align-items-center">
+                                                <!-- Check-in Time & Quick Action Trigger -->
+                                                <div class="d-flex align-items-center gate-time-action gate-checkin-action"
+                                                     onclick="handleKioskStaffAction(<?php echo (int)$initialKioskUser['id']; ?>, '<?php echo htmlspecialchars($initBadgeCode); ?>', 'check_in')"
+                                                     style="cursor: pointer; user-select: none;"
+                                                     title="Check In (<?php echo htmlspecialchars($initInTime); ?>) — Click to check in staff">
+                                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="me-2" style="flex-shrink: 0;">
+                                                        <path d="M10 4.5A8 8 0 1 1 10 19.5"></path>
+                                                        <polyline points="10 8 14 12 10 16"></polyline>
+                                                        <line x1="2" y1="12" x2="14" y2="12"></line>
+                                                    </svg>
+                                                    <span class="fw-bold" style="color: #0f172a; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.3px;">
+                                                        <?php echo htmlspecialchars($initInTime); ?>
+                                                    </span>
+                                                </div>
+
+                                                <!-- Check-out Time & Quick Action Trigger -->
+                                                <div class="d-flex align-items-center gate-time-action gate-checkout-action"
+                                                     onclick="handleKioskStaffAction(<?php echo (int)$initialKioskUser['id']; ?>, '<?php echo htmlspecialchars($initBadgeCode); ?>', 'check_out')"
+                                                     style="cursor: pointer; user-select: none;"
+                                                     title="Check Out (<?php echo htmlspecialchars($initOutTime); ?>) — Click to check out staff">
+                                                    <span class="fw-bold me-2" style="color: #0f172a; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.3px;">
+                                                        <?php echo htmlspecialchars($initOutTime); ?>
+                                                    </span>
+                                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                                                        <path d="M14 4.5A8 8 0 1 0 14 19.5"></path>
+                                                        <polyline points="14 8 18 12 14 16"></polyline>
+                                                        <line x1="6" y1="12" x2="18" y2="12"></line>
+                                                    </svg>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Bottom Footer Bar: Badge # and Clearance Location (Image 2) -->
+                                        <div class="px-4 py-3 d-flex flex-wrap justify-content-between align-items-center border-top"
+                                             style="background: #edf2f7; border-color: #e2e8f0 !important; font-size: 0.88rem;">
+                                            <div>
+                                                <strong style="color: #0f2e5a; font-family: monospace; letter-spacing: 0.8px; font-size: 0.95rem;">
+                                                    BADGE &nbsp;#:&nbsp; <?php echo htmlspecialchars($initBadgeCode); ?>
+                                                </strong>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-1">
+                                                <i class="fas fa-map-marker-alt" style="color: #b45309;"></i>
+                                                <span id="kioskCardLocationFooter" class="fst-italic text-secondary" style="font-size: 0.84rem;">
+                                                    <?php echo htmlspecialchars($initialCheckpointName); ?> Clearance - Verified.
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php else: ?>
                             <div id="kioskResultPlaceholder" class="p-4 rounded-4 border bg-light text-center mb-4">
                                 <i class="fas fa-id-card-clip fa-2x text-secondary mb-2"></i>
                                 <h6 class="fw-bold text-dark mb-1">Ready for Stock or Venue Checkin / Checkout</h6>
-                                <p class="text-muted small mb-0">
-                                    Select <strong>Stock (BKAr, KCC)</strong> or <strong>Venue (Marriot Hotel, FourPoint Hotel, MovenPick Hotel..)</strong> above, then click <strong>Checkin</strong> or <strong>Checkout</strong> next to any staff member.
-                                </p>
+                                <p class="text-muted small mb-0">Select a checkpoint above, then click Checkin or Checkout next to any staff member.</p>
                             </div>
-
-                            <div id="kioskResultActiveCard" class="rounded-4 overflow-hidden shadow-sm mb-4 d-none">
-                                <!-- Populated dynamically by JS on Checkin / Checkout / Scan -->
-                            </div>
+                            <div id="kioskResultActiveCard" class="rounded-4 overflow-hidden shadow-sm mb-4 d-none"></div>
+                            <?php endif; ?>
 
                             <h6 class="fw-bold text-uppercase small text-muted mb-2">
                                 <i class="fas fa-clock-rotate-left me-1"></i>Recent Stock &amp; Venue Gate Scans
@@ -1701,8 +2084,86 @@ require_once 'views/partials/header.php';
             </div>
         </div>
 
-        <!-- ==================== TAB 4: STOCK & VENUE CLEARANCE MATRIX ==================== -->
+        <!-- ==================== TAB 4: ACCESS LEVELS & CLEARANCE MATRIX ==================== -->
         <div class="tab-pane fade <?php echo ($initialTab === 'matrix') ? 'show active' : ''; ?> no-print" id="pane-matrix" role="tabpanel">
+            <!-- Access Clearance Levels Management Card (CRUD) -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom">
+                    <div>
+                        <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-layer-group text-primary me-2"></i>Access Clearance Levels Management</h5>
+                        <div class="small text-muted">Create, edit, and configure clearance tiers, custom colors, badge icons, and default Stock &amp; Venue scopes</div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-success fw-bold px-3" onclick="openAddAccessLevelModal()">
+                        <i class="fas fa-plus-circle me-1"></i>Add New Clearance Level
+                    </button>
+                </div>
+                <div class="card-body p-3">
+                    <div class="row g-3" id="clearanceLevelsGrid">
+                        <?php foreach ($clearanceMeta as $cKey => $cm):
+                            $levelId = (int)($cm['id'] ?? 0);
+                            $staffCount = 0;
+                            foreach ($usersWithBadges as $u) {
+                                if (($u['clearance_level'] ?: 'L1_VENUE_BASIC') === $cKey) {
+                                    $staffCount++;
+                                }
+                            }
+                        ?>
+                        <div class="col-md-6 col-lg-3" id="clearance-card-<?php echo $levelId; ?>">
+                            <div class="card h-100 border shadow-sm rounded-4 overflow-hidden" style="border-top: 4px solid <?php echo $cm['color']; ?> !important;">
+                                <div class="card-body p-3 d-flex flex-column justify-content-between">
+                                    <div>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm"
+                                                 style="width: 38px; height: 38px; background: <?php echo $cm['color']; ?>; color: #ffffff; font-size: 0.95rem; font-weight: 800;">
+                                                <?php echo htmlspecialchars($cm['code']); ?>
+                                            </div>
+                                            <span class="badge font-monospace text-secondary bg-light border" style="font-size: 0.72rem;">
+                                                <?php echo htmlspecialchars($cKey); ?>
+                                            </span>
+                                        </div>
+                                        <h6 class="fw-bold text-dark mb-1"><?php echo htmlspecialchars($cm['title']); ?></h6>
+                                        <div class="small fw-semibold text-muted mb-2">
+                                            <i class="fas <?php echo $cm['icon'] ?: 'fa-shield-halved'; ?> me-1" style="color: <?php echo $cm['color']; ?>;"></i>
+                                            <?php echo htmlspecialchars($cm['short'] ?? ''); ?>
+                                        </div>
+                                        <p class="small text-muted mb-3" style="font-size: 0.78rem; min-height: 42px;">
+                                            <?php echo htmlspecialchars($cm['description'] ?? ''); ?>
+                                        </p>
+
+                                        <div class="d-flex flex-column gap-1 mb-3" style="font-size: 0.74rem;">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="text-muted"><i class="fas fa-warehouse me-1 text-success"></i>Stock Scope:</span>
+                                                <span class="badge bg-light text-dark border"><?php echo ucfirst($cm['default_stock_access'] ?? 'none'); ?></span>
+                                            </div>
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="text-muted"><i class="fas fa-location-dot me-1 text-primary"></i>Venue Scope:</span>
+                                                <span class="badge bg-light text-dark border"><?php echo ucfirst(str_replace('_', ' ', $cm['default_venue_access'] ?? 'assigned_only')); ?></span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="pt-2 border-top d-flex justify-content-between align-items-center">
+                                        <span class="badge bg-secondary-subtle text-secondary" style="font-size: 0.72rem;">
+                                            <i class="fas fa-users me-1"></i><?php echo $staffCount; ?> Staff
+                                        </span>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-outline-primary btn-xs px-2 py-1" onclick="openEditAccessLevelModal(<?php echo $levelId; ?>)" title="Edit Clearance Level">
+                                                <i class="fas fa-edit me-1"></i>Edit
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger btn-xs px-2 py-1" onclick="confirmDeleteAccessLevel(<?php echo $levelId; ?>, '<?php echo htmlspecialchars($cKey); ?>', '<?php echo htmlspecialchars($cm['title']); ?>', <?php echo $staffCount; ?>)" title="Delete Clearance Level">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Staff Access Clearance Matrix Table Card -->
             <div class="card border-0 shadow-sm rounded-4">
                 <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
                     <div>
@@ -1913,11 +2374,117 @@ require_once 'views/partials/header.php';
     </div>
 </div>
 
+<!-- ==================== MODAL: ADD / EDIT ACCESS CLEARANCE LEVEL ==================== -->
+<div class="modal fade no-print" id="modalAccessLevelForm" tabindex="-1" aria-labelledby="modalAccessLevelTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white py-3 px-4">
+                <h5 class="modal-title fw-bold" id="modalAccessLevelTitle">
+                    <i class="fas fa-shield-halved text-warning me-2"></i>Configure Access Clearance Level
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="accessLevelForm" onsubmit="submitAccessLevelForm(event)">
+                <input type="hidden" name="ajax_action" value="save_clearance_level">
+                <input type="hidden" name="level_id" id="lvl_id" value="0">
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Level Code <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control font-monospace fw-bold" name="code" id="lvl_code" placeholder="e.g. L5" maxlength="10" required>
+                            <div class="form-text" style="font-size: 0.72rem;">Circular badge text (e.g. L1, L2, L5, VIP).</div>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold small">Level Key <span class="text-muted">(Identifier)</span></label>
+                            <input type="text" class="form-control font-monospace" name="level_key" id="lvl_key" placeholder="e.g. L5_VIP_STAGE">
+                            <div class="form-text" style="font-size: 0.72rem;">Leave empty to auto-generate.</div>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Full Title <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control fw-semibold" name="title" id="lvl_title" placeholder="e.g. Level 5 — VIP & Production Head" required>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Short Name / Tagline</label>
+                            <input type="text" class="form-control" name="short_name" id="lvl_short_name" placeholder="e.g. VIP Backstage & Stock Vault">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Theme Color</label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="color" class="form-control form-control-color" id="lvl_color_picker" value="#0284c7" oninput="document.getElementById('lvl_color').value=this.value;">
+                                <input type="text" class="form-control font-monospace" name="color" id="lvl_color" value="#0284c7" oninput="document.getElementById('lvl_color_picker').value=this.value;">
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Icon</label>
+                            <select class="form-select" name="icon" id="lvl_icon">
+                                <option value="fa-shield-halved">Shield (fa-shield-halved)</option>
+                                <option value="fa-sliders">Sliders / Tech (fa-sliders)</option>
+                                <option value="fa-warehouse">Warehouse (fa-warehouse)</option>
+                                <option value="fa-location-dot">Location Dot (fa-location-dot)</option>
+                                <option value="fa-crown">Crown / VIP (fa-crown)</option>
+                                <option value="fa-star">Star / Premium (fa-star)</option>
+                                <option value="fa-key">Key / Master (fa-key)</option>
+                                <option value="fa-headphones">Audio / Stage (fa-headphones)</option>
+                                <option value="fa-video">Video / Rigging (fa-video)</option>
+                                <option value="fa-bolt">Power / Tech (fa-bolt)</option>
+                                <option value="fa-truck">Transport / Dispatch (fa-truck)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Description</label>
+                            <textarea class="form-control" name="description" id="lvl_description" rows="2" placeholder="Describe the physical zones, access hours, or restrictions for this clearance tier..."></textarea>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Default Stock Scope</label>
+                            <select class="form-select" name="default_stock_access" id="lvl_default_stock">
+                                <option value="none">None</option>
+                                <option value="selected">Selected Warehouses</option>
+                                <option value="all">All Warehouses</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Default Venue Scope</label>
+                            <select class="form-select" name="default_venue_access" id="lvl_default_venue">
+                                <option value="none">None</option>
+                                <option value="assigned_only">Assigned Events Only</option>
+                                <option value="selected">Selected Venues</option>
+                                <option value="all">All Event Venues</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Sort Order</label>
+                            <input type="number" class="form-control" name="sort_order" id="lvl_sort_order" value="1" min="0" max="99">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light py-2 px-4 d-flex justify-content-between">
+                    <button type="button" class="btn btn-secondary fw-semibold" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary fw-bold" id="btnSaveClearanceLevel">
+                        <i class="fas fa-check me-1"></i>Save Clearance Level
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     const usersBadgeDirectory = <?php echo json_encode($usersWithBadges); ?>;
     const kioskCheckpointStateMap = <?php echo json_encode($todayCheckpointStates); ?>;
 
-    // Render all QR codes on DOM ready
+    function getKioskStateKey(uid, cpType, cpId) {
+        return cpType + '_' + cpId + '_' + uid;
+    }
+
+    // Render all QR codes and initialize tabs on DOM ready
     document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.cr80-qr-render').forEach(function(container) {
             const payload = container.getAttribute('data-qr') || 'ABL-BDG';
@@ -1932,7 +2499,33 @@ require_once 'views/partials/header.php';
             });
         });
 
-        if (document.getElementById('badgeSearchInput').value) {
+        // Tab switching and hash preservation
+        const hash = (window.location.hash || '').replace('#', '').toLowerCase();
+        if (hash === 'pane-matrix' || hash === 'matrix' || hash === 'access-levels') {
+            const btn = document.getElementById('tab-matrix-btn');
+            if (btn) btn.click();
+        } else if (hash === 'pane-kiosk' || hash === 'kiosk' || hash === 'terminal') {
+            const btn = document.getElementById('tab-kiosk-btn');
+            if (btn) btn.click();
+        } else if (hash === 'pane-roster' || hash === 'roster') {
+            const btn = document.getElementById('tab-roster-btn');
+            if (btn) btn.click();
+        } else if (hash === 'pane-gallery' || hash === 'gallery') {
+            const btn = document.getElementById('tab-gallery-btn');
+            if (btn) btn.click();
+        }
+
+        // Keep hash in URL when tab changes
+        document.querySelectorAll('#badgesHubTabs button[data-bs-toggle="pill"]').forEach(function(tabBtn) {
+            tabBtn.addEventListener('shown.bs.tab', function(e) {
+                const target = e.target.getAttribute('data-bs-target');
+                if (target && history.replaceState) {
+                    history.replaceState(null, '', target);
+                }
+            });
+        });
+
+        if (document.getElementById('badgeSearchInput') && document.getElementById('badgeSearchInput').value) {
             filterBadgeGallery();
         }
         syncKioskStaffButtonStates();
@@ -2041,15 +2634,22 @@ require_once 'views/partials/header.php';
     }
 
     function syncKioskStaffButtonStates() {
-        const isStock = document.getElementById('cp_type_stock').checked;
-        const cpType = isStock ? 'stock_warehouse' : 'event_venue';
-        const selEl = isStock ? document.getElementById('kiosk_stock_id') : document.getElementById('kiosk_event_id');
+        const isVenue = document.getElementById('cp_type_venue') ? document.getElementById('cp_type_venue').checked : true;
+        const isStock = !isVenue;
+        const cpType = isVenue ? 'event_venue' : 'stock_warehouse';
+        const selEl = isVenue ? document.getElementById('kiosk_event_id') : document.getElementById('kiosk_stock_id');
         const cpId = selEl ? selEl.value : '1';
         const prefix = cpType + '_' + cpId + '_';
 
         const bannerLabel = document.getElementById('activeCheckpointBannerLabel');
         if (bannerLabel && selEl && selEl.options[selEl.selectedIndex]) {
-            bannerLabel.textContent = 'Active ' + (isStock ? 'Stock Gate: ' : 'Venue Gate: ') + selEl.options[selEl.selectedIndex].text;
+            bannerLabel.textContent = 'Active ' + (isVenue ? 'Venue: ' : 'Stock Gate: ') + selEl.options[selEl.selectedIndex].text;
+        }
+
+        const footerLoc = document.getElementById('kioskCardLocationFooter');
+        if (footerLoc && selEl && selEl.options[selEl.selectedIndex]) {
+            const cleanName = selEl.options[selEl.selectedIndex].text.split('(')[0].trim();
+            footerLoc.textContent = cleanName + ' Clearance - Verified.';
         }
 
         document.querySelectorAll('.kiosk-staff-row').forEach(function(row) {
@@ -2245,15 +2845,183 @@ require_once 'views/partials/header.php';
     }
 
     function toggleCheckpointDropdown() {
-        const isStock = document.getElementById('cp_type_stock').checked;
-        document.getElementById('stockCheckpointSelectWrap').classList.toggle('d-none', !isStock);
-        document.getElementById('venueCheckpointSelectWrap').classList.toggle('d-none', isStock);
-        const searchLabel = document.getElementById('kioskSearchTypeLabel');
-        if (searchLabel) {
-            searchLabel.textContent = isStock ? 'Stock (BKAr, KCC)' : 'Venue (Marriot, FourPoint, MovenPick..)';
-            searchLabel.className = isStock ? 'badge bg-success' : 'badge bg-info text-dark';
+        const isVenue = document.getElementById('cp_type_venue') ? document.getElementById('cp_type_venue').checked : true;
+        const btnStock = document.getElementById('btn_label_stock');
+        const btnVenue = document.getElementById('btn_label_venue');
+
+        if (isVenue) {
+            if (btnVenue) {
+                btnVenue.style.background = '#00d2ff';
+                btnVenue.style.color = '#000000';
+                btnVenue.style.borderColor = '#00d2ff';
+            }
+            if (btnStock) {
+                btnStock.style.background = '';
+                btnStock.style.color = '';
+                btnStock.style.borderColor = '';
+            }
+        } else {
+            if (btnStock) {
+                btnStock.style.background = '#16a34a';
+                btnStock.style.color = '#ffffff';
+                btnStock.style.borderColor = '#16a34a';
+            }
+            if (btnVenue) {
+                btnVenue.style.background = '';
+                btnVenue.style.color = '';
+                btnVenue.style.borderColor = '';
+            }
         }
+
+        const venueWrap = document.getElementById('venueCheckpointSelectWrap');
+        const stockWrap = document.getElementById('stockCheckpointSelectWrap');
+        if (venueWrap) venueWrap.classList.toggle('d-none', !isVenue);
+        if (stockWrap) stockWrap.classList.toggle('d-none', isVenue);
+
         syncKioskStaffButtonStates();
+    }
+
+    function syncScanActionMode() {
+        const modeSel = document.getElementById('kiosk_scan_mode_select');
+        if (modeSel) {
+            document.getElementById('kiosk_scan_mode').value = modeSel.value;
+        }
+    }
+
+    // ==================== ACCESS CLEARANCE LEVELS CRUD ====================
+    function openAddAccessLevelModal() {
+        document.getElementById('modalAccessLevelTitle').innerHTML = '<i class="fas fa-plus-circle text-success me-2"></i>Add New Access Clearance Level';
+        document.getElementById('lvl_id').value = '0';
+        document.getElementById('lvl_code').value = '';
+        document.getElementById('lvl_key').value = '';
+        document.getElementById('lvl_title').value = '';
+        document.getElementById('lvl_short_name').value = '';
+        document.getElementById('lvl_color').value = '#0284c7';
+        document.getElementById('lvl_color_picker').value = '#0284c7';
+        document.getElementById('lvl_icon').value = 'fa-shield-halved';
+        document.getElementById('lvl_description').value = '';
+        document.getElementById('lvl_default_stock').value = 'none';
+        document.getElementById('lvl_default_venue').value = 'assigned_only';
+        document.getElementById('lvl_sort_order').value = '10';
+
+        const modal = new bootstrap.Modal(document.getElementById('modalAccessLevelForm'));
+        modal.show();
+    }
+
+    function openEditAccessLevelModal(id) {
+        const fd = new FormData();
+        fd.append('ajax_action', 'get_clearance_level');
+        fd.append('id', id);
+
+        fetch('id_badges.php', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success || !data.level) {
+                    Swal.fire('Error', data.message || 'Could not load clearance level details.', 'error');
+                    return;
+                }
+                const lvl = data.level;
+                document.getElementById('modalAccessLevelTitle').innerHTML = '<i class="fas fa-edit text-warning me-2"></i>Edit Access Clearance Level';
+                document.getElementById('lvl_id').value = lvl.id;
+                document.getElementById('lvl_code').value = lvl.code;
+                document.getElementById('lvl_key').value = lvl.level_key;
+                document.getElementById('lvl_title').value = lvl.title;
+                document.getElementById('lvl_short_name').value = lvl.short_name;
+                document.getElementById('lvl_color').value = lvl.color;
+                document.getElementById('lvl_color_picker').value = lvl.color;
+                document.getElementById('lvl_icon').value = lvl.icon || 'fa-shield-halved';
+                document.getElementById('lvl_description').value = lvl.description || '';
+                document.getElementById('lvl_default_stock').value = lvl.default_stock_access || 'none';
+                document.getElementById('lvl_default_venue').value = lvl.default_venue_access || 'assigned_only';
+                document.getElementById('lvl_sort_order').value = lvl.sort_order || 0;
+
+                const modal = new bootstrap.Modal(document.getElementById('modalAccessLevelForm'));
+                modal.show();
+            })
+            .catch(err => {
+                Swal.fire('Error', 'Network error fetching level details.', 'error');
+            });
+    }
+
+    function submitAccessLevelForm(e) {
+        e.preventDefault();
+        const form = document.getElementById('accessLevelForm');
+        const fd = new FormData(form);
+
+        const btn = document.getElementById('btnSaveClearanceLevel');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+
+        fetch('id_badges.php', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check me-1"></i>Save Clearance Level';
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Saved!',
+                        text: data.message,
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => {
+                        window.location.href = 'id_badges.php?tab=matrix';
+                    });
+                } else {
+                    Swal.fire('Error', data.message || 'Failed to save level.', 'error');
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check me-1"></i>Save Clearance Level';
+                Swal.fire('Error', 'Network error saving clearance level.', 'error');
+            });
+    }
+
+    function confirmDeleteAccessLevel(id, key, title, staffCount) {
+        let warningText = `Are you sure you want to delete "${title}" (${key})?`;
+        if (staffCount > 0) {
+            warningText += `\n\nNote: ${staffCount} staff member(s) currently hold this clearance level and will be automatically reassigned to Level 1 — Basic Venue Crew.`;
+        }
+
+        Swal.fire({
+            title: 'Delete Clearance Level?',
+            text: warningText,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Yes, Delete & Reassign',
+            cancelButtonText: 'Cancel'
+        }).then(result => {
+            if (result.isConfirmed) {
+                const fd = new FormData();
+                fd.append('ajax_action', 'delete_clearance_level');
+                fd.append('id', id);
+                fd.append('reassign_to', 'L1_VENUE_BASIC');
+
+                fetch('id_badges.php', { method: 'POST', body: fd })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Deleted!',
+                                text: data.message,
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(() => {
+                                window.location.href = 'id_badges.php?tab=matrix';
+                            });
+                        } else {
+                            Swal.fire('Error', data.message || 'Failed to delete clearance level.', 'error');
+                        }
+                    })
+                    .catch(err => {
+                        Swal.fire('Error', 'Network error deleting clearance level.', 'error');
+                    });
+            }
+        });
     }
 
     function simulateGateScan(badgeCode) {
@@ -2332,13 +3100,17 @@ require_once 'views/partials/header.php';
                 const actionLabel = data.scan_action === 'check_in' ? 'CHECKED IN (ARRIVAL)' :
                                    (data.scan_action === 'check_out' ? 'CHECKED OUT (DEPARTURE)' : 'CLEARANCE VERIFIED');
 
+                const stateKey = getKioskStateKey(u.id, cpType, cpId);
+                const existingState = kioskCheckpointStateMap[stateKey] || {};
+
                 if (granted && u && u.id && (data.scan_action === 'check_in' || data.scan_action === 'check_out')) {
-                    const stateKey = getKioskStateKey(u.id, cpType, cpId);
                     kioskCheckpointStateMap[stateKey] = {
-                        action: data.scan_action,
-                        time: data.scanned_at
+                        state: data.scan_action === 'check_in' ? 'checked_in' : 'checked_out',
+                        time: data.scanned_at,
+                        check_in_time: data.check_in_time || (data.scan_action === 'check_in' ? data.scanned_at : (existingState.check_in_time || null)),
+                        check_out_time: data.check_out_time || (data.scan_action === 'check_out' ? data.scanned_at : (existingState.check_out_time || null))
                     };
-                    applyKioskStaffButtonState(u.id, data.scan_action, data.scanned_at);
+                    applyKioskStaffButtonState(u.id, kioskCheckpointStateMap[stateKey]);
                 }
 
                 const getInitials = (name) => {
@@ -2354,6 +3126,15 @@ require_once 'views/partials/header.php';
                 const hasProfileImg = u.profile_image && u.profile_image.trim() !== '';
                 const roleDeptTag = (u.role ? u.role.replace(/_/g, ' ').toUpperCase() : 'CREW') + (u.department ? ' - ' + u.department.toUpperCase() : '');
                 const timeActionText = data.scan_action === 'check_in' ? 'Arrived at' : (data.scan_action === 'check_out' ? 'Departed at' : 'Scanned at');
+
+                const clearanceCode = u.clearance_code || 'L2';
+                const clearanceCleanTitle = (u.clearance_title || 'Technical & Stage')
+                    .replace(/^Level\s+\d+\s*[-—]\s*/i, '')
+                    .trim();
+
+                const curState = kioskCheckpointStateMap[stateKey] || {};
+                const displayInTime = data.check_in_time || (data.scan_action === 'check_in' ? data.scanned_at : (curState.check_in_time || '--:--:--'));
+                const displayOutTime = data.check_out_time || (data.scan_action === 'check_out' ? data.scanned_at : (curState.check_out_time || '--:--:--'));
 
                 const smallAvatarHtml = hasProfileImg
                     ? `<img src="${u.profile_image}" alt="${u.full_name}" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1.5px solid ${uColor};" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.classList.remove('d-none');">
@@ -2389,21 +3170,26 @@ require_once 'views/partials/header.php';
                             </div>
                         </div>
 
-                        <!-- Right: Blue Header with Name, Status Circle, Big Pill, Timestamp & Footer -->
+                        <!-- Right: Blue Header with Name + L2 Circle, Middle with Clearance Pill, Status Circle, Big Pill, In/Out Times & Footer -->
                         <div class="col-md-7 d-flex flex-column justify-content-between" style="background: #ffffff;">
-                            <!-- Top Navy Blue Name Header -->
-                            <div class="px-4 py-3" style="background: #17487a;">
+                            <!-- Top Navy Blue Name Header with Clearance Code Circle Badge (Image 2) -->
+                            <div class="px-4 py-3 d-flex justify-content-between align-items-center" style="background: #17487a;">
                                 <h3 class="fw-bold mb-0 text-white" style="letter-spacing: 0.5px; font-size: 1.65rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                                     ${u.full_name}
                                 </h3>
+                                <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm"
+                                     style="width: 36px; height: 36px; background: #ffffff; color: #0f172a; font-size: 0.95rem; font-weight: 800; flex-shrink: 0;"
+                                     title="Clearance Level: ${clearanceCode}">
+                                    ${clearanceCode}
+                                </div>
                             </div>
 
-                            <!-- Middle Section: Clearance Pill + Circle Icon + ACCESS GRANTED + Timestamp -->
+                            <!-- Middle Section: Clearance Pill + Circle Icon + ACCESS GRANTED + Timestamps -->
                             <div class="p-3 px-4 position-relative d-flex flex-column align-items-center justify-content-center flex-grow-1">
-                                <!-- Top-Right Clearance Tag -->
+                                <!-- Top-Right Clearance Tag (Title only, Image 2 style) -->
                                 <div class="position-absolute top-0 end-0 p-3">
-                                    <span class="badge" style="background: #e2e8f0; color: #334155; font-size: 0.78rem; font-weight: 700; border-radius: 8px; padding: 5px 12px;">
-                                        ${u.clearance_title || 'Technical & Stage'}
+                                    <span class="badge" style="background: #8fa4b8; color: #0f172a; font-size: 0.84rem; font-weight: 800; border-radius: 14px; padding: 6px 16px; letter-spacing: 0.3px;">
+                                        ${clearanceCleanTitle}
                                     </span>
                                 </div>
 
@@ -2425,49 +3211,66 @@ require_once 'views/partials/header.php';
                                 <!-- Big Status Action Button / Pill -->
                                 <div class="my-2">
                                     <span class="badge shadow-sm"
-                                          style="background: ${granted ? '#16a34a' : '#dc2626'}; color: #ffffff; font-size: 1.18rem; font-weight: 800; border-radius: 10px; padding: 9px 26px; letter-spacing: 0.8px;">
+                                          style="background: ${granted ? '#16a34a' : '#dc2626'}; color: #ffffff; font-size: 1.18rem; font-weight: 800; border-radius: 10px; padding: 9px 28px; letter-spacing: 0.8px;">
                                         ${granted ? 'ACCESS GRANTED' : 'ACCESS DENIED'}
                                     </span>
                                 </div>
 
-                                <!-- Timestamp / Denial Reason -->
-                                <div class="mt-2 text-center">
-                                    <span class="fw-bold" style="color: #0f2e5a; font-size: 0.95rem;">
-                                        ${timeActionText} - ${data.scanned_at}.
-                                    </span>
-                                    ${!granted ? `<div class="small text-danger fw-semibold mt-1">${data.reason}</div>` : ''}
-                                </div>
+                                ${granted ? `
+                                    <!-- Inbound (Check-in) and Outbound (Check-out) Timestamps (Image 2) -->
+                                    <div class="w-100 px-3 mt-3 d-flex justify-content-between align-items-center">
+                                        <!-- Check-in Time & Quick Action Trigger -->
+                                        <div class="d-flex align-items-center gate-time-action gate-checkin-action"
+                                             onclick="handleKioskStaffAction(${u.id}, '${u.badge_code}', 'check_in')"
+                                             style="cursor: pointer; user-select: none;"
+                                             title="Check In (${displayInTime}) — Click to check in staff">
+                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="me-2" style="flex-shrink: 0;">
+                                                <path d="M10 4.5A8 8 0 1 1 10 19.5"></path>
+                                                <polyline points="10 8 14 12 10 16"></polyline>
+                                                <line x1="2" y1="12" x2="14" y2="12"></line>
+                                            </svg>
+                                            <span class="fw-bold" style="color: #0f172a; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.3px;">
+                                                ${displayInTime}
+                                            </span>
+                                        </div>
+
+                                        <!-- Check-out Time & Quick Action Trigger -->
+                                        <div class="d-flex align-items-center gate-time-action gate-checkout-action"
+                                             onclick="handleKioskStaffAction(${u.id}, '${u.badge_code}', 'check_out')"
+                                             style="cursor: pointer; user-select: none;"
+                                             title="Check Out (${displayOutTime}) — Click to check out staff">
+                                            <span class="fw-bold me-2" style="color: #0f172a; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.3px;">
+                                                ${displayOutTime}
+                                            </span>
+                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                                                <path d="M14 4.5A8 8 0 1 0 14 19.5"></path>
+                                                <polyline points="14 8 18 12 14 16"></polyline>
+                                                <line x1="6" y1="12" x2="18" y2="12"></line>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                ` : `
+                                    <div class="mt-2 text-center">
+                                        <span class="fw-bold text-danger" style="font-size: 0.95rem;">
+                                            ${data.reason || 'Checkpoint Clearance Required'}
+                                        </span>
+                                    </div>
+                                `}
                             </div>
 
-                            <!-- Bottom Footer Bar: Badge #, Location & Quick Function Buttons -->
-                            <div class="px-3 py-2 d-flex flex-wrap justify-content-between align-items-center border-top"
+                            <!-- Bottom Footer Bar: Badge # and Clearance Location (Image 2) -->
+                            <div class="px-4 py-3 d-flex flex-wrap justify-content-between align-items-center border-top"
                                  style="background: #edf2f7; border-color: #e2e8f0 !important; font-size: 0.88rem;">
                                 <div>
-                                    <strong style="color: #0f2e5a; font-family: monospace; letter-spacing: 0.5px; font-size: 0.92rem;">
-                                        BADGE #: ${u.badge_code}
+                                    <strong style="color: #0f2e5a; font-family: monospace; letter-spacing: 0.8px; font-size: 0.95rem;">
+                                        BADGE &nbsp;#:&nbsp; ${u.badge_code}
                                     </strong>
                                 </div>
                                 <div class="d-flex align-items-center gap-1">
                                     <i class="fas fa-map-marker-alt" style="color: #b45309;"></i>
-                                    <span class="fst-italic text-secondary" style="font-size: 0.82rem;">
+                                    <span class="fst-italic text-secondary" style="font-size: 0.84rem;">
                                         ${data.checkpoint_name} ${granted ? 'Clearance - Verified.' : '— Denied.'}
                                     </span>
-                                </div>
-                                <div class="d-flex gap-1">
-                                    <button type="button"
-                                            class="btn btn-xs ${granted && data.scan_action === 'check_in' ? 'btn-success' : 'btn-outline-success'} fw-bold px-2 py-1"
-                                            style="font-size: 0.72rem; border-radius: 6px;"
-                                            onclick="handleKioskStaffAction(${u.id}, '${u.badge_code}', 'check_in')"
-                                            title="Check In">
-                                        <i class="fas fa-sign-in-alt me-1"></i>Checkin
-                                    </button>
-                                    <button type="button"
-                                            class="btn btn-xs ${granted && data.scan_action === 'check_out' ? 'btn-warning text-dark' : 'btn-outline-warning text-dark'} fw-bold px-2 py-1"
-                                            style="font-size: 0.72rem; border-radius: 6px;"
-                                            onclick="handleKioskStaffAction(${u.id}, '${u.badge_code}', 'check_out')"
-                                            title="Check Out">
-                                        <i class="fas fa-sign-out-alt me-1"></i>Checkout
-                                    </button>
                                 </div>
                             </div>
                         </div>
