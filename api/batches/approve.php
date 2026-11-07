@@ -23,11 +23,13 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$userId = $_SESSION['user_id'] ?? 0;
+$userId = (int)($_SESSION['user_id'] ?? 0);
 $userRole = $_SESSION['role'] ?? ($_SESSION['user_role'] ?? '');
-$userName = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'Approver');
+$userLoginName = trim($_SESSION['username'] ?? '');
+$userFullName = trim($_SESSION['full_name'] ?? '');
+$userName = !empty($userFullName) ? $userFullName : (!empty($userLoginName) ? $userLoginName : 'Approver');
 $isAdmin = in_array($userRole, ['admin', 'superadmin']);
-$isStockController = ($userRole === 'stock_controller');
+$isStockController = ($userRole === 'stock_controller' || strtolower($userLoginName) === 'mirene');
 
 if (!$isAdmin && !$isStockController) {
     echo json_encode(['success' => false, 'message' => 'Access denied. Only Admins and Stock Controllers can manage batch approvals.']);
@@ -71,14 +73,28 @@ $checkStmt->close();
 
 // Role-Based Restriction:
 // Admins can manage ANY batch.
-// Stock controllers can approve any standard movement
-$allowedMovements = ['stock_to_stock', 'stock_to_venue_transport', 'stock_to_venue_room', 'venue_room_to_stock', 'transport'];
-$isAllowedMovement = in_array($batch['movement_type'], $allowedMovements);
+// Stock controllers can only manage batches where they were the selected stock controller.
+if (!$isAdmin) {
+    $isAssigned = false;
+    if ($userId > 0 && !empty($batch['stock_controller_id']) && (int)$batch['stock_controller_id'] === (int)$userId) {
+        $isAssigned = true;
+    }
+    if (!empty($userLoginName) && !empty($batch['stock_controller_name'])) {
+        if (strcasecmp($batch['stock_controller_name'], $userLoginName) === 0 || stripos($batch['stock_controller_name'], $userLoginName . ' (') === 0) {
+            $isAssigned = true;
+        }
+    }
+    if (!empty($userFullName) && !empty($batch['stock_controller_name'])) {
+        if (strcasecmp($batch['stock_controller_name'], $userFullName) === 0 || stripos($batch['stock_controller_name'], $userFullName . ' (') === 0) {
+            $isAssigned = true;
+        }
+    }
 
-if (!$isAdmin && !$isAllowedMovement && !empty($batch['stock_controller_id']) && $batch['stock_controller_id'] != $userId) {
-    echo json_encode(['success' => false, 'message' => 'Access denied. You can only manage batches assigned to your stock or standard movements.']);
-    $conn->close();
-    exit();
+    if (!$isAssigned) {
+        echo json_encode(['success' => false, 'message' => 'Access denied. You can only manage batches where you are the selected stock controller.']);
+        $conn->close();
+        exit();
+    }
 }
 
 $currentStatus = $batch['status'] ?? $batch['approval_status'];

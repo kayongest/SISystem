@@ -4,8 +4,10 @@
 // ==================== SESSION CONFIGURATION ====================
 // Configure session parameters only if session is not active yet
 if (session_status() === PHP_SESSION_NONE) {
-    // Set session name first
-    session_name('equipment_manager');
+    // Only set custom session name if equipment_manager cookie is present and PHPSESSID is not
+    if (isset($_COOKIE['equipment_manager']) && !isset($_COOKIE['PHPSESSID'])) {
+        session_name('equipment_manager');
+    }
 
     // Configure session cookie parameters
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443) ? "https" : "http";

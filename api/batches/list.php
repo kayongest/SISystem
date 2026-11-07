@@ -16,6 +16,12 @@ if (!$conn) {
     exit();
 }
 
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Please log in to view batches', 'batches' => [], 'total' => 0]);
+    $conn->close();
+    exit();
+}
+
 // ✅ FIX: Use !empty() so empty strings from JS are treated as null, not used as filter values
 $date_from     = !empty($_GET['date_from'])     ? $_GET['date_from']     : null;
 $date_to       = !empty($_GET['date_to'])       ? $_GET['date_to']       : null;
@@ -46,7 +52,10 @@ $sql = "SELECT
             b.stock_controller_id,
             b.stock_controller_name,
             b.stock_location_name,
-            b.movement_type
+            b.movement_type,
+            b.transport_driver,
+            b.driver_verified,
+            b.tech_onboard
         FROM stock_movements b
         LEFT JOIN users t ON b.technician_id = t.id
         WHERE 1=1";
@@ -55,13 +64,42 @@ $params = [];
 $types = "";
 
 // Role-Based Filtering: Stock Controllers only see their assigned batches
-$userRole = $_SESSION['role'] ?? '';
-$userId = $_SESSION['user_id'] ?? 0;
+$userRole = $_SESSION['role'] ?? ($_SESSION['user_role'] ?? '');
+$userId = (int)($_SESSION['user_id'] ?? 0);
+$userName = trim($_SESSION['username'] ?? '');
+$userFullName = trim($_SESSION['full_name'] ?? '');
+$isAdmin = in_array($userRole, ['admin', 'superadmin']);
+$isStockController = ($userRole === 'stock_controller' || strtolower($userName) === 'mirene');
 
-if ($userRole === 'stock_controller') {
-    $sql .= " AND (b.stock_controller_id = ? OR b.movement_type IN ('transport', 'stock_to_venue_transport', 'stock_to_stock', 'stock_to_venue_room', 'venue_room_to_stock'))";
-    $params[] = $userId;
-    $types .= "i";
+if (!$isAdmin && $isStockController) {
+    $scConditions = [];
+    if ($userId > 0) {
+        $scConditions[] = "b.stock_controller_id = ?";
+        $params[] = $userId;
+        $types .= "i";
+    }
+    if (!empty($userName)) {
+        $scConditions[] = "LOWER(b.stock_controller_name) = LOWER(?)";
+        $params[] = $userName;
+        $types .= "s";
+        $scConditions[] = "LOWER(b.stock_controller_name) LIKE LOWER(CONCAT(?, ' (%'))";
+        $params[] = $userName;
+        $types .= "s";
+    }
+    if (!empty($userFullName) && strcasecmp($userFullName, $userName) !== 0) {
+        $scConditions[] = "LOWER(b.stock_controller_name) = LOWER(?)";
+        $params[] = $userFullName;
+        $types .= "s";
+        $scConditions[] = "LOWER(b.stock_controller_name) LIKE LOWER(CONCAT(?, ' (%'))";
+        $params[] = $userFullName;
+        $types .= "s";
+    }
+
+    if (!empty($scConditions)) {
+        $sql .= " AND (" . implode(" OR ", $scConditions) . ")";
+    } else {
+        $sql .= " AND 1=0";
+    }
 }
 
 if ($date_from) {

@@ -623,9 +623,12 @@ $pageTitle = "Batch History - aBility";
     <div class="container-fluid px-4 py-4">
         <!-- Page Title -->
         <div class="d-flex justify-content-between align-items-center mb-4 no-print">
-            <h4 class="mb-0">
-                Filter Batches
-            </h4>
+            <div>
+                <h4 class="mb-0">Batch Approvals</h4>
+                <?php if ($is_stock_controller): ?>
+                    <small class="text-muted"><i class="fas fa-user-shield me-1 text-primary"></i>Logged in as Stock Controller: <strong><?php echo htmlspecialchars($_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Stock Controller'); ?></strong> (Showing batches submitted to you)</small>
+                <?php endif; ?>
+            </div>
             <div>
                 <button class="btn btn-outline btn-sm me-2 text-white" style="background-color: #3A6D8C;" onclick="refreshData()">
                     <i class="fas fa-sync-alt me-1"></i> Refresh

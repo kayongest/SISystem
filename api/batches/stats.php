@@ -16,6 +16,12 @@ if (!$conn) {
     exit();
 }
 
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Please log in to view stats', 'stats' => []]);
+    $conn->close();
+    exit();
+}
+
 $raw_from = $_GET['date_from'] ?? date('Y-m-d', strtotime('-30 days'));
 $raw_to = $_GET['date_to'] ?? date('Y-m-d');
 $date_from = $conn->real_escape_string($raw_from);
@@ -23,12 +29,36 @@ $date_to = $conn->real_escape_string($raw_to);
 
 $stats = [];
 
-// Role-Based Filtering
-$userRole = $_SESSION['role'] ?? '';
-$userId = $_SESSION['user_id'] ?? 0;
+// Role-Based Filtering: Stock Controllers only see their assigned batches
+$userRole = $_SESSION['role'] ?? ($_SESSION['user_role'] ?? '');
+$userId = (int)($_SESSION['user_id'] ?? 0);
+$userName = trim($_SESSION['username'] ?? '');
+$userFullName = trim($_SESSION['full_name'] ?? '');
+$isAdmin = in_array($userRole, ['admin', 'superadmin']);
+$isStockController = ($userRole === 'stock_controller' || strtolower($userName) === 'mirene');
+
 $roleFilter = "";
-if ($userRole === 'stock_controller') {
-    $roleFilter = " AND (stock_controller_id = " . intval($userId) . " OR movement_type IN ('transport', 'stock_to_venue_transport', 'stock_to_stock', 'stock_to_venue_room', 'venue_room_to_stock'))";
+if (!$isAdmin && $isStockController) {
+    $scParts = [];
+    if ($userId > 0) {
+        $scParts[] = "stock_controller_id = " . $userId;
+    }
+    if (!empty($userName)) {
+        $escapedUser = $conn->real_escape_string($userName);
+        $scParts[] = "LOWER(stock_controller_name) = LOWER('" . $escapedUser . "')";
+        $scParts[] = "LOWER(stock_controller_name) LIKE LOWER('" . $escapedUser . " (%')";
+    }
+    if (!empty($userFullName) && strcasecmp($userFullName, $userName) !== 0) {
+        $escapedFull = $conn->real_escape_string($userFullName);
+        $scParts[] = "LOWER(stock_controller_name) = LOWER('" . $escapedFull . "')";
+        $scParts[] = "LOWER(stock_controller_name) LIKE LOWER('" . $escapedFull . " (%')";
+    }
+
+    if (!empty($scParts)) {
+        $roleFilter = " AND (" . implode(" OR ", $scParts) . ")";
+    } else {
+        $roleFilter = " AND 1=0";
+    }
 }
 
 // Total batches in date range

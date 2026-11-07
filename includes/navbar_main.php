@@ -46,8 +46,8 @@ try {
             }
         }
 
-        if (isAdmin() || $user_role === 'stock_controller') {
-            $stmt = $nav_conn->prepare("SELECT COUNT(*) as count FROM batches WHERE status = 'pending_verification'");
+        if (isAdmin()) {
+            $stmt = $nav_conn->prepare("SELECT COUNT(*) as count FROM stock_movements WHERE (status = 'pending' OR approval_status = 'pending')");
             if ($stmt) {
                 $stmt->execute();
                 $res = $stmt->get_result();
@@ -55,6 +55,26 @@ try {
                     $pending_approval_count = $row['count'] ?? 0;
                 }
                 $stmt->close();
+            }
+        } elseif ($user_role === 'stock_controller' || strtolower($_SESSION['username'] ?? '') === 'mirene') {
+            $uId = (int)($_SESSION['user_id'] ?? 0);
+            $uName = trim($_SESSION['username'] ?? '');
+            $uFull = trim($_SESSION['full_name'] ?? '');
+            $scClause = ["stock_controller_id = " . $uId];
+            if (!empty($uName)) {
+                $escName = $nav_conn->real_escape_string($uName);
+                $scClause[] = "LOWER(stock_controller_name) = LOWER('" . $escName . "')";
+                $scClause[] = "LOWER(stock_controller_name) LIKE LOWER('" . $escName . " (%')";
+            }
+            if (!empty($uFull) && strcasecmp($uFull, $uName) !== 0) {
+                $escFull = $nav_conn->real_escape_string($uFull);
+                $scClause[] = "LOWER(stock_controller_name) = LOWER('" . $escFull . "')";
+                $scClause[] = "LOWER(stock_controller_name) LIKE LOWER('" . $escFull . " (%')";
+            }
+            $scSql = "SELECT COUNT(*) as count FROM stock_movements WHERE (status = 'pending' OR approval_status = 'pending') AND (" . implode(" OR ", $scClause) . ")";
+            $res = $nav_conn->query($scSql);
+            if ($res && $row = $res->fetch_assoc()) {
+                $pending_approval_count = $row['count'] ?? 0;
             }
         }
 

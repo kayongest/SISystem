@@ -90,6 +90,38 @@ if (!$batch) {
     exit();
 }
 
+// Role-Based Filtering: Stock Controllers only see their assigned batches
+$userRole = $_SESSION['role'] ?? ($_SESSION['user_role'] ?? '');
+$userId = (int)($_SESSION['user_id'] ?? 0);
+$userName = trim($_SESSION['username'] ?? '');
+$userFullName = trim($_SESSION['full_name'] ?? '');
+$isAdmin = in_array($userRole, ['admin', 'superadmin']);
+$isStockController = ($userRole === 'stock_controller' || strtolower($userName) === 'mirene');
+
+if (!$isAdmin && $isStockController) {
+    $isAssigned = false;
+    if ($userId > 0 && !empty($batch['stock_controller_id']) && (int)$batch['stock_controller_id'] === (int)$userId) {
+        $isAssigned = true;
+    }
+    if (!empty($userName) && !empty($batch['stock_controller_name'])) {
+        if (strcasecmp($batch['stock_controller_name'], $userName) === 0 || stripos($batch['stock_controller_name'], $userName . ' (') === 0) {
+            $isAssigned = true;
+        }
+    }
+    if (!empty($userFullName) && !empty($batch['stock_controller_name'])) {
+        if (strcasecmp($batch['stock_controller_name'], $userFullName) === 0 || stripos($batch['stock_controller_name'], $userFullName . ' (') === 0) {
+            $isAssigned = true;
+        }
+    }
+
+    if (!$isAssigned) {
+        echo json_encode(['success' => false, 'message' => 'Access denied. You can only view batches assigned to you.']);
+        $stmt->close();
+        $conn->close();
+        exit();
+    }
+}
+
 // Get batch items
 $itemsSql = "SELECT 
                 bi.id,
