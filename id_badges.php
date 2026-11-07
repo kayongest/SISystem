@@ -710,11 +710,8 @@ if (!$initialKioskUser && !empty($usersWithBadges)) {
 
 $userRole = function_exists('getUserRole') ? getUserRole() : ($_SESSION['role'] ?? '');
 
-// Check if terminal view mode should be used (Stock Controllers or explicit terminal param)
-$isTerminalView = ($userRole === 'stock_controller')
-    || (isset($_GET['terminal']) && $_GET['terminal'] == '1')
-    || (isset($_GET['kiosk']) && $_GET['kiosk'] == '1')
-    || (isset($_GET['tab']) && $_GET['tab'] === 'kiosk');
+// Check if terminal view mode should be used (ONLY for Stock Controller and Manager roles)
+$isTerminalView = in_array($userRole, ['stock_controller', 'manager', 'stock_manager']);
 
 if ($isTerminalView) {
     $skip_navbar = true;
@@ -723,6 +720,7 @@ if ($isTerminalView) {
         ? $_GET['type']
         : 'stock_warehouse';
 } else {
+    $skip_navbar = false;
     $initialTab = $_GET['tab'] ?? 'gallery';
     $defaultType = isset($_GET['type']) && in_array($_GET['type'], ['event_venue', 'stock_warehouse'], true)
         ? $_GET['type']
@@ -737,14 +735,19 @@ foreach ($eventsList as $ev) {
     }
 }
 
-// Default stock warehouse: prioritize KCC Stock (ID 2) to match terminal kiosk design
-$defaultStockId = !empty($stockLocations) ? (int)$stockLocations[0]['id'] : 1;
-foreach ($stockLocations as $sl) {
-    if (stripos($sl['name'], 'kcc') !== false) {
-        $defaultStockId = (int)$sl['id'];
-        break;
+if ($isTerminalView) {
+    // Default stock warehouse: prioritize KCC Stock (ID 2) to match terminal kiosk design
+    $defaultStockId = !empty($stockLocations) ? (int)$stockLocations[0]['id'] : 1;
+    foreach ($stockLocations as $sl) {
+        if (stripos($sl['name'], 'kcc') !== false) {
+            $defaultStockId = (int)$sl['id'];
+            break;
+        }
     }
+} else {
+    $defaultStockId = !empty($stockLocations) ? (int)$stockLocations[0]['id'] : 1;
 }
+
 if (isset($_GET['stock_id']) && isset($stockMap[(int)$_GET['stock_id']])) {
     $defaultStockId = (int)$_GET['stock_id'];
 }
@@ -767,13 +770,13 @@ if ($defaultType === 'event_venue') {
     $matchedStock = $stockMap[$defaultStockId] ?? (!empty($stockLocations) ? $stockLocations[0] : null);
     $initialCheckpointName = $matchedStock
         ? ($matchedStock['name'] . (!empty($matchedStock['location']) ? ' — ' . $matchedStock['location'] : ''))
-        : 'KCC Stock — Kigali Convention Centre';
+        : ($defaultStockId === 1 ? 'Ndera Central Warehouse' : 'KCC Stock — Kigali Convention Centre');
 }
 
 $initActiveId = ($defaultType === 'event_venue') ? $defaultEventId : $defaultStockId;
 $initKey = $defaultType . '_' . $initActiveId . '_' . ($initialKioskUser ? (int)$initialKioskUser['id'] : 0);
-$initInTime = $todayCheckpointStates[$initKey]['check_in_time'] ?? '13:11:41 PM';
-$initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '11:52:49 AM';
+$initInTime = $todayCheckpointStates[$initKey]['check_in_time'] ?? ($isTerminalView ? '13:11:41 PM' : '10:46:36 AM');
+$initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? ($isTerminalView ? '11:52:49 AM' : '10:46:41 AM');
 
 // Optional focus user if linked from users.php?focus_user=X
 $focusUserId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
