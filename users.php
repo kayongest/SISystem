@@ -676,6 +676,31 @@ if ($selected_user) {
     }
 }
 
+// Query attendance logs with user details for User Activity Timeline (venues & stock)
+$access_timeline_logs = [];
+$attLogQuery = "
+    SELECT l.id, l.user_id, l.badge_code, l.checkpoint_type, l.checkpoint_id,
+           l.checkpoint_name, l.scan_action, l.access_status, l.denial_reason,
+           l.punctuality_status, l.notes, l.scanned_at,
+           COALESCE(NULLIF(u.full_name, ''), u.username, 'Unknown Individual') AS full_name,
+           COALESCE(u.username, '') AS username,
+           COALESCE(u.role, 'staff') AS role,
+           COALESCE(u.department, 'Operations') AS department,
+           u.profile_image
+    FROM attendance_logs l
+    LEFT JOIN users u ON l.user_id = u.id
+    ORDER BY l.scanned_at DESC, l.id DESC
+    LIMIT 600
+";
+$attLogRes = @$conn->query($attLogQuery);
+if ($attLogRes) {
+    while ($row = $attLogRes->fetch_assoc()) {
+        $row['time_ago'] = timeAgoString($row['scanned_at']);
+        $row['formatted_time'] = date('M d, Y h:i A', strtotime($row['scanned_at']));
+        $access_timeline_logs[] = $row;
+    }
+}
+
 require_once 'views/partials/header.php';
 ?>
 
@@ -1735,73 +1760,44 @@ require_once 'views/partials/header.php';
                     </div>
                     <!-- Bottom Card: User Activity Timeline -->
                     <div class="vuexy-card">
-                        <div class="vuexy-card-header">
-                            <h5 class="vuexy-card-title">User Activity Timeline</h5>
-                        </div>
-
-                        <?php if (!empty($assigned_events)): 
-                            $firstEv = $assigned_events[0];
-                            $firstEvVenue = !empty($firstEv['location']) ? $firstEv['location'] : 'Marriot';
-                        ?>
-                        <div class="timeline-container">
-                            <!-- Item 1: Call time to venue -->
-                            <div class="timeline-item">
-                                <div class="timeline-point" style="background: #2f3349;"></div>
-                                <div class="timeline-header">
-                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">Entered Venue - <?php echo htmlspecialchars($firstEvVenue); ?></h6>
-                                    <span class="timeline-time">12 min ago</span>
-                                </div>
-                                <p class="timeline-text" style="color: #6f6b7d;">Arrived on time for <?php echo htmlspecialchars($firstEv['title']); ?></p>
-                                <div>
-                                    <span class="badge border border-danger text-danger bg-transparent px-2 py-1" style="border-radius: 4px; font-weight: 600; cursor: pointer;">
-                                        <i class="far fa-file-pdf me-1 text-danger"></i>
-                                        <span>Invoice.pdf</span>
-                                    </span>
-                                </div>
+                        <div class="vuexy-card-header d-flex flex-wrap justify-content-between align-items-center gap-2 pb-2">
+                            <div>
+                                <h5 class="vuexy-card-title mb-0">User Activity Timeline</h5>
+                                <div class="text-muted small mt-1">Individual access logs for venues &amp; stock</div>
                             </div>
-
-                            <!-- Item 2: Break for Coffee -->
-                            <div class="timeline-item">
-                                <div class="timeline-point" style="background: #2f3349;"></div>
-                                <div class="timeline-header">
-                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">Breakfast</h6>
-                                    <span class="timeline-time">45 min ago</span>
-                                </div>
-                                <p class="timeline-text" style="color: #6f6b7d;">Coffee served @10:15am</p>
-                                <div>
-                                    <div class="client-card-preview" style="background: #f8f7fa; border: 1px solid #dbdade; border-radius: 6px; padding: 6px 12px;">
-                                        <img src="uploads/profiles/profile_3_1789409415.png" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 fill=%22%23e2e8f0%22/><circle cx=%2220%22 cy=%2215%22 r=%227%22 fill=%22%2364748b%22/><path d=%22M8 36c0-6.6 5.4-12 12-12s12 5.4 12 12%22 fill=%22%2364748b%22/></svg>';" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover;">
-                                        <div>
-                                            <div class="fw-bold small text-dark leading-tight">Lester McCarthy (Client)</div>
-                                            <div class="text-muted" style="font-size: 0.72rem;">CEO of Pixinvent</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Item 3: Logged out from venue -->
-                            <div class="timeline-item">
-                                <div class="timeline-point" style="background: #2f3349;"></div>
-                                <div class="timeline-header">
-                                    <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">Signed out from venue - Room (Kilimanajaro)</h6>
-                                    <span class="timeline-time">2 Day Ago</span>
-                                </div>
-                                <p class="timeline-text" style="color: #6f6b7d;">6 team members in the event</p>
-                                <div class="avatar-stack mt-2">
-                                    <img src="uploads/profiles/profile_2_1789409080.png" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 fill=%22%23e2e8f0%22/><circle cx=%2220%22 cy=%2215%22 r=%227%22 fill=%22%2364748b%22/><path d=%22M8 36c0-6.6 5.4-12 12-12s12 5.4 12 12%22 fill=%22%2364748b%22/></svg>';" class="avatar-stack-item">
-                                    <img src="uploads/profiles/profile_6_1793873223_6ddd8c4c.jpeg" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 fill=%22%23e2e8f0%22/><circle cx=%2220%22 cy=%2215%22 r=%227%22 fill=%22%2364748b%22/><path d=%22M8 36c0-6.6 5.4-12 12-12s12 5.4 12 12%22 fill=%22%2364748b%22/></svg>';" class="avatar-stack-item">
-                                    <img src="uploads/profiles/profile_3_1789409415.png" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 fill=%22%23e2e8f0%22/><circle cx=%2220%22 cy=%2215%22 r=%227%22 fill=%22%2364748b%22/><path d=%22M8 36c0-6.6 5.4-12 12-12s12 5.4 12 12%22 fill=%22%2364748b%22/></svg>';" class="avatar-stack-item">
-                                    <span class="avatar-stack-badge">+3</span>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <!-- Checkpoint Scope Filter -->
+                                <select id="timelineScopeFilter" class="form-select form-select-sm" style="width: auto; min-width: 175px; font-size: 0.8rem; border-color: #dbdade;">
+                                    <option value="all">All Individuals (All Logs)</option>
+                                    <?php if ($selected_user): ?>
+                                    <option value="user_<?php echo $selected_user['id']; ?>">This User: <?php echo htmlspecialchars($userFullName ?: $selected_user['username']); ?></option>
+                                    <?php endif; ?>
+                                    <option value="event_venue">Venues Only</option>
+                                    <option value="stock_warehouse">Stock Warehouses Only</option>
+                                    <option value="granted">Access Granted</option>
+                                    <option value="denied">Access Denied</option>
+                                </select>
+                                <!-- Search Input -->
+                                <div class="input-group input-group-sm" style="width: 230px;">
+                                    <span class="input-group-text bg-light border-end-0 text-muted"><i class="fas fa-search"></i></span>
+                                    <input type="text" id="timelineSearchInput" class="form-control border-start-0 ps-0" placeholder="Search individual, venue, stock..." autocomplete="off">
+                                    <button class="btn btn-outline-secondary border-start-0" type="button" id="timelineSearchClear" style="display: none;" title="Clear search"><i class="fas fa-times"></i></button>
                                 </div>
                             </div>
                         </div>
-                        <?php else: ?>
-                        <div class="text-center py-4 text-muted">
-                            <i class="fas fa-history fa-2x mb-2 text-secondary opacity-50 d-block"></i>
-                            <div class="small fw-semibold">No recent activity recorded</div>
-                            <div class="small text-muted">No venue check-ins or event logs found for '<?php echo htmlspecialchars($userFullName); ?>'.</div>
+
+                        <!-- Dynamic Timeline Container -->
+                        <div class="timeline-container mt-2" id="timelineContainer">
+                            <!-- Populated via JavaScript (5 items per page) -->
                         </div>
-                        <?php endif; ?>
+
+                        <!-- Pagination Footer (5 items per page) -->
+                        <div class="d-flex flex-wrap justify-content-between align-items-center mt-3 pt-3 border-top text-muted small" id="timelinePaginationWrapper">
+                            <span id="timelinePaginationInfo">Showing 1 to 5 entries</span>
+                            <div class="d-flex align-items-center gap-1" id="timelinePaginationControls">
+                                <!-- Injected by JS -->
+                            </div>
+                        </div>
                     </div>
 
                 </div>
@@ -3529,6 +3525,292 @@ ob_start();
             unset($_SESSION['toast_type']); 
             ?>
         <?php endif; ?>
+
+        // ==========================================
+        // User Activity Timeline (Search & 5-items Pagination)
+        // ==========================================
+        const timelineAllData = <?php echo json_encode($access_timeline_logs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?> || [];
+        const timelinePageSize = 5;
+        let timelineCurrentPage = 1;
+        let timelineFilteredData = [...timelineAllData];
+
+        function escapeTimelineHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function getTimelineRoleLabel(role) {
+            if (!role) return 'Staff';
+            const r = String(role).toLowerCase().trim();
+            const map = {
+                'admin': 'Administrator',
+                'manager': 'Operations Manager',
+                'stock_manager': 'Stock Manager',
+                'stock_controller': 'Stock Controller',
+                'tech_lead': 'Technical Lead',
+                'technician': 'AV Technician',
+                'driver': 'Logistics Driver',
+                'user': 'Production Staff'
+            };
+            if (map[r]) return map[r];
+            return r.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function renderActivityTimeline() {
+            const $container = $('#timelineContainer');
+            const $info = $('#timelinePaginationInfo');
+            const $controls = $('#timelinePaginationControls');
+
+            if (!$container.length) return;
+
+            const totalItems = timelineFilteredData.length;
+            const totalPages = Math.ceil(totalItems / timelinePageSize) || 1;
+
+            if (timelineCurrentPage > totalPages) timelineCurrentPage = totalPages;
+            if (timelineCurrentPage < 1) timelineCurrentPage = 1;
+
+            if (totalItems === 0) {
+                $container.html(`
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-search fa-2x mb-2 text-secondary opacity-50 d-block"></i>
+                        <div class="small fw-semibold">No matching access logs found</div>
+                        <div class="small text-muted">Try adjusting your search terms or filter criteria.</div>
+                    </div>
+                `);
+                $info.text('Showing 0 to 0 of 0 entries');
+                $controls.html('');
+                return;
+            }
+
+            const startIndex = (timelineCurrentPage - 1) * timelinePageSize;
+            const endIndex = Math.min(startIndex + timelinePageSize, totalItems);
+            const pageData = timelineFilteredData.slice(startIndex, endIndex);
+
+            let html = '';
+            pageData.forEach(item => {
+                const isDenied = item.access_status === 'denied';
+                const isVenue = item.checkpoint_type === 'event_venue';
+                const cpName = item.checkpoint_name || (isVenue ? 'Assigned Venue' : 'Stock Warehouse');
+
+                // Determine Timeline Title
+                let title = '';
+                if (isDenied) {
+                    title = `Access Denied - ${cpName}`;
+                } else if (item.scan_action === 'check_out') {
+                    title = `Signed out from ${isVenue ? 'venue' : 'stock'} - ${cpName}`;
+                } else if (item.scan_action === 'check_in') {
+                    title = `Entered ${isVenue ? 'Venue' : 'Stock Warehouse'} - ${cpName}`;
+                } else {
+                    title = `${isVenue ? 'Venue' : 'Stock'} Access Verified - ${cpName}`;
+                }
+
+                // Point Color: #ea5455 if denied, #2f3349 default
+                const pointColor = isDenied ? '#ea5455' : '#2f3349';
+
+                // Description text
+                let desc = '';
+                if (isDenied) {
+                    desc = item.denial_reason ? `Access denied: ${item.denial_reason}` : 'Access denied by security checkpoint policy.';
+                } else if (item.punctuality_status === 'on_time') {
+                    desc = `Arrived on time for ${cpName}`;
+                } else if (item.punctuality_status === 'late') {
+                    desc = `Arrived late for ${cpName}`;
+                } else if (item.punctuality_status === 'early') {
+                    desc = `Early arrival logged at ${cpName}`;
+                } else {
+                    desc = item.notes ? item.notes : `Individual clearance verified at ${cpName}`;
+                }
+                if (item.notes && !isDenied && desc !== item.notes) {
+                    desc += ` &bull; ${item.notes}`;
+                }
+
+                // Profile Image SVG Fallback
+                const defaultSvg = "data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 fill=%22%23e2e8f0%22/><circle cx=%2220%22 cy=%2215%22 r=%227%22 fill=%22%2364748b%22/><path d=%22M8 36c0-6.6 5.4-12 12-12s12 5.4 12 12%22 fill=%22%2364748b%22/></svg>";
+                const profileImg = (item.profile_image && item.profile_image.trim() !== '') ? escapeTimelineHtml(item.profile_image) : defaultSvg;
+
+                const roleName = getTimelineRoleLabel(item.role);
+                const deptName = item.department ? (item.department.charAt(0).toUpperCase() + item.department.slice(1)) : 'Operations';
+                const badgeCode = item.badge_code || 'N/A';
+                const timeAgo = item.time_ago || 'Recently';
+
+                // Badges
+                const statusBadge = isDenied 
+                    ? `<span class="badge border border-danger text-danger bg-transparent px-2 py-1" style="border-radius: 4px; font-weight: 600;"><i class="fas fa-times-circle me-1 text-danger"></i>Denied</span>`
+                    : `<span class="badge border border-success text-success bg-transparent px-2 py-1" style="border-radius: 4px; font-weight: 600;"><i class="fas fa-check-circle me-1 text-success"></i>Granted</span>`;
+
+                const typeBadge = isVenue
+                    ? `<span class="badge border border-primary text-primary bg-transparent px-2 py-1 ms-1" style="border-radius: 4px; font-weight: 600;"><i class="fas fa-hotel me-1 text-primary"></i>Venue</span>`
+                    : `<span class="badge border border-info text-info bg-transparent px-2 py-1 ms-1" style="border-radius: 4px; font-weight: 600;"><i class="fas fa-warehouse me-1 text-info"></i>Stock</span>`;
+
+                html += `
+                    <div class="timeline-item">
+                        <div class="timeline-point" style="background: ${pointColor};"></div>
+                        <div class="timeline-header">
+                            <h6 class="timeline-title" style="color: #2f3349; font-weight: 600;">${escapeTimelineHtml(title)}</h6>
+                            <span class="timeline-time">${escapeTimelineHtml(timeAgo)}</span>
+                        </div>
+                        <p class="timeline-text" style="color: #6f6b7d;">${escapeTimelineHtml(desc)}</p>
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-1">
+                            <div class="client-card-preview" style="background: #f8f7fa; border: 1px solid #dbdade; border-radius: 6px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 10px;">
+                                <img src="${profileImg}" onerror="this.onerror=null;this.src='${defaultSvg}';" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover;">
+                                <div>
+                                    <div class="fw-bold small text-dark leading-tight">${escapeTimelineHtml(item.full_name)} <span class="text-muted fw-normal" style="font-size: 0.74rem;">(${escapeTimelineHtml(roleName)})</span></div>
+                                    <div class="text-muted" style="font-size: 0.72rem;">${escapeTimelineHtml(deptName)} &bull; Badge: <span class="fw-semibold text-dark">${escapeTimelineHtml(badgeCode)}</span></div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                ${statusBadge}
+                                ${typeBadge}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            $container.html(html);
+            $info.text(`Showing ${startIndex + 1} to ${endIndex} of ${totalItems} entries`);
+
+            // Build Pagination Controls
+            let paginationHtml = '';
+            // Previous Button
+            paginationHtml += `
+                <button type="button" class="btn btn-xs btn-outline-secondary px-2 py-1 ${timelineCurrentPage === 1 ? 'disabled' : ''}" id="timelinePrevBtn" style="font-size: 0.78rem;">
+                    <i class="fas fa-chevron-left me-1"></i> Previous
+                </button>
+            `;
+
+            // Numeric Buttons
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, timelineCurrentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+
+            if (startPage > 1) {
+                paginationHtml += `<button type="button" class="btn btn-xs btn-outline-secondary px-2 py-1 timeline-page-btn" data-page="1" style="font-size: 0.78rem;">1</button>`;
+                if (startPage > 2) {
+                    paginationHtml += `<span class="px-1 text-muted">...</span>`;
+                }
+            }
+
+            for (let p = startPage; p <= endPage; p++) {
+                if (p === timelineCurrentPage) {
+                    paginationHtml += `<span class="badge bg-dark px-2 py-1" style="font-size: 0.78rem; line-height: 1.4;">${p}</span>`;
+                } else {
+                    paginationHtml += `<button type="button" class="btn btn-xs btn-outline-secondary px-2 py-1 timeline-page-btn" data-page="${p}" style="font-size: 0.78rem;">${p}</button>`;
+                }
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    paginationHtml += `<span class="px-1 text-muted">...</span>`;
+                }
+                paginationHtml += `<button type="button" class="btn btn-xs btn-outline-secondary px-2 py-1 timeline-page-btn" data-page="${totalPages}" style="font-size: 0.78rem;">${totalPages}</button>`;
+            }
+
+            // Next Button
+            paginationHtml += `
+                <button type="button" class="btn btn-xs btn-outline-secondary px-2 py-1 ${timelineCurrentPage === totalPages ? 'disabled' : ''}" id="timelineNextBtn" style="font-size: 0.78rem;">
+                    Next <i class="fas fa-chevron-right ms-1"></i>
+                </button>
+            `;
+
+            $controls.html(paginationHtml);
+        }
+
+        function filterActivityTimeline() {
+            const query = ($('#timelineSearchInput').val() || '').trim().toLowerCase();
+            const scope = $('#timelineScopeFilter').val() || 'all';
+
+            timelineFilteredData = timelineAllData.filter(item => {
+                // Scope Filter
+                if (scope === 'event_venue' && item.checkpoint_type !== 'event_venue') return false;
+                if (scope === 'stock_warehouse' && item.checkpoint_type !== 'stock_warehouse') return false;
+                if (scope === 'granted' && item.access_status !== 'granted') return false;
+                if (scope === 'denied' && item.access_status !== 'denied') return false;
+                if (scope.startsWith('user_')) {
+                    const uId = parseInt(scope.replace('user_', ''), 10);
+                    if (parseInt(item.user_id, 10) !== uId) return false;
+                }
+
+                // Query Text Filter
+                if (!query) return true;
+                const corpus = [
+                    item.full_name,
+                    item.username,
+                    item.role,
+                    item.department,
+                    item.checkpoint_name,
+                    item.checkpoint_type,
+                    item.badge_code,
+                    item.scan_action,
+                    item.access_status,
+                    item.notes,
+                    item.denial_reason,
+                    item.punctuality_status
+                ].filter(Boolean).join(' ').toLowerCase();
+
+                return corpus.includes(query);
+            });
+
+            timelineCurrentPage = 1;
+            renderActivityTimeline();
+        }
+
+        // Search Input event
+        $('#timelineSearchInput').on('input', function() {
+            if ($(this).val().trim().length > 0) {
+                $('#timelineSearchClear').show();
+            } else {
+                $('#timelineSearchClear').hide();
+            }
+            filterActivityTimeline();
+        });
+
+        // Search Clear button
+        $('#timelineSearchClear').on('click', function() {
+            $('#timelineSearchInput').val('').focus();
+            $(this).hide();
+            filterActivityTimeline();
+        });
+
+        // Scope Filter event
+        $('#timelineScopeFilter').on('change', function() {
+            filterActivityTimeline();
+        });
+
+        // Pagination controls click handlers (delegated)
+        $(document).on('click', '#timelinePrevBtn', function() {
+            if (timelineCurrentPage > 1) {
+                timelineCurrentPage--;
+                renderActivityTimeline();
+            }
+        });
+
+        $(document).on('click', '#timelineNextBtn', function() {
+            const totalPages = Math.ceil(timelineFilteredData.length / timelinePageSize) || 1;
+            if (timelineCurrentPage < totalPages) {
+                timelineCurrentPage++;
+                renderActivityTimeline();
+            }
+        });
+
+        $(document).on('click', '.timeline-page-btn', function() {
+            const page = parseInt($(this).data('page'), 10);
+            if (page && page !== timelineCurrentPage) {
+                timelineCurrentPage = page;
+                renderActivityTimeline();
+            }
+        });
+
+        // Initial Render of Activity Timeline
+        renderActivityTimeline();
     });
 </script>
 <?php
