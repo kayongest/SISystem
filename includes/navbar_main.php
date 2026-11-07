@@ -360,13 +360,25 @@ try {
 
                 <!-- Stock / Venue Gate Attendance Terminal Link -->
                 <?php if (isAdmin() || in_array($user_role, ['stock_controller', 'stock_manager', 'manager']) || (function_exists('hasPermission') && hasPermission('manage_id_badges'))): ?>
-                    <a href="<?php echo BASE_URL; ?>id_badges.php#pane-kiosk" class="nav-link-compact <?php echo ($current_page == 'id_badges.php') ? 'active' : ''; ?>" title="Stock &amp; Venue Attendance Terminal">
+                    <?php
+                    $gateTerminalHref = in_array($user_role, ['stock_controller', 'stock_manager'], true)
+                        ? (BASE_URL . 'id_badges.php?view=terminal&type=stock_warehouse#pane-kiosk')
+                        : (BASE_URL . 'id_badges.php#pane-kiosk');
+                    ?>
+                    <a href="<?php echo $gateTerminalHref; ?>" class="nav-link-compact <?php echo ($current_page == 'id_badges.php') ? 'active' : ''; ?>" title="Stock &amp; Venue Access Matrix Terminal">
                         <i class="fas fa-id-card-clip text-success"></i> Gate Terminal
                     </a>
                 <?php endif; ?>
 
+                <!-- Dedicated Venue Main Entrance Security Portal Link -->
+                <?php if ($user_role === 'security'): ?>
+                    <a href="<?php echo BASE_URL; ?>venue_scanner.php?mode=security_portal" class="nav-link-compact <?php echo ($current_page == 'venue_scanner.php') ? 'active' : ''; ?>" title="Venue Main Entrance Security Portal">
+                        <i class="fas fa-shield-halved text-info"></i> Venue Security Portal
+                    </a>
+                <?php endif; ?>
+
                 <!-- Setup Dropdown (Multi-role Config) -->
-                <?php if (!in_array($user_role, ['driver', 'user', 'technician'])): ?>
+                <?php if (!in_array($user_role, ['driver', 'user', 'technician', 'security'])): ?>
                 <div class="dropdown dropdown-compact">
                     <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['stock_locations.php', 'categories.php', 'departments.php', 'locations.php', 'events.php', 'mobile_app.php', 'reports.php', 'hr_center.php', 'drivers.php', 'users.php', 'id_badges.php', 'venue_scanner.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
                         <i class="fas fa-cog"></i> Setup
@@ -393,8 +405,9 @@ try {
                             <li>
                                 <hr class="dropdown-divider">
                             </li>
-                            <li><a class="dropdown-item <?php echo ($current_page == 'id_badges.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>id_badges.php"><i class="fas fa-id-card-clip me-2 text-success"></i> ID Badges &amp; Attendance</a></li>
-                            <li><a class="dropdown-item <?php echo ($current_page == 'venue_scanner.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>venue_scanner.php" target="_blank"><i class="fas fa-camera me-2 text-info"></i> Venue Camera Scanner</a></li>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'id_badges.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>id_badges.php"><i class="fas fa-id-card-clip me-2 text-success"></i> ID Badges &amp; Access Matrix</a></li>
+                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>id_badges.php?view=terminal&type=stock_warehouse"><i class="fas fa-warehouse me-2 text-teal" style="color: #0d9488;"></i> Stock Controller Terminal</a></li>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'venue_scanner.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>venue_scanner.php?mode=security_portal" target="_blank"><i class="fas fa-shield-halved me-2 text-info"></i> Venue Entrance Security Portal</a></li>
                         <?php endif; ?>
 
                         <!-- Admin Setup Configs -->

@@ -292,10 +292,17 @@ if ($uRes) {
 }
 
 // Pre-selected URL parameters for sharing with a specific venue or stock gate
+$currentRole = strtolower(trim((string)($_SESSION['role'] ?? $_SESSION['user_role'] ?? '')));
+$isSecurityPortal = (isset($_GET['mode']) && $_GET['mode'] === 'security_portal') || ($currentRole === 'security');
+$isStationLocked = (isset($_GET['locked']) && $_GET['locked'] === '1') || ($currentRole === 'security');
+
 $defaultType = isset($_GET['type']) && in_array($_GET['type'], ['event_venue', 'stock_warehouse'], true)
     ? $_GET['type']
     : 'event_venue';
-$defaultId = isset($_GET['id']) ? (int)$_GET['id'] : (isset($_GET['location_id']) ? (int)$_GET['location_id'] : 0);
+if ($isSecurityPortal && !isset($_GET['type'])) {
+    $defaultType = 'event_venue';
+}
+$defaultId = isset($_GET['id']) ? (int)$_GET['id'] : (isset($_GET['event_id']) ? (int)$_GET['event_id'] : (isset($_GET['location_id']) ? (int)$_GET['location_id'] : 0));
 
 // Build today's attendance state map per checkpoint: key = "{checkpoint_type}_{checkpoint_id}_{user_id}" => 'checked_in' | 'checked_out'
 $todayCheckpointStates = [];
@@ -524,39 +531,56 @@ $initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 A
 <header class="kiosk-topbar d-flex flex-wrap justify-content-between align-items-center gap-3">
     <div class="d-flex align-items-center gap-3">
         <div class="rounded-3 bg-warning text-dark d-flex align-items-center justify-content-center fw-bold" style="width: 42px; height: 42px;">
-            <i class="fas fa-camera-retro fs-5"></i>
+            <i class="fas <?php echo $isSecurityPortal ? 'fa-shield-halved' : 'fa-camera-retro'; ?> fs-5"></i>
         </div>
         <div>
-            <div class="d-flex align-items-center gap-2">
-                <h5 class="mb-0 fw-bold text-white">aBility Venue &amp; Stock Scanner</h5>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <h5 class="mb-0 fw-bold text-white" id="portalHeaderTitle">
+                    <?php echo $isSecurityPortal ? 'Venue Main Entrance Security Portal' : 'aBility Venue &amp; Stock Gate Scanner'; ?>
+                </h5>
+                <span class="badge bg-info text-dark fw-bold small" id="stationLockStatusBadge">
+                    <i class="fas <?php echo $isStationLocked ? 'fa-lock' : 'fa-lock-open'; ?> me-1"></i>
+                    <?php echo $isStationLocked ? 'ENTRANCE STATION LOCKED' : 'MULTI-CHECKPOINT MODE'; ?>
+                </span>
                 <span class="badge bg-success-subtle text-success border border-success-subtle small">
-                    <i class="fas fa-video me-1"></i>Logitech Camera &amp; USB Scanner Ready
+                    <i class="fas fa-video me-1"></i>Camera &amp; USB Scanner Ready
                 </span>
             </div>
-            <div class="small text-white-50">Scan staff ID badge QR code with camera/scanner or search by staff name</div>
+            <div class="small text-white-50">
+                4-Tier Access Matrix Verification &bull; Instant Crew Clearance &amp; Call-Time Punctuality Check
+            </div>
         </div>
     </div>
 
     <div class="d-flex flex-wrap align-items-center gap-2">
-        <button type="button" class="btn btn-sm btn-warning fw-bold text-dark" onclick="copyShareableVenueLink()">
-            <i class="fas fa-share-nodes me-1"></i>Copy Shareable Venue Link
+        <button type="button" class="btn btn-sm btn-success fw-bold text-white shadow-sm" onclick="openVenueOnSiteRosterModal()">
+            <i class="fas fa-users-viewfinder me-1"></i>On-Site Roll-Call (<span id="liveVenueOnSiteCount">0</span>)
         </button>
-        <?php if (isLoggedIn()): ?>
-            <a href="id_badges.php?tab=matrix" class="btn btn-sm btn-outline-success fw-bold">
-                <i class="fas fa-sliders me-1"></i>Access Levels CRUD
-            </a>
-            <a href="id_badges.php#pane-kiosk" class="btn btn-sm btn-outline-warning fw-bold">
-                <i class="fas fa-qrcode me-1"></i>Gate Terminal
-            </a>
-            <a href="id_badges.php" class="btn btn-sm btn-outline-light">
-                <i class="fas fa-id-card me-1"></i>All Badges
-            </a>
-            <?php if (function_exists('isAdmin') && isAdmin()): ?>
-                <a href="users.php" class="btn btn-sm btn-outline-info">
-                    <i class="fas fa-users me-1"></i>Users
+        <button type="button" class="btn btn-sm <?php echo $isStationLocked ? 'btn-danger' : 'btn-outline-info'; ?> fw-bold" id="btnToggleStationLock" onclick="toggleStationLock()">
+            <i class="fas <?php echo $isStationLocked ? 'fa-unlock-keyhole' : 'fa-lock'; ?> me-1"></i>
+            <span id="btnToggleStationLockText"><?php echo $isStationLocked ? 'Unlock Station (PIN)' : 'Lock to This Venue'; ?></span>
+        </button>
+        <button type="button" class="btn btn-sm btn-warning fw-bold text-dark" onclick="copyShareableVenueLink()">
+            <i class="fas fa-share-nodes me-1"></i>Share Entrance Portal Link
+        </button>
+        <div id="adminNavButtonsWrap" class="d-flex flex-wrap align-items-center gap-2 <?php echo $isStationLocked ? 'd-none' : ''; ?>">
+            <?php if (isLoggedIn()): ?>
+                <a href="id_badges.php?tab=matrix" class="btn btn-sm btn-outline-success fw-bold">
+                    <i class="fas fa-sliders me-1"></i>Access Matrix
                 </a>
+                <a href="id_badges.php?view=terminal&amp;type=stock_warehouse" class="btn btn-sm btn-outline-warning fw-bold">
+                    <i class="fas fa-warehouse me-1"></i>Stock Terminal
+                </a>
+                <a href="id_badges.php" class="btn btn-sm btn-outline-light">
+                    <i class="fas fa-id-card me-1"></i>All Badges
+                </a>
+                <?php if (function_exists('isAdmin') && isAdmin()): ?>
+                    <a href="users.php" class="btn btn-sm btn-outline-info">
+                        <i class="fas fa-users me-1"></i>Users
+                    </a>
+                <?php endif; ?>
             <?php endif; ?>
-        <?php endif; ?>
+        </div>
     </div>
 </header>
 
@@ -564,29 +588,51 @@ $initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 A
     <!-- Active Venue / Stock Checkpoint Selector Strip (Dark Card matching id_badges.php) -->
     <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden" style="background: #0f172a; color: #ffffff;">
         <div class="p-3 px-4">
-            <div class="row g-3 align-items-center">
-                <div class="col-md-4">
+            <!-- Locked Main Entrance Security Banner (Shown when Station Lock is active) -->
+            <div id="stationLockedBanner" class="<?php echo $isStationLocked ? '' : 'd-none'; ?> pb-3 mb-3 border-bottom border-secondary">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="badge bg-danger px-3 py-2 fw-bold" style="font-size: 0.85rem; letter-spacing: 0.5px;">
+                            <i class="fas fa-shield-halved me-1"></i>MAIN ENTRANCE SECURITY GATE
+                        </span>
+                        <div>
+                            <div class="fw-bold text-info fs-5" id="lockedStationVenueTitle"><?php echo htmlspecialchars($initialCheckpointName); ?></div>
+                            <div class="small text-white-50">Station is locked to this entrance. Only crew assigned to this venue or holding L3/L4 clearance will be granted entry.</div>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-1 flex-wrap">
+                        <span class="small text-white-50 me-1">Authorized Tiers:</span>
+                        <span class="badge" style="background: #dc2626;">L4 All-Access</span>
+                        <span class="badge" style="background: #059669;">L3 Stock &amp; Venue</span>
+                        <span class="badge" style="background: #4f46e5;">L2 Tech Stage</span>
+                        <span class="badge" style="background: #0284c7;">L1 Assigned Crew</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 align-items-center" id="checkpointControlsRow">
+                <div class="col-md-4" id="checkpointTypeToggleCol">
                     <label class="form-label small text-info fw-bold text-uppercase mb-1">
-                        <i class="fas fa-tower-broadcast me-1"></i>1. Toggle Checkpoint Type (Stock &amp; Venue)
+                        <i class="fas fa-tower-broadcast me-1"></i>1. Checkpoint Gate Type
                     </label>
                     <div class="btn-group w-100" role="group">
-                        <input type="radio" class="btn-check" name="kiosk_cp_type" id="type_stock" value="stock_warehouse" <?php echo ($defaultType === 'stock_warehouse') ? 'checked' : ''; ?> onchange="switchCheckpointType()">
+                        <input type="radio" class="btn-check" name="kiosk_cp_type" id="type_stock" value="stock_warehouse" <?php echo ($defaultType === 'stock_warehouse') ? 'checked' : ''; ?> <?php echo $isStationLocked ? 'disabled' : ''; ?> onchange="switchCheckpointType()">
                         <label class="btn btn-outline-success fw-bold btn-sm py-2" for="type_stock" id="btn_label_stock" style="<?php echo ($defaultType === 'stock_warehouse') ? 'background: #16a34a; color: #ffffff; border-color: #16a34a;' : ''; ?>">
                             <i class="fas fa-warehouse me-1"></i>Stock (<?php echo htmlspecialchars($stockLabelSummary); ?>)
                         </label>
-                        <input type="radio" class="btn-check" name="kiosk_cp_type" id="type_venue" value="event_venue" <?php echo ($defaultType === 'event_venue') ? 'checked' : ''; ?> onchange="switchCheckpointType()">
+                        <input type="radio" class="btn-check" name="kiosk_cp_type" id="type_venue" value="event_venue" <?php echo ($defaultType === 'event_venue') ? 'checked' : ''; ?> <?php echo $isStationLocked ? 'disabled' : ''; ?> onchange="switchCheckpointType()">
                         <label class="btn btn-outline-info fw-bold btn-sm py-2" for="type_venue" id="btn_label_venue" style="<?php echo ($defaultType === 'event_venue') ? 'background: #00d2ff; color: #000000; border-color: #00d2ff;' : ''; ?>">
-                            <i class="fas fa-location-dot me-1"></i>Venue (<?php echo htmlspecialchars($venueLabelSummary); ?>)
+                            <i class="fas fa-location-dot me-1"></i>Venue Entrance (<?php echo htmlspecialchars($venueLabelSummary); ?>)
                         </label>
                     </div>
                 </div>
 
                 <div class="col-md-4">
                     <div id="venueSelectBox" class="<?php echo ($defaultType === 'event_venue') ? '' : 'd-none'; ?>">
-                        <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">2. Active Venue (<?php echo htmlspecialchars($venueLabelSummary); ?>)</label>
-                        <select id="active_venue_id" class="form-select bg-dark text-white border-secondary fw-semibold" onchange="handleCheckpointChange()">
+                        <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">2. Active Venue Main Entrance</label>
+                        <select id="active_venue_id" class="form-select bg-dark text-white border-secondary fw-semibold" <?php echo $isStationLocked ? 'disabled' : ''; ?> onchange="handleCheckpointChange()">
                             <?php foreach ($eventsList as $ev): ?>
-                                <option value="<?php echo (int)$ev['id']; ?>" <?php echo ($defaultId === (int)$ev['id']) ? 'selected' : ''; ?>>
+                                <option value="<?php echo (int)$ev['id']; ?>" <?php echo (($defaultId ?: $defaultEventId) === (int)$ev['id']) ? 'selected' : ''; ?>>
                                     <?php echo htmlspecialchars($ev['title'] . (!empty($ev['location']) ? ' — ' . $ev['location'] : '') . ' (Calltime: ' . ($ev['call_time'] ?: '08:00') . ')'); ?>
                                 </option>
                             <?php endforeach; ?>
@@ -594,10 +640,10 @@ $initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 A
                     </div>
 
                     <div id="stockSelectBox" class="<?php echo ($defaultType === 'stock_warehouse') ? '' : 'd-none'; ?>">
-                        <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">2. Active Stock (<?php echo htmlspecialchars($stockLabelSummary); ?>)</label>
-                        <select id="active_stock_id" class="form-select bg-dark text-white border-secondary fw-semibold" onchange="handleCheckpointChange()">
+                        <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">2. Active Stock Warehouse Gate</label>
+                        <select id="active_stock_id" class="form-select bg-dark text-white border-secondary fw-semibold" <?php echo $isStationLocked ? 'disabled' : ''; ?> onchange="handleCheckpointChange()">
                             <?php foreach ($stockLocations as $sl): ?>
-                                <option value="<?php echo (int)$sl['id']; ?>" <?php echo ($defaultId === (int)$sl['id']) ? 'selected' : ''; ?>>
+                                <option value="<?php echo (int)$sl['id']; ?>" <?php echo (($defaultId ?: $defaultStockId) === (int)$sl['id']) ? 'selected' : ''; ?>>
                                     <?php echo htmlspecialchars($sl['name'] . (!empty($sl['code']) ? ' (' . $sl['code'] . ')' : '')); ?>
                                 </option>
                             <?php endforeach; ?>
@@ -606,12 +652,12 @@ $initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 A
                 </div>
 
                 <div class="col-md-4">
-                    <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">3. Scan Action Mode</label>
+                    <label class="form-label small text-white-50 fw-bold text-uppercase mb-1">3. Security Gate Action Mode</label>
                     <select id="active_scan_mode" class="form-select bg-dark text-white border-secondary fw-semibold">
                         <option value="auto">Auto-Toggle (Check-In on Arrival / Check-Out on Exit)</option>
-                        <option value="check_in">Check-In Only (Venue / Stock Arrival)</option>
-                        <option value="check_out">Check-Out Only (Departure)</option>
-                        <option value="access_verify">Verify Badge Access Only</option>
+                        <option value="check_in">Check-In Only (Main Entrance Arrival)</option>
+                        <option value="check_out">Check-Out Only (Venue Departure)</option>
+                        <option value="access_verify">Verify Security Clearance Only</option>
                     </select>
                 </div>
             </div>
@@ -991,15 +1037,78 @@ $initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 A
     </div>
 </div>
 
+<!-- Live On-Site Venue Crew Roll-Call Modal -->
+<div class="modal fade" id="venueOnSiteRosterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+            <div class="modal-header text-white border-0 py-3 px-4" style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);">
+                <div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-success fw-bold px-2 py-1" style="font-size: 0.7rem;">
+                            <i class="fas fa-circle me-1" style="font-size: 0.5rem;"></i>LIVE ROLL-CALL
+                        </span>
+                        <h5 class="modal-title fw-bold mb-0" id="rosterModalVenueTitle">Venue Main Entrance — On-Site Crew Roster</h5>
+                    </div>
+                    <div class="small text-white-50 mt-1">
+                        Real-time emergency muster & headcount of personnel currently checked in at this checkpoint today.
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0 bg-white">
+                <div class="px-4 py-2 border-bottom d-flex flex-wrap justify-content-between align-items-center" style="background: #f8fafc;">
+                    <div class="small fw-semibold text-secondary">
+                        <i class="fas fa-users text-primary me-1"></i>Currently Inside Checkpoint:
+                        <span class="badge bg-success ms-1" id="rosterModalVenueCount">0</span>
+                    </div>
+                    <div class="small text-muted">
+                        Click <strong>Check Out</strong> to log immediate departure from this entrance.
+                    </div>
+                </div>
+                <div class="table-responsive" style="max-height: 420px;">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                            <tr>
+                                <th class="ps-4">Crew Member</th>
+                                <th>Clearance Tier</th>
+                                <th>Badge #</th>
+                                <th>Check-In Time</th>
+                                <th class="text-end pe-4">Quick Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="venueOnSiteRosterTableBody">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">No crew members currently checked in at this checkpoint.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-top bg-light py-2 px-4 d-flex justify-content-between">
+                <span class="small text-muted"><i class="fas fa-shield-alt text-primary me-1"></i>4-Tier Access Matrix Verified</span>
+                <button type="button" class="btn btn-sm btn-secondary fw-bold px-3" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     let html5QrScanner = null;
     let isCameraRunning = false;
     let lastScannedCode = '';
     let lastScanTimestamp = 0;
+    let isStationLocked = <?php echo $isStationLocked ? 'true' : 'false'; ?>;
 
     // Today's checkpoint attendance state map: "{cpType}_{cpId}_{userId}" => { state: 'checked_in'|'checked_out', time: '03:15 PM' }
     const checkpointStateMap = <?php echo json_encode($todayCheckpointStates); ?>;
+    const staffDirectoryList = <?php echo json_encode($staffDirectory); ?>;
+    const staffByIdMap = {};
+    if (Array.isArray(staffDirectoryList)) {
+        staffDirectoryList.forEach(function(st) {
+            staffByIdMap[st.user_id] = st;
+        });
+    }
 
     function getActiveCheckpointKeyPrefix() {
         const isVenue = document.getElementById('type_venue').checked;
@@ -1069,6 +1178,180 @@ $initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 A
             const st = checkpointStateMap[prefix + uid] || null;
             applyStaffButtonState(uid, st);
         });
+        updateOnSiteCounterAndRoster();
+    }
+
+    function getActiveCheckpointLabel() {
+        const isVenue = document.getElementById('type_venue').checked;
+        if (isVenue) {
+            const sel = document.getElementById('active_venue_id');
+            return sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : 'Event Venue';
+        }
+        const sel = document.getElementById('active_stock_id');
+        return sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : 'Stock Warehouse';
+    }
+
+    function updateOnSiteCounterAndRoster() {
+        const prefix = getActiveCheckpointKeyPrefix();
+        const checkedInList = [];
+        Object.keys(checkpointStateMap).forEach(function(key) {
+            if (key.indexOf(prefix) === 0) {
+                const st = checkpointStateMap[key];
+                if (st && st.state === 'checked_in') {
+                    const uid = parseInt(key.substring(prefix.length), 10);
+                    const staff = staffByIdMap[uid] || {
+                        user_id: uid,
+                        full_name: 'Staff #' + uid,
+                        role: 'crew',
+                        badge_code: 'REW-BADGE-' + uid,
+                        clearance_code: 'L2',
+                        clearance_title: 'Technical & Stage',
+                        clearance_color: '#2563eb',
+                        profile_image: ''
+                    };
+                    checkedInList.push({
+                        staff: staff,
+                        state: st
+                    });
+                }
+            }
+        });
+
+        const countEl = document.getElementById('liveVenueOnSiteCount');
+        if (countEl) countEl.textContent = checkedInList.length;
+        const modalCountEl = document.getElementById('rosterModalVenueCount');
+        if (modalCountEl) modalCountEl.textContent = checkedInList.length;
+
+        const cpName = getActiveCheckpointLabel();
+        const modalTitleEl = document.getElementById('rosterModalVenueTitle');
+        if (modalTitleEl) modalTitleEl.textContent = cpName + ' — On-Site Crew Roster';
+
+        const tbody = document.getElementById('venueOnSiteRosterTableBody');
+        if (!tbody) return;
+
+        if (checkedInList.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><i class="fas fa-user-clock me-1"></i>No crew members currently checked in at <strong>' + cpName + '</strong>.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = checkedInList.map(function(entry) {
+            const s = entry.staff;
+            const st = entry.state;
+            const avatar = renderUserAvatarHtml(s.profile_image || '', s.full_name, s.clearance_color || '#2563eb', 36, '0.78rem', '');
+            const inTime = st.check_in_time || st.time || '--:--';
+            const roleLabel = (s.role || 'crew').replace(/_/g, ' ').toUpperCase();
+            return `
+                <tr>
+                    <td class="ps-4">
+                        <div class="d-flex align-items-center gap-2">
+                            ${avatar}
+                            <div>
+                                <div class="fw-bold text-dark small">${s.full_name}</div>
+                                <div class="text-muted" style="font-size: 0.7rem;">${roleLabel}${s.department ? ' • ' + s.department : ''}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge text-white fw-bold" style="background: ${s.clearance_color || '#2563eb'}; font-size: 0.72rem;">
+                            ${s.clearance_code || 'L2'}
+                        </span>
+                        <span class="small text-secondary ms-1" style="font-size: 0.74rem;">${(s.clearance_title || '').replace(/^Level\s+\d+\s*[-—]\s*/i, '')}</span>
+                    </td>
+                    <td><code class="small fw-bold text-primary">${s.badge_code}</code></td>
+                    <td><span class="badge bg-success-subtle text-success border border-success-subtle fw-bold"><i class="fas fa-sign-in-alt me-1"></i>${inTime}</span></td>
+                    <td class="text-end pe-4">
+                        <button type="button" class="btn btn-sm btn-warning fw-bold text-dark px-2 py-1"
+                                onclick="handleStaffButtonAction(${s.user_id}, '${s.badge_code}', 'check_out')">
+                            <i class="fas fa-sign-out-alt me-1"></i>Check Out
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function openVenueOnSiteRosterModal() {
+        updateOnSiteCounterAndRoster();
+        const modalEl = document.getElementById('venueOnSiteRosterModal');
+        if (modalEl && typeof bootstrap !== 'undefined') {
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+    }
+
+    function applyStationLockUI(locked) {
+        isStationLocked = !!locked;
+        const typeStock = document.getElementById('type_stock');
+        const typeVenue = document.getElementById('type_venue');
+        const selVenue = document.getElementById('active_venue_id');
+        const selStock = document.getElementById('active_stock_id');
+        const banner = document.getElementById('stationLockedBanner');
+        const adminWrap = document.getElementById('adminNavButtonsWrap');
+        const statusBadge = document.getElementById('stationLockStatusBadge');
+        const btnLock = document.getElementById('btnToggleStationLock');
+        const lblStock = document.getElementById('btn_label_stock');
+        const lblVenue = document.getElementById('btn_label_venue');
+
+        if (typeStock) typeStock.disabled = isStationLocked;
+        if (typeVenue) typeVenue.disabled = isStationLocked;
+        if (selVenue) selVenue.disabled = isStationLocked;
+        if (selStock) selStock.disabled = isStationLocked;
+        if (lblStock) lblStock.classList.toggle('disabled', isStationLocked);
+        if (lblVenue) lblVenue.classList.toggle('disabled', isStationLocked);
+
+        if (banner) banner.classList.toggle('d-none', !isStationLocked);
+        if (adminWrap) adminWrap.classList.toggle('d-none', isStationLocked);
+
+        if (statusBadge) {
+            statusBadge.style.background = isStationLocked ? '#16a34a' : '#2563eb';
+            statusBadge.innerHTML = `<i class="fas ${isStationLocked ? 'fa-lock' : 'fa-door-open'} me-1"></i><span id="stationLockStatusText">${isStationLocked ? 'ENTRANCE STATION LOCKED' : 'MULTI-CHECKPOINT MODE'}</span>`;
+        }
+        if (btnLock) {
+            btnLock.className = 'btn btn-sm fw-bold ' + (isStationLocked ? 'btn-warning text-dark' : 'btn-outline-warning');
+            btnLock.innerHTML = `<i class="fas ${isStationLocked ? 'fa-unlock-alt' : 'fa-lock'} me-1"></i><span id="stationLockBtnLabel">${isStationLocked ? 'Unlock Station (PIN)' : 'Lock to This Venue'}</span>`;
+        }
+    }
+
+    function toggleStationLock() {
+        const cpName = getActiveCheckpointLabel();
+        if (!isStationLocked) {
+            // Switch to Event Venue if currently on stock when locking to Venue Entrance
+            applyStationLockUI(true);
+            const lockedTitle = document.getElementById('lockedStationVenueTitle');
+            if (lockedTitle) lockedTitle.textContent = cpName;
+            Swal.fire({
+                icon: 'success',
+                title: 'Station Locked to Entrance',
+                html: `This tablet/kiosk is now locked to <strong>${cpName}</strong>.<br><span class="small text-muted">Checkpoint selectors and admin navigation are restricted. Use Supervisor PIN <code>1234</code> to unlock.</span>`,
+                timer: 2600,
+                showConfirmButton: false
+            });
+        } else {
+            Swal.fire({
+                title: 'Supervisor PIN Required',
+                text: 'Enter Supervisor PIN (Default: 1234) to unlock checkpoint switching:',
+                input: 'password',
+                inputPlaceholder: 'Enter 4-digit PIN (1234)',
+                inputAttributes: { maxlength: 10, autocapitalize: 'off', autocorrect: 'off' },
+                showCancelButton: true,
+                confirmButtonText: 'Unlock Station',
+                confirmButtonColor: '#2563eb'
+            }).then(function(result) {
+                if (!result.isConfirmed) return;
+                if (result.value === '1234' || result.value === 'admin') {
+                    applyStationLockUI(false);
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Station Unlocked',
+                        text: 'You can now switch between Event Venues and Stock Warehouses.',
+                        timer: 1800,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire('Invalid PIN', 'Supervisor PIN was not recognized. Station remains locked to ' + cpName + '.', 'error');
+                }
+            });
+        }
     }
 
     function handleStaffRowClick(event, uid, badgeCode) {
@@ -1169,6 +1452,10 @@ $initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 A
         const banner = document.getElementById('activeCheckpointBannerLabel');
         if (banner) {
             banner.textContent = (isVenue ? 'Active Venue: ' : 'Active Stock Gate: ') + name;
+        }
+        const lockedTitle = document.getElementById('lockedStationVenueTitle');
+        if (lockedTitle) {
+            lockedTitle.textContent = name;
         }
         syncAllStaffButtonStates();
     }
@@ -1380,12 +1667,24 @@ $initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 A
                         check_out_time: data.check_out_time || (data.scan_action === 'check_out' ? data.scanned_at : (existingState.check_out_time || null))
                     };
                     applyStaffButtonState(u.id, checkpointStateMap[stateKey]);
+                    updateOnSiteCounterAndRoster();
                 } else {
                     syncAllStaffButtonStates();
                 }
 
                 const actionBadge = data.scan_action === 'check_in' ? 'CHECKED IN' :
                                    (data.scan_action === 'check_out' ? 'CHECKED OUT' : 'VERIFIED');
+
+                let punctualityPillHtml = '';
+                if (granted && data.punctuality && data.punctuality !== 'n/a') {
+                    if (data.punctuality === 'on_time') {
+                        punctualityPillHtml = '<span class="badge bg-success-subtle text-success border border-success-subtle fw-bold px-2 py-1" style="font-size: 0.72rem;"><i class="fas fa-clock me-1"></i>ON TIME</span>';
+                    } else if (data.punctuality === 'early') {
+                        punctualityPillHtml = '<span class="badge bg-info-subtle text-info border border-info-subtle fw-bold px-2 py-1" style="font-size: 0.72rem;"><i class="fas fa-bolt me-1"></i>EARLY ARRIVAL</span>';
+                    } else if (data.punctuality === 'late') {
+                        punctualityPillHtml = '<span class="badge bg-warning-subtle text-dark border border-warning fw-bold px-2 py-1" style="font-size: 0.72rem;"><i class="fas fa-exclamation-triangle text-warning me-1"></i>LATE CALL-TIME</span>';
+                    }
+                }
 
                 const initials = getUserInitialsJs(u.full_name);
                 const uColor = u.clearance_color || '#17487a';
@@ -1471,11 +1770,12 @@ $initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 A
                                 </div>
 
                                 <!-- Big Status Action Button / Pill -->
-                                <div class="my-2">
+                                <div class="my-2 d-flex flex-column align-items-center gap-1">
                                     <span class="badge shadow-sm"
                                           style="background: ${granted ? '#16a34a' : '#dc2626'}; color: #ffffff; font-size: 1.18rem; font-weight: 800; border-radius: 10px; padding: 9px 28px; letter-spacing: 0.8px;">
                                         ${granted ? 'ACCESS GRANTED' : 'ACCESS DENIED'}
                                     </span>
+                                    ${punctualityPillHtml}
                                 </div>
 
                                 ${granted ? `
@@ -1569,19 +1869,23 @@ $initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 A
         const isVenue = document.getElementById('type_venue').checked;
         const cpType = isVenue ? 'event_venue' : 'stock_warehouse';
         const cpId = isVenue ? document.getElementById('active_venue_id').value : document.getElementById('active_stock_id').value;
-        const shareUrl = window.location.origin + window.location.pathname + '?type=' + encodeURIComponent(cpType) + '&id=' + encodeURIComponent(cpId);
+        const cpName = getActiveCheckpointLabel();
+        const shareUrl = window.location.origin + window.location.pathname
+            + '?mode=security_portal&type=' + encodeURIComponent(cpType)
+            + '&id=' + encodeURIComponent(cpId)
+            + '&locked=1';
 
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(shareUrl).then(function() {
                 Swal.fire({
                     icon: 'success',
-                    title: 'Venue Scanner Link Copied!',
-                    html: 'Share this URL with the venue/stock check-in desk:<br><code class="d-block mt-2 p-2 bg-light text-dark rounded">' + shareUrl + '</code>',
+                    title: 'Entrance Security Portal Link Copied!',
+                    html: 'Open this dedicated locked portal URL on the tablet/kiosk at <strong>' + cpName + '</strong>:<br><code class="d-block mt-2 p-2 bg-light text-dark rounded">' + shareUrl + '</code>',
                     confirmButtonText: 'Great!'
                 });
             });
         } else {
-            prompt('Copy this Shareable Venue Scanner URL:', shareUrl);
+            prompt('Copy this Entrance Security Portal URL:', shareUrl);
         }
     }
 </script>

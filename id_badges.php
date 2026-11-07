@@ -16,6 +16,58 @@ ensureBadgesAndAttendanceTables($conn);
 $clearanceMeta = getClearanceLevelsMeta();
 $currentUserId = (int)($_SESSION['user_id'] ?? 0);
 
+// Helper: Fetch active/recent equipment batches linked to a scanned technician/staff member for Stock Controller verification
+if (!function_exists('getUserLinkedStockBatches')) {
+    function getUserLinkedStockBatches($conn, $uid, $username, $fullName)
+    {
+        $batches = [];
+        if (!$conn) return $batches;
+        $uIdInt = (int)$uid;
+        $uName = trim((string)$username);
+        $uFull = trim((string)$fullName ?: $uName);
+        $opRole = strtolower(trim((string)($_SESSION['role'] ?? $_SESSION['user_role'] ?? '')));
+        $opUser = trim((string)($_SESSION['username'] ?? ''));
+        $opFull = trim((string)($_SESSION['full_name'] ?? $opUser));
+
+        $sql = "
+            SELECT sm.id, sm.batch_number, sm.movement_type, sm.source_name, sm.destination_name,
+                   sm.destination_room, sm.technician_id, sm.submitted_by, sm.stock_controller_name,
+                   sm.status, sm.approval_status, sm.created_at, sm.event_name, sm.job_sheet,
+                   (SELECT COUNT(*) FROM batch_items bi WHERE bi.batch_id = sm.id) as item_count,
+                   (SELECT COALESCE(SUM(quantity), 0) FROM batch_items bi WHERE bi.batch_id = sm.id) as total_qty
+            FROM stock_movements sm
+            WHERE (sm.technician_id = ? OR LOWER(TRIM(sm.submitted_by)) = LOWER(?) OR LOWER(TRIM(sm.submitted_by)) = LOWER(?))
+        ";
+        if ($opRole === 'stock_controller' && ($opUser !== '' || $opFull !== '')) {
+            $sql .= " AND LOWER(TRIM(COALESCE(sm.stock_controller_name, ''))) IN (LOWER(?), LOWER(?))";
+            $sql .= " ORDER BY sm.created_at DESC LIMIT 3";
+            $st = @$conn->prepare($sql);
+            if ($st) {
+                $st->bind_param("issss", $uIdInt, $uName, $uFull, $opUser, $opFull);
+                $st->execute();
+                $res = $st->get_result();
+                while ($r = $res->fetch_assoc()) {
+                    $batches[] = $r;
+                }
+                $st->close();
+            }
+        } else {
+            $sql .= " ORDER BY sm.created_at DESC LIMIT 3";
+            $st = @$conn->prepare($sql);
+            if ($st) {
+                $st->bind_param("iss", $uIdInt, $uName, $uFull);
+                $st->execute();
+                $res = $st->get_result();
+                while ($r = $res->fetch_assoc()) {
+                    $batches[] = $r;
+                }
+                $st->close();
+            }
+        }
+        return $batches;
+    }
+}
+
 // Load Stock Locations directly from stock_locations table (matching the warehouse floor)
 $stockLocations = [];
 $stockMap = [];
@@ -530,6 +582,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
             $outTime = date('H:i:s A', strtotime($nowStr));
         }
 
+        $linkedBatches = getUserLinkedStockBatches(
+            $conn,
+            $uid,
+            $matchedUser['username'] ?? '',
+            $matchedUser['full_name'] ?? ''
+        );
+
         echo json_encode([
             'success' => true,
             'log_id' => $logId,
@@ -543,6 +602,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
             'scanned_date' => date('M d, Y', strtotime($nowStr)),
             'checkpoint_type' => $checkpointType,
             'checkpoint_name' => $checkpointName,
+            'linked_batches' => $linkedBatches,
             'user' => [
                 'id' => $uid,
                 'full_name' => $matchedUser['full_name'] ?: $matchedUser['username'],
@@ -710,8 +770,8 @@ if (!$initialKioskUser && !empty($usersWithBadges)) {
 
 $userRole = function_exists('getUserRole') ? getUserRole() : ($_SESSION['role'] ?? '');
 
-// Check if terminal view mode should be used (ONLY for Stock Controller and Manager roles)
-$isTerminalView = in_array($userRole, ['stock_controller', 'manager', 'stock_manager']);
+// Check if terminal view mode should be used (for Stock Controller, Manager, or explicit ?view=terminal)
+$isTerminalView = in_array($userRole, ['stock_controller', 'manager', 'stock_manager']) || (isset($_GET['view']) && $_GET['view'] === 'terminal');
 
 if ($isTerminalView) {
     $skip_navbar = true;
@@ -725,6 +785,16 @@ if ($isTerminalView) {
     $defaultType = isset($_GET['type']) && in_array($_GET['type'], ['event_venue', 'stock_warehouse'], true)
         ? $_GET['type']
         : 'event_venue';
+}
+
+$initLinkedBatches = [];
+if ($initialKioskUser) {
+    $initLinkedBatches = getUserLinkedStockBatches(
+        $conn,
+        (int)$initialKioskUser['id'],
+        $initialKioskUser['username'] ?? '',
+        $initialKioskUser['full_name'] ?? ''
+    );
 }
 
 $defaultEventId = !empty($eventsList) ? (int)$eventsList[0]['id'] : 1;
@@ -1102,20 +1172,25 @@ require_once 'views/partials/header.php';
     <!-- Dedicated Gate Attendance Terminal Header (Clean View matching user design) -->
     <div class="card border-0 shadow-sm rounded-4 p-3 mb-3 bg-white no-print">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
                 <div class="btn fw-bold text-white px-3 py-2 shadow-sm" style="background: #255382; border-radius: 10px; font-size: 0.95rem; cursor: default;">
-                    <i class="fas fa-qrcode me-2"></i> Attendance &amp; Gate Access Terminals
+                    <i class="fas fa-qrcode me-2"></i> Stock &amp; Venue Access Matrix Terminal
                 </div>
-                <div class="vr mx-2 text-secondary" style="height: 24px; opacity: 0.25;"></div>
+                <span class="badge bg-teal-subtle text-dark border px-2 py-1" style="background: #f0fdfa; border-color: #99f6e4 !important; color: #0f766e !important; font-size: 0.78rem;">
+                    <i class="fas fa-user-shield me-1"></i>Operator: <strong><?php echo htmlspecialchars($_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Controller'); ?></strong> (<?php echo htmlspecialchars(strtoupper(str_replace('_', ' ', $userRole ?: 'STAFF'))); ?>)
+                </span>
             </div>
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
                 <?php if (function_exists('isAdmin') && isAdmin()): ?>
                     <a href="id_badges.php?tab=gallery" class="btn btn-sm btn-outline-primary fw-bold">
                         <i class="fas fa-id-card me-1"></i> ID Badges Hub
                     </a>
                 <?php endif; ?>
-                <a href="venue_scanner.php" target="_blank" class="btn btn-sm btn-outline-info fw-bold">
-                    <i class="fas fa-camera me-1"></i> Camera Scanner
+                <a href="batch_history.php" class="btn btn-sm btn-outline-success fw-bold">
+                    <i class="fas fa-check-double me-1"></i> Batch Approvals
+                </a>
+                <a href="venue_scanner.php?mode=security_portal" target="_blank" class="btn btn-sm btn-outline-info fw-bold">
+                    <i class="fas fa-shield-halved me-1"></i> Venue Security Portal
                 </a>
                 <a href="dashboard_full.php" class="btn btn-sm btn-outline-secondary fw-bold">
                     <i class="fas fa-home me-1"></i> Dashboard
@@ -1126,28 +1201,40 @@ require_once 'views/partials/header.php';
             </div>
         </div>
 
-        <!-- Clean Stock Gate Selector: Stock - KCC -->
-        <div class="mt-3 pt-3 border-top d-flex align-items-center gap-2 flex-wrap">
-            <div class="dropdown">
-                <button class="btn btn-success fw-bold px-3 py-2 dropdown-toggle shadow-sm text-white" type="button" id="kioskStockSelectDropdownBtn" data-bs-toggle="dropdown" aria-expanded="false" style="background: #28a745; border-color: #28a745; border-radius: 6px; font-size: 1rem;">
-                    <i class="fas fa-warehouse me-2"></i> <span id="currentStockBtnLabel"><?php echo htmlspecialchars($initialShortStockLabel); ?></span>
-                </button>
-                <ul class="dropdown-menu shadow border-0 rounded-3 mt-1" aria-labelledby="kioskStockSelectDropdownBtn">
-                    <li class="dropdown-header text-uppercase small fw-bold text-muted">Select Stock Warehouse Gate</li>
-                    <?php foreach ($stockLocations as $sl):
-                        $slName = $sl['name'];
-                        $shortLabel = 'Stock - ' . (stripos($slName, 'KCC') !== false ? 'KCC' : (stripos($slName, 'BK') !== false ? 'BK Arena' : (stripos($slName, 'Ndera') !== false ? 'Ndera Warehouse' : $slName)));
-                        $fullName = $sl['name'] . (!empty($sl['location']) ? ' — ' . $sl['location'] : '');
-                    ?>
-                    <li>
-                        <a class="dropdown-item py-2 fw-semibold <?php echo ($defaultStockId === (int)$sl['id']) ? 'active bg-success text-white' : ''; ?>"
-                           href="javascript:void(0)"
-                           onclick="selectKioskStockGate(<?php echo (int)$sl['id']; ?>, '<?php echo htmlspecialchars($shortLabel, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($fullName, ENT_QUOTES); ?>')">
-                            <i class="fas fa-warehouse me-2 text-success"></i> <?php echo htmlspecialchars($shortLabel); ?>
-                        </a>
-                    </li>
-                    <?php endforeach; ?>
-                </ul>
+        <!-- Clean Stock Gate Selector + Access Matrix Tier Legend -->
+        <div class="mt-3 pt-3 border-top d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="dropdown">
+                    <button class="btn btn-success fw-bold px-3 py-2 dropdown-toggle shadow-sm text-white" type="button" id="kioskStockSelectDropdownBtn" data-bs-toggle="dropdown" aria-expanded="false" style="background: #28a745; border-color: #28a745; border-radius: 6px; font-size: 1rem;">
+                        <i class="fas fa-warehouse me-2"></i> <span id="currentStockBtnLabel"><?php echo htmlspecialchars($initialShortStockLabel); ?></span>
+                    </button>
+                    <ul class="dropdown-menu shadow border-0 rounded-3 mt-1" aria-labelledby="kioskStockSelectDropdownBtn">
+                        <li class="dropdown-header text-uppercase small fw-bold text-muted">Select Stock Warehouse Gate</li>
+                        <?php foreach ($stockLocations as $sl):
+                            $slName = $sl['name'];
+                            $shortLabel = 'Stock - ' . (stripos($slName, 'KCC') !== false ? 'KCC' : (stripos($slName, 'BK') !== false ? 'BK Arena' : (stripos($slName, 'Ndera') !== false ? 'Ndera Warehouse' : $slName)));
+                            $fullName = $sl['name'] . (!empty($sl['location']) ? ' — ' . $sl['location'] : '');
+                        ?>
+                        <li>
+                            <a class="dropdown-item py-2 fw-semibold <?php echo ($defaultStockId === (int)$sl['id']) ? 'active bg-success text-white' : ''; ?>"
+                               href="javascript:void(0)"
+                               onclick="selectKioskStockGate(<?php echo (int)$sl['id']; ?>, '<?php echo htmlspecialchars($shortLabel, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($fullName, ENT_QUOTES); ?>')">
+                                <i class="fas fa-warehouse me-2 text-success"></i> <?php echo htmlspecialchars($shortLabel); ?>
+                            </a>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <span class="text-muted small ms-1 d-none d-md-inline"><i class="fas fa-circle-info me-1 text-primary"></i>Scan staff badge before equipment handover to log warehouse presence.</span>
+            </div>
+
+            <!-- 4-Tier Access Matrix Quick Reference -->
+            <div class="d-flex align-items-center gap-1 flex-wrap">
+                <span class="small fw-bold text-muted me-1">Access Matrix:</span>
+                <span class="badge" style="background: #dc2626;" title="Level 4: Full 24/7 All-Access (Stock & Venues)">L4 All-Access</span>
+                <span class="badge" style="background: #059669;" title="Level 3: Authorized Stock Warehouses & Assigned Venues">L3 Stock &amp; Venue</span>
+                <span class="badge" style="background: #4f46e5;" title="Level 2: Technical Stage & Designated Dispatch Stock">L2 Tech Dispatch</span>
+                <span class="badge" style="background: #0284c7;" title="Level 1: Basic Venue Crew (Denied at Stock Warehouses)">L1 Venue Only</span>
             </div>
         </div>
     </div>
@@ -1170,16 +1257,19 @@ require_once 'views/partials/header.php';
                         <i class="fas fa-id-card-clip fs-2 text-warning"></i>
                     </div>
                     <div>
-                        <span class="badge bg-warning text-dark fw-bold mb-1 px-2 py-1"><i class="fas fa-qrcode me-1"></i>CR80 QR &amp; RFID ACCESS CONTROL</span>
-                        <h3 class="fw-bold mb-1">Staff ID Badges &amp; Stock / Venue Attendance</h3>
-                        <p class="mb-0 text-white-50 small">Generate printable staff ID badges, configure clearance tiers for Stock Warehouses &amp; Event Venues, and log real-time check-ins.</p>
+                        <span class="badge bg-warning text-dark fw-bold mb-1 px-2 py-1"><i class="fas fa-qrcode me-1"></i>4-TIER ACCESS MATRIX &amp; GATE TERMINALS</span>
+                        <h3 class="fw-bold mb-1">Staff ID Badges, Stock Terminal &amp; Venue Security Portal</h3>
+                        <p class="mb-0 text-white-50 small">Manage 4-tier clearance credentials (`L1`–`L4`), operate the Stock Controller Warehouse Terminal, or launch a locked Main Entrance Security Portal for any Event Venue.</p>
                     </div>
                 </div>
             </div>
             <div class="col-lg-5 text-lg-end">
                 <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
-                    <a href="venue_scanner.php" target="_blank" class="btn btn-info fw-bold btn-sm px-3 py-2 text-dark">
-                        <i class="fas fa-camera me-1"></i>Shareable Venue Camera Scanner
+                    <a href="id_badges.php?view=terminal&amp;type=stock_warehouse" class="btn btn-success fw-bold btn-sm px-3 py-2 text-white shadow-sm">
+                        <i class="fas fa-warehouse me-1"></i>Stock Controller Terminal
+                    </a>
+                    <a href="venue_scanner.php?mode=security_portal" target="_blank" class="btn btn-info fw-bold btn-sm px-3 py-2 text-dark shadow-sm">
+                        <i class="fas fa-shield-halved me-1"></i>Venue Entrance Security Portal
                     </a>
                     <button type="button" class="btn btn-light fw-bold btn-sm px-3 py-2" onclick="syncRoleDefaults()">
                         <i class="fas fa-wand-magic-sparkles text-primary me-1"></i>Sync Access by Role
@@ -1187,9 +1277,6 @@ require_once 'views/partials/header.php';
                     <button type="button" class="btn btn-warning fw-bold btn-sm px-3 py-2 text-dark" onclick="printVisibleBadges()">
                         <i class="fas fa-print me-1"></i>Print All Visible Badges
                     </button>
-                    <a href="users.php" class="btn btn-outline-light fw-bold btn-sm px-3 py-2">
-                        <i class="fas fa-users me-1"></i>Users Directory
-                    </a>
                 </div>
             </div>
         </div>
@@ -1975,6 +2062,25 @@ require_once 'views/partials/header.php';
                                                 </span>
                                             </div>
                                         </div>
+                                        <?php if (!empty($initLinkedBatches)):
+                                            $firstBatch = $initLinkedBatches[0];
+                                            $bSt = strtolower($firstBatch['approval_status'] ?: ($firstBatch['status'] ?: 'pending'));
+                                        ?>
+                                        <div class="px-4 py-2 d-flex flex-wrap justify-content-between align-items-center border-top"
+                                             style="background: #f0fdf4; border-color: #bbf7d0 !important; font-size: 0.8rem;">
+                                            <div class="d-flex align-items-center gap-2 text-truncate">
+                                                <span class="badge bg-success text-white"><i class="fas fa-boxes-stacked me-1"></i>Linked Batch</span>
+                                                <strong class="text-dark font-monospace"><?php echo htmlspecialchars($firstBatch['batch_number']); ?></strong>
+                                                <span class="text-muted small d-none d-sm-inline">
+                                                    (<?php echo (int)$firstBatch['item_count']; ?> items &bull; <?php echo htmlspecialchars(($firstBatch['source_name'] ?: 'Stock') . ' → ' . ($firstBatch['destination_name'] ?: 'Venue')); ?>)
+                                                </span>
+                                                <span class="badge border border-success text-success bg-white text-uppercase" style="font-size: 0.68rem;"><?php echo htmlspecialchars($bSt); ?></span>
+                                            </div>
+                                            <a href="batch_history.php" class="btn btn-xs btn-success fw-bold py-0 px-2" style="font-size: 0.74rem;">
+                                                <i class="fas fa-check-double me-1"></i>Batch Approvals
+                                            </a>
+                                        </div>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </div>
@@ -3447,6 +3553,25 @@ require_once 'views/partials/header.php';
                                     </span>
                                 </div>
                             </div>
+                            ${(data.linked_batches && data.linked_batches.length > 0) ? (() => {
+                                const fb = data.linked_batches[0];
+                                const fbSt = (fb.approval_status || fb.status || 'pending').toUpperCase();
+                                const fbRoute = (fb.source_name || 'Stock') + ' → ' + (fb.destination_name || 'Venue');
+                                return `
+                                    <div class="px-4 py-2 d-flex flex-wrap justify-content-between align-items-center border-top"
+                                         style="background: #f0fdf4; border-color: #bbf7d0 !important; font-size: 0.8rem;">
+                                        <div class="d-flex align-items-center gap-2 text-truncate">
+                                            <span class="badge bg-success text-white"><i class="fas fa-boxes-stacked me-1"></i>Linked Batch</span>
+                                            <strong class="text-dark font-monospace">${fb.batch_number}</strong>
+                                            <span class="text-muted small d-none d-sm-inline">(${fb.item_count || 0} items &bull; ${fbRoute})</span>
+                                            <span class="badge border border-success text-success bg-white" style="font-size: 0.68rem;">${fbSt}</span>
+                                        </div>
+                                        <a href="batch_history.php" class="btn btn-xs btn-success fw-bold py-0 px-2" style="font-size: 0.74rem;">
+                                            <i class="fas fa-check-double me-1"></i>Batch Approvals
+                                        </a>
+                                    </div>
+                                `;
+                            })() : ''}
                         </div>
                     </div>
                 `;

@@ -99,6 +99,7 @@ if (!function_exists('getRoleAccentMeta')) {
             'tech_lead' => ['label' => 'TECHNICAL LEAD', 'color' => '#6366f1', 'header' => 'linear-gradient(135deg, #1e293b 0%, #312e81 100%)'],
             'technician' => ['label' => 'AV TECHNICIAN', 'color' => '#2563eb', 'header' => 'linear-gradient(135deg, #1e293b 0%, #1e3a8a 100%)'],
             'driver' => ['label' => 'LOGISTICS DRIVER', 'color' => '#0891b2', 'header' => 'linear-gradient(135deg, #1e293b 0%, #164e63 100%)'],
+            'security' => ['label' => 'VENUE SECURITY', 'color' => '#7c3aed', 'header' => 'linear-gradient(135deg, #1e293b 0%, #4c1d95 100%)'],
             'user' => ['label' => 'PRODUCTION STAFF', 'color' => '#475569', 'header' => 'linear-gradient(135deg, #1e293b 0%, #334155 100%)'],
         ];
         return $map[$role] ?? [
@@ -150,6 +151,14 @@ if (!function_exists('getDefaultBadgeSpecForRole')) {
                     'allowed_stock_ids' => json_encode(array_slice($allStockIds, 0, 1)),
                     'venue_access_mode' => 'assigned_only',
                     'allowed_event_ids' => json_encode(array_slice($allEventIds, 0, 2))
+                ];
+            case 'security':
+                return [
+                    'clearance_level' => 'L1_VENUE_BASIC',
+                    'stock_access_mode' => 'none',
+                    'allowed_stock_ids' => json_encode([]),
+                    'venue_access_mode' => 'all',
+                    'allowed_event_ids' => json_encode($allEventIds)
                 ];
             default:
                 return [

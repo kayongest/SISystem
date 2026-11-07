@@ -420,7 +420,8 @@ $roles = [
     'stock_controller' => 'Stock Controller',
     'tech_lead' => 'Tech Lead',
     'technician' => 'Technician',
-    'driver' => 'Driver'
+    'driver' => 'Driver',
+    'security' => 'Venue Security'
 ];
 $roleListDetails = [];
 try {
@@ -3586,6 +3587,7 @@ ob_start();
                 'tech_lead': 'Technical Lead',
                 'technician': 'AV Technician',
                 'driver': 'Logistics Driver',
+                'security': 'Venue Security',
                 'user': 'Production Staff'
             };
             if (map[r]) return map[r];
