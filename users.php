@@ -699,6 +699,37 @@ if ($attLogRes) {
         $row['formatted_time'] = date('M d, Y h:i A', strtotime($row['scanned_at']));
         $access_timeline_logs[] = $row;
     }
+
+    // Pair check-in and check-out times per user + checkpoint + date (walking oldest to newest)
+    $sessionMap = [];
+    $totalTimelineLogs = count($access_timeline_logs);
+    for ($i = $totalTimelineLogs - 1; $i >= 0; $i--) {
+        $row = &$access_timeline_logs[$i];
+        $ts = strtotime($row['scanned_at']);
+        $timeFormatted = date('h:i A', $ts);
+        $dateKey = date('Y-m-d', $ts);
+        $cpKey = $row['user_id'] . '|' . $row['checkpoint_type'] . '|' . strtolower(trim($row['checkpoint_name'])) . '|' . $dateKey;
+
+        $action = $row['scan_action'] ?: 'check_in';
+        if ($action === 'check_out') {
+            $row['check_out_time'] = $timeFormatted;
+            $row['check_in_time'] = $sessionMap[$cpKey]['in_time'] ?? '--:--';
+            if ($row['access_status'] === 'granted' && !empty($sessionMap[$cpKey]['open_indices'])) {
+                foreach ($sessionMap[$cpKey]['open_indices'] as $openIdx) {
+                    $access_timeline_logs[$openIdx]['check_out_time'] = $timeFormatted;
+                }
+                $sessionMap[$cpKey]['open_indices'] = [];
+            }
+        } else {
+            $row['check_in_time'] = $timeFormatted;
+            $row['check_out_time'] = '--:--';
+            if ($row['access_status'] === 'granted') {
+                $sessionMap[$cpKey]['in_time'] = $timeFormatted;
+                $sessionMap[$cpKey]['open_indices'][] = $i;
+            }
+        }
+        unset($row);
+    }
 }
 
 require_once 'views/partials/header.php';
@@ -3638,10 +3669,17 @@ ob_start();
                 const badgeCode = item.badge_code || 'N/A';
                 const timeAgo = item.time_ago || 'Recently';
 
+                // Check-in & Check-out times
+                const checkInTime = item.check_in_time || '--:--';
+                const checkOutTime = item.check_out_time || '--:--';
+
+                const checkInBadge = `<span class="badge border text-dark bg-transparent px-2 py-1" style="border-radius: 4px; font-weight: 600; border-color: #dbdade !important;" title="Check-In Time"><i class="fas fa-sign-in-alt me-1 text-success"></i>In: ${escapeTimelineHtml(checkInTime)}</span>`;
+                const checkOutBadge = `<span class="badge border text-dark bg-transparent px-2 py-1 ms-1" style="border-radius: 4px; font-weight: 600; border-color: #dbdade !important;" title="Check-Out Time"><i class="fas fa-sign-out-alt me-1 text-danger"></i>Out: ${escapeTimelineHtml(checkOutTime)}</span>`;
+
                 // Badges
                 const statusBadge = isDenied 
-                    ? `<span class="badge border border-danger text-danger bg-transparent px-2 py-1" style="border-radius: 4px; font-weight: 600;"><i class="fas fa-times-circle me-1 text-danger"></i>Denied</span>`
-                    : `<span class="badge border border-success text-success bg-transparent px-2 py-1" style="border-radius: 4px; font-weight: 600;"><i class="fas fa-check-circle me-1 text-success"></i>Granted</span>`;
+                    ? `<span class="badge border border-danger text-danger bg-transparent px-2 py-1 ms-1" style="border-radius: 4px; font-weight: 600;"><i class="fas fa-times-circle me-1 text-danger"></i>Denied</span>`
+                    : `<span class="badge border border-success text-success bg-transparent px-2 py-1 ms-1" style="border-radius: 4px; font-weight: 600;"><i class="fas fa-check-circle me-1 text-success"></i>Granted</span>`;
 
                 const typeBadge = isVenue
                     ? `<span class="badge border border-primary text-primary bg-transparent px-2 py-1 ms-1" style="border-radius: 4px; font-weight: 600;"><i class="fas fa-hotel me-1 text-primary"></i>Venue</span>`
@@ -3663,7 +3701,9 @@ ob_start();
                                     <div class="text-muted" style="font-size: 0.72rem;">${escapeTimelineHtml(deptName)} &bull; Badge: <span class="fw-semibold text-dark">${escapeTimelineHtml(badgeCode)}</span></div>
                                 </div>
                             </div>
-                            <div class="d-flex align-items-center">
+                            <div class="d-flex align-items-center flex-wrap gap-y-1">
+                                ${checkInBadge}
+                                ${checkOutBadge}
                                 ${statusBadge}
                                 ${typeBadge}
                             </div>
@@ -3753,7 +3793,9 @@ ob_start();
                     item.access_status,
                     item.notes,
                     item.denial_reason,
-                    item.punctuality_status
+                    item.punctuality_status,
+                    item.check_in_time,
+                    item.check_out_time
                 ].filter(Boolean).join(' ').toLowerCase();
 
                 return corpus.includes(query);
