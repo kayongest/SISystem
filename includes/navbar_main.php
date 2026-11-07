@@ -340,7 +340,7 @@ try {
 
                 <!-- Stock / Venue Gate Attendance Terminal Link -->
                 <?php if (isAdmin() || in_array($user_role, ['stock_controller', 'stock_manager']) || (function_exists('hasPermission') && hasPermission('manage_id_badges'))): ?>
-                    <a href="<?php echo BASE_URL; ?>id_badges.php#pane-kiosk" class="nav-link-compact <?php echo ($current_page == 'id_badges.php') ? 'active' : ''; ?>" title="Stock &amp; Venue Attendance Terminal">
+                    <a href="<?php echo BASE_URL; ?>id_badges.php?terminal=1#pane-kiosk" class="nav-link-compact <?php echo ($current_page == 'id_badges.php') ? 'active' : ''; ?>" title="Stock &amp; Venue Attendance Terminal">
                         <i class="fas fa-id-card-clip text-success"></i> Gate Terminal
                     </a>
                 <?php endif; ?>

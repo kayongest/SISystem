@@ -708,10 +708,26 @@ if (!$initialKioskUser && !empty($usersWithBadges)) {
     $initialKioskUser = reset($usersWithBadges);
 }
 
-// Pre-selected checkpoint type & venue / stock
-$defaultType = isset($_GET['type']) && in_array($_GET['type'], ['event_venue', 'stock_warehouse'], true)
-    ? $_GET['type']
-    : 'event_venue';
+$userRole = function_exists('getUserRole') ? getUserRole() : ($_SESSION['role'] ?? '');
+
+// Check if terminal view mode should be used (Stock Controllers or explicit terminal param)
+$isTerminalView = ($userRole === 'stock_controller')
+    || (isset($_GET['terminal']) && $_GET['terminal'] == '1')
+    || (isset($_GET['kiosk']) && $_GET['kiosk'] == '1')
+    || (isset($_GET['tab']) && $_GET['tab'] === 'kiosk');
+
+if ($isTerminalView) {
+    $skip_navbar = true;
+    $initialTab = 'kiosk';
+    $defaultType = isset($_GET['type']) && in_array($_GET['type'], ['event_venue', 'stock_warehouse'], true)
+        ? $_GET['type']
+        : 'stock_warehouse';
+} else {
+    $initialTab = $_GET['tab'] ?? 'gallery';
+    $defaultType = isset($_GET['type']) && in_array($_GET['type'], ['event_venue', 'stock_warehouse'], true)
+        ? $_GET['type']
+        : 'event_venue';
+}
 
 $defaultEventId = !empty($eventsList) ? (int)$eventsList[0]['id'] : 1;
 foreach ($eventsList as $ev) {
@@ -720,7 +736,27 @@ foreach ($eventsList as $ev) {
         break;
     }
 }
+
+// Default stock warehouse: prioritize KCC Stock (ID 2) to match terminal kiosk design
 $defaultStockId = !empty($stockLocations) ? (int)$stockLocations[0]['id'] : 1;
+foreach ($stockLocations as $sl) {
+    if (stripos($sl['name'], 'kcc') !== false) {
+        $defaultStockId = (int)$sl['id'];
+        break;
+    }
+}
+if (isset($_GET['stock_id']) && isset($stockMap[(int)$_GET['stock_id']])) {
+    $defaultStockId = (int)$_GET['stock_id'];
+}
+
+$initialShortStockLabel = 'Stock - KCC';
+foreach ($stockLocations as $sl) {
+    if ((int)$sl['id'] === $defaultStockId) {
+        $slName = $sl['name'];
+        $initialShortStockLabel = 'Stock - ' . (stripos($slName, 'KCC') !== false ? 'KCC' : (stripos($slName, 'BK') !== false ? 'BK Arena' : (stripos($slName, 'Ndera') !== false ? 'Ndera Warehouse' : $slName)));
+        break;
+    }
+}
 
 if ($defaultType === 'event_venue') {
     $matchedEvent = $eventMap[$defaultEventId] ?? (!empty($eventsList) ? $eventsList[0] : null);
@@ -731,18 +767,16 @@ if ($defaultType === 'event_venue') {
     $matchedStock = $stockMap[$defaultStockId] ?? (!empty($stockLocations) ? $stockLocations[0] : null);
     $initialCheckpointName = $matchedStock
         ? ($matchedStock['name'] . (!empty($matchedStock['location']) ? ' — ' . $matchedStock['location'] : ''))
-        : 'Ndera Central Warehouse';
+        : 'KCC Stock — Kigali Convention Centre';
 }
 
 $initActiveId = ($defaultType === 'event_venue') ? $defaultEventId : $defaultStockId;
 $initKey = $defaultType . '_' . $initActiveId . '_' . ($initialKioskUser ? (int)$initialKioskUser['id'] : 0);
-$initInTime = $todayCheckpointStates[$initKey]['check_in_time'] ?? '10:46:36 AM';
-$initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 AM';
+$initInTime = $todayCheckpointStates[$initKey]['check_in_time'] ?? '13:11:41 PM';
+$initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '11:52:49 AM';
 
 // Optional focus user if linked from users.php?focus_user=X
 $focusUserId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
-$userRole = function_exists('getUserRole') ? getUserRole() : ($_SESSION['role'] ?? '');
-$initialTab = $_GET['tab'] ?? ($userRole === 'stock_controller' ? 'kiosk' : 'gallery');
 
 require_once 'views/partials/header.php';
 ?>
@@ -1061,6 +1095,60 @@ require_once 'views/partials/header.php';
 </style>
 
 <div class="badges-hub-wrapper">
+<?php if ($isTerminalView): ?>
+    <!-- Dedicated Gate Attendance Terminal Header (Clean View matching user design) -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 mb-3 bg-white no-print">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <div class="btn fw-bold text-white px-3 py-2 shadow-sm" style="background: #255382; border-radius: 10px; font-size: 0.95rem; cursor: default;">
+                    <i class="fas fa-qrcode me-2"></i> Attendance &amp; Gate Access Terminals
+                </div>
+                <div class="vr mx-2 text-secondary" style="height: 24px; opacity: 0.25;"></div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <?php if (function_exists('isAdmin') && isAdmin()): ?>
+                    <a href="id_badges.php?tab=gallery" class="btn btn-sm btn-outline-primary fw-bold">
+                        <i class="fas fa-id-card me-1"></i> ID Badges Hub
+                    </a>
+                <?php endif; ?>
+                <a href="venue_scanner.php" target="_blank" class="btn btn-sm btn-outline-info fw-bold">
+                    <i class="fas fa-camera me-1"></i> Camera Scanner
+                </a>
+                <a href="dashboard_full.php" class="btn btn-sm btn-outline-secondary fw-bold">
+                    <i class="fas fa-home me-1"></i> Dashboard
+                </a>
+                <a href="logout.php" class="btn btn-sm btn-outline-danger fw-bold" onclick="return confirm('Are you sure you want to logout?')">
+                    <i class="fas fa-sign-out-alt me-1"></i> Logout
+                </a>
+            </div>
+        </div>
+
+        <!-- Clean Stock Gate Selector: Stock - KCC -->
+        <div class="mt-3 pt-3 border-top d-flex align-items-center gap-2 flex-wrap">
+            <div class="dropdown">
+                <button class="btn btn-success fw-bold px-3 py-2 dropdown-toggle shadow-sm text-white" type="button" id="kioskStockSelectDropdownBtn" data-bs-toggle="dropdown" aria-expanded="false" style="background: #28a745; border-color: #28a745; border-radius: 6px; font-size: 1rem;">
+                    <i class="fas fa-warehouse me-2"></i> <span id="currentStockBtnLabel"><?php echo htmlspecialchars($initialShortStockLabel); ?></span>
+                </button>
+                <ul class="dropdown-menu shadow border-0 rounded-3 mt-1" aria-labelledby="kioskStockSelectDropdownBtn">
+                    <li class="dropdown-header text-uppercase small fw-bold text-muted">Select Stock Warehouse Gate</li>
+                    <?php foreach ($stockLocations as $sl):
+                        $slName = $sl['name'];
+                        $shortLabel = 'Stock - ' . (stripos($slName, 'KCC') !== false ? 'KCC' : (stripos($slName, 'BK') !== false ? 'BK Arena' : (stripos($slName, 'Ndera') !== false ? 'Ndera Warehouse' : $slName)));
+                        $fullName = $sl['name'] . (!empty($sl['location']) ? ' — ' . $sl['location'] : '');
+                    ?>
+                    <li>
+                        <a class="dropdown-item py-2 fw-semibold <?php echo ($defaultStockId === (int)$sl['id']) ? 'active bg-success text-white' : ''; ?>"
+                           href="javascript:void(0)"
+                           onclick="selectKioskStockGate(<?php echo (int)$sl['id']; ?>, '<?php echo htmlspecialchars($shortLabel, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($fullName, ENT_QUOTES); ?>')">
+                            <i class="fas fa-warehouse me-2 text-success"></i> <?php echo htmlspecialchars($shortLabel); ?>
+                        </a>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        </div>
+    </div>
+<?php else: ?>
     <!-- Breadcrumb -->
     <nav aria-label="breadcrumb" class="mb-3 no-print">
         <ol class="breadcrumb mb-0 small">
@@ -1198,8 +1286,10 @@ require_once 'views/partials/header.php';
             </button>
         </div>
     </div>
+<?php endif; ?>
 
     <div class="tab-content" id="badgesHubTabsContent">
+        <?php if (!$isTerminalView): ?>
         <!-- ==================== TAB 1: ID BADGES GALLERY & CR80 DESIGNER ==================== -->
         <div class="tab-pane fade <?php echo ($initialTab === 'gallery') ? 'show active' : ''; ?>" id="pane-gallery" role="tabpanel">
             <!-- Filter & View Mode Toolbar -->
@@ -1531,9 +1621,11 @@ require_once 'views/partials/header.php';
                 <?php endforeach; ?>
             </div>
         </div>
+        <?php endif; ?>
 
         <!-- ==================== TAB 2: ATTENDANCE & GATE ACCESS TERMINAL ==================== -->
-        <div class="tab-pane fade <?php echo ($initialTab === 'kiosk') ? 'show active' : ''; ?> no-print" id="pane-kiosk" role="tabpanel">
+        <div class="tab-pane fade <?php echo ($initialTab === 'kiosk' || $isTerminalView) ? 'show active' : ''; ?> no-print" id="pane-kiosk" role="tabpanel">
+            <?php if (!$isTerminalView): ?>
             <!-- Top Terminal Control Card: 3-Step Checkpoint & Mode Selector -->
             <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden" style="background: #0f172a; color: #ffffff;">
                 <div class="p-3 px-4">
@@ -1602,6 +1694,26 @@ require_once 'views/partials/header.php';
                     </div>
                 </div>
             </div>
+            <?php else: ?>
+            <!-- Hidden Checkpoint and Mode State for Gate Terminal View -->
+            <input type="radio" class="d-none" name="checkpoint_type" id="cp_type_stock" value="stock_warehouse" checked>
+            <input type="radio" class="d-none" name="checkpoint_type" id="cp_type_venue" value="event_venue">
+            <select class="d-none" id="kiosk_stock_id" onchange="syncKioskStaffButtonStates()">
+                <?php foreach ($stockLocations as $sl): ?>
+                    <option value="<?php echo (int)$sl['id']; ?>" <?php echo ($defaultStockId === (int)$sl['id']) ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($sl['name'] . (!empty($sl['code']) ? ' (' . $sl['code'] . ')' : '') . (!empty($sl['location']) ? ' — ' . $sl['location'] : '')); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <select class="d-none" id="kiosk_event_id" onchange="syncKioskStaffButtonStates()">
+                <?php foreach ($eventsList as $ev): ?>
+                    <option value="<?php echo (int)$ev['id']; ?>" <?php echo ($defaultEventId === (int)$ev['id']) ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($ev['title'] . (!empty($ev['location']) ? ' — ' . $ev['location'] : '')); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <input type="hidden" id="kiosk_scan_mode" value="auto">
+            <?php endif; ?>
 
             <!-- Two Columns: Left (col-lg-5) = Search Staff (Checkin -> Checkout) & Badge Scan | Right (col-lg-7) = Live Gate Decision & Feed -->
             <div class="row g-4">
@@ -1932,6 +2044,7 @@ require_once 'views/partials/header.php';
             </div>
         </div>
 
+        <?php if (!$isTerminalView): ?>
         <!-- ==================== TAB 3: LIVE ON-SITE ROSTER & ATTENDANCE LOGS ==================== -->
         <div class="tab-pane fade <?php echo ($initialTab === 'roster') ? 'show active' : ''; ?> no-print" id="pane-roster" role="tabpanel">
             <!-- Currently Checked-In Personnel -->
@@ -2253,6 +2366,7 @@ require_once 'views/partials/header.php';
                 </div>
             </div>
         </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -2529,8 +2643,64 @@ require_once 'views/partials/header.php';
         if (document.getElementById('badgeSearchInput') && document.getElementById('badgeSearchInput').value) {
             filterBadgeGallery();
         }
+
+        // Restore saved stock gate in terminal view if stored
+        try {
+            const savedStockId = localStorage.getItem('kiosk_active_stock_id');
+            const savedStockLabel = localStorage.getItem('kiosk_active_stock_label');
+            const savedStockFull = localStorage.getItem('kiosk_active_stock_fullname');
+            if (savedStockId && document.getElementById('kiosk_stock_id')) {
+                const opt = document.querySelector('#kiosk_stock_id option[value="' + savedStockId + '"]');
+                if (opt) {
+                    document.getElementById('kiosk_stock_id').value = savedStockId;
+                    if (savedStockLabel && document.getElementById('currentStockBtnLabel')) {
+                        document.getElementById('currentStockBtnLabel').textContent = savedStockLabel;
+                    }
+                    if (savedStockFull && document.getElementById('activeCheckpointBannerLabel')) {
+                        document.getElementById('activeCheckpointBannerLabel').textContent = 'Active Stock Gate: ' + savedStockFull;
+                    }
+                    if (savedStockFull && document.getElementById('kioskCardLocationFooter')) {
+                        document.getElementById('kioskCardLocationFooter').textContent = savedStockFull.split('(')[0].trim() + ' Clearance - Verified.';
+                    }
+                }
+            }
+        } catch(e) {}
+
         syncKioskStaffButtonStates();
     });
+
+    function selectKioskStockGate(stockId, shortLabel, fullLocationName) {
+        const stockSelect = document.getElementById('kiosk_stock_id');
+        if (stockSelect) {
+            stockSelect.value = stockId;
+        }
+        const btnLabel = document.getElementById('currentStockBtnLabel');
+        if (btnLabel) {
+            btnLabel.textContent = shortLabel;
+        }
+        const cpStockRadio = document.getElementById('cp_type_stock');
+        if (cpStockRadio) {
+            cpStockRadio.checked = true;
+        }
+        const cpVenueRadio = document.getElementById('cp_type_venue');
+        if (cpVenueRadio) {
+            cpVenueRadio.checked = false;
+        }
+        const bannerLabel = document.getElementById('activeCheckpointBannerLabel');
+        if (bannerLabel) {
+            bannerLabel.textContent = 'Active Stock Gate: ' + fullLocationName;
+        }
+        const footerLoc = document.getElementById('kioskCardLocationFooter');
+        if (footerLoc) {
+            footerLoc.textContent = fullLocationName.split('(')[0].trim() + ' Clearance - Verified.';
+        }
+        try {
+            localStorage.setItem('kiosk_active_stock_id', stockId);
+            localStorage.setItem('kiosk_active_stock_label', shortLabel);
+            localStorage.setItem('kiosk_active_stock_fullname', fullLocationName);
+        } catch(e) {}
+        syncKioskStaffButtonStates();
+    }
 
     function openTerminalWithToggle(cpType) {
         const kioskTab = document.getElementById('tab-kiosk-btn');
