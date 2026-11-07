@@ -109,7 +109,8 @@ function getDefaultRolePermissionsMap()
             'manage_stock_locations',
             'view_batch_history',
             'view_accessories',
-            'view_reports'
+            'view_reports',
+            'manage_id_badges'
         ],
         'stock_controller' => [
             'view_dashboard',
@@ -122,7 +123,8 @@ function getDefaultRolePermissionsMap()
             'view_scan_history',
             'view_batch_history',
             'view_accessories',
-            'view_reports'
+            'view_reports',
+            'manage_id_badges'
         ],
         'tech_lead' => [
             'view_dashboard',

@@ -338,10 +338,17 @@ try {
                     </a>
                 <?php endif; ?>
 
+                <!-- Stock / Venue Gate Attendance Terminal Link -->
+                <?php if (isAdmin() || in_array($user_role, ['stock_controller', 'stock_manager']) || (function_exists('hasPermission') && hasPermission('manage_id_badges'))): ?>
+                    <a href="<?php echo BASE_URL; ?>id_badges.php#pane-kiosk" class="nav-link-compact <?php echo ($current_page == 'id_badges.php') ? 'active' : ''; ?>" title="Stock &amp; Venue Attendance Terminal">
+                        <i class="fas fa-id-card-clip text-success"></i> Gate Terminal
+                    </a>
+                <?php endif; ?>
+
                 <!-- Setup Dropdown (Multi-role Config) -->
                 <?php if (!in_array($user_role, ['driver', 'user', 'technician'])): ?>
                 <div class="dropdown dropdown-compact">
-                    <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['stock_locations.php', 'categories.php', 'departments.php', 'locations.php', 'events.php', 'mobile_app.php', 'reports.php', 'hr_center.php', 'drivers.php', 'users.php', 'id_badges.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
+                    <a href="#" class="nav-link-compact dropdown-toggle <?php echo (in_array($current_page, ['stock_locations.php', 'categories.php', 'departments.php', 'locations.php', 'events.php', 'mobile_app.php', 'reports.php', 'hr_center.php', 'drivers.php', 'users.php', 'id_badges.php', 'venue_scanner.php'])) ? 'active' : ''; ?>" data-bs-toggle="dropdown">
                         <i class="fas fa-cog"></i> Setup
                     </a>
                     <ul class="dropdown-menu shadow">
@@ -361,14 +368,21 @@ try {
                             <li><a class="dropdown-item <?php echo ($current_page == 'hr_center.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>hr_center.php"><i class="fas fa-users-cog me-2 text-danger"></i> HR Center</a></li>
                         <?php endif; ?>
 
+                        <!-- ID Badges & Venue/Stock Gate Scanner -->
+                        <?php if (isAdmin() || in_array($user_role, ['stock_controller', 'stock_manager', 'manager']) || (function_exists('hasPermission') && hasPermission('manage_id_badges'))): ?>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'id_badges.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>id_badges.php"><i class="fas fa-id-card-clip me-2 text-success"></i> ID Badges &amp; Attendance</a></li>
+                            <li><a class="dropdown-item <?php echo ($current_page == 'venue_scanner.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>venue_scanner.php" target="_blank"><i class="fas fa-camera me-2 text-info"></i> Venue Camera Scanner</a></li>
+                        <?php endif; ?>
+
                         <!-- Admin Setup Configs -->
                         <?php if (isAdmin()): ?>
                             <li>
                                 <hr class="dropdown-divider">
                             </li>
                             <li><a class="dropdown-item <?php echo ($current_page == 'users.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>users.php"><i class="fas fa-users-cog me-2 text-warning"></i> Users</a></li>
-                            <li><a class="dropdown-item <?php echo ($current_page == 'id_badges.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>id_badges.php"><i class="fas fa-id-card-clip me-2 text-success"></i> ID Badges &amp; Attendance</a></li>
-                            <li><a class="dropdown-item <?php echo ($current_page == 'venue_scanner.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>venue_scanner.php" target="_blank"><i class="fas fa-camera me-2 text-info"></i> Venue Camera Scanner</a></li>
                             <li><a class="dropdown-item <?php echo ($current_page == 'stock_locations.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>stock_locations.php"><i class="fas fa-warehouse me-2"></i> Stock Locations</a></li>
                             <li><a class="dropdown-item <?php echo ($current_page == 'categories.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>categories.php"><i class="fas fa-list me-2"></i> Categories</a></li>
                             <li><a class="dropdown-item <?php echo ($current_page == 'departments.php') ? 'active' : ''; ?>" href="<?php echo BASE_URL; ?>departments.php"><i class="fas fa-building me-2"></i> Departments</a></li>

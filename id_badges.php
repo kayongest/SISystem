@@ -741,7 +741,8 @@ $initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 A
 
 // Optional focus user if linked from users.php?focus_user=X
 $focusUserId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
-$initialTab = $_GET['tab'] ?? 'gallery';
+$userRole = function_exists('getUserRole') ? getUserRole() : ($_SESSION['role'] ?? '');
+$initialTab = $_GET['tab'] ?? ($userRole === 'stock_controller' ? 'kiosk' : 'gallery');
 
 require_once 'views/partials/header.php';
 ?>

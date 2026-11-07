@@ -545,12 +545,17 @@ $initOutTime = $todayCheckpointStates[$initKey]['check_out_time'] ?? '10:46:41 A
             <a href="id_badges.php?tab=matrix" class="btn btn-sm btn-outline-success fw-bold">
                 <i class="fas fa-sliders me-1"></i>Access Levels CRUD
             </a>
+            <a href="id_badges.php#pane-kiosk" class="btn btn-sm btn-outline-warning fw-bold">
+                <i class="fas fa-qrcode me-1"></i>Gate Terminal
+            </a>
             <a href="id_badges.php" class="btn btn-sm btn-outline-light">
                 <i class="fas fa-id-card me-1"></i>All Badges
             </a>
-            <a href="users.php" class="btn btn-sm btn-outline-info">
-                <i class="fas fa-users me-1"></i>Users
-            </a>
+            <?php if (function_exists('isAdmin') && isAdmin()): ?>
+                <a href="users.php" class="btn btn-sm btn-outline-info">
+                    <i class="fas fa-users me-1"></i>Users
+                </a>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </header>
